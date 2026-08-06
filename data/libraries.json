@@ -1,0 +1,58 @@
+[
+  {
+    "id": "chuzhong",
+    "name": "初中",
+    "desc": "中考核心词汇",
+    "emoji": "🎒",
+    "count": 1500
+  },
+  {
+    "id": "gaozhong",
+    "name": "高中",
+    "desc": "高考核心词汇",
+    "emoji": "✏️",
+    "count": 2000
+  },
+  {
+    "id": "cet4",
+    "name": "四级 CET4",
+    "desc": "大学英语四级",
+    "emoji": "📗",
+    "count": 2500
+  },
+  {
+    "id": "cet6",
+    "name": "六级 CET6",
+    "desc": "大学英语六级",
+    "emoji": "📘",
+    "count": 2500
+  },
+  {
+    "id": "kaoyan",
+    "name": "考研",
+    "desc": "考研英语核心",
+    "emoji": "📕",
+    "count": 2800
+  },
+  {
+    "id": "ielts",
+    "name": "雅思 IELTS",
+    "desc": "出国考试核心词",
+    "emoji": "🎓",
+    "count": 3000
+  },
+  {
+    "id": "toefl",
+    "name": "托福 TOEFL",
+    "desc": "托福核心词汇",
+    "emoji": "🌍",
+    "count": 3000
+  },
+  {
+    "id": "gre",
+    "name": "GRE",
+    "desc": "出国读研核心",
+    "emoji": "🗽",
+    "count": 2500
+  }
+]

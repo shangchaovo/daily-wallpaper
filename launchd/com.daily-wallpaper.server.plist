@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.daily-wallpaper.server</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/xieshangchao/.local/bin/node</string>
+        <string>/Users/xieshangchao/daily-wallpaper/server.js</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>8770</string>
+        <key>PATH</key>
+        <string>/Users/xieshangchao/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/xieshangchao/daily-wallpaper</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/xieshangchao/Library/Logs/daily-wallpaper/server.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/xieshangchao/Library/Logs/daily-wallpaper/server.log</string>
+</dict>
+</plist>

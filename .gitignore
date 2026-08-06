@@ -1,0 +1,10 @@
+# runtime artifacts (regenerated)
+current-wallpaper.png
+custom-wallpaper.png
+companion-config.json
+
+# render-test output
+scripts/out_v3/
+
+# OS / editor
+.DS_Store

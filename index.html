@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>每日壁纸 · 把单词和提醒做成你的壁纸</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app">
+  <!-- ============ top bar ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🌱</span>
+      <div>
+        <h1>每日壁纸</h1>
+        <p class="tagline">把每天的单词和小提醒，变成你的手机 / 电脑壁纸</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button id="btn-set-wallpaper" class="btn soft" title="直接把当前壁纸设到 Mac 桌面">🖥️ 设为桌面壁纸</button>
+      <button id="btn-download" class="btn soft">⬇️ 下载 PNG</button>
+      <button id="btn-refresh" class="btn primary">✨ 换一组</button>
+    </div>
+  </header>
+
+  <main class="workbench">
+    <!-- ============ control panel ============ -->
+    <aside class="panel">
+
+      <section class="card">
+        <h2><span class="h-emoji">📚</span>选一个词库</h2>
+        <div id="library-cards" class="lib-cards"></div>
+        <label class="row">
+          <span>选词方式</span>
+          <select id="sel-order">
+            <option value="sequential">按顺序每天推进</option>
+            <option value="random">每天随机抽</option>
+          </select>
+        </label>
+        <label class="row" id="count-row">
+          <span>每组单词数</span>
+          <input id="inp-count" type="number" min="1" max="12" value="6">
+        </label>
+      </section>
+
+      <section class="card" id="import-card">
+        <h2><span class="h-emoji">📥</span>把单词倒进「我的词库」</h2>
+        <p class="hint">最省事：直接<b>截图 / 拍照</b>你的单词表，我帮你认出来。也可以用文件、粘贴，或先下个模板。</p>
+        <div class="import-grid">
+          <label class="import-tile shot">
+            <input id="file-screenshot" type="file" accept="image/*">
+            <span class="it-icon">📸</span><b>截图 / 拍照导入</b><i>自动 OCR 识别</i>
+          </label>
+          <label class="import-tile">
+            <input id="file-import" type="file" accept=".csv,.txt,.xlsx,.xls,image/*">
+            <span class="it-icon">📄</span><b>CSV / Excel</b><i>单词表文件</i>
+          </label>
+        </div>
+        <div class="pack-row">
+          <span class="mini-label">先下个模板填：</span>
+          <button class="chip" data-pack="template">⬇️ 空白模板</button>
+          <button class="chip" data-pack="ielts">⬇️ 雅思示例</button>
+        </div>
+        <textarea id="txt-paste" rows="3" placeholder="或直接粘贴：每行一个单词&#10;abandon, /əˈbændən/, v., 放弃"></textarea>
+        <button id="btn-paste-import" class="btn small soft">导入粘贴内容</button>
+        <details class="sub">
+          <summary>手动添加单个单词</summary>
+          <div class="nw-grid">
+            <input id="nw-word" placeholder="单词 *">
+            <input id="nw-phonetic" placeholder="音标">
+            <input id="nw-pos" placeholder="词性 (n./v./adj.)">
+            <input id="nw-meaning" placeholder="释义">
+            <input id="nw-example" placeholder="例句(可选)">
+          </div>
+          <div class="row-btns">
+            <button id="btn-add-word" class="btn small soft">添加</button>
+            <button id="btn-clear-custom" class="btn small danger">清空我的词库</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2><span class="h-emoji">⏰</span>今天的小提醒</h2>
+        <div class="rem-input">
+          <input id="inp-reminder" placeholder="比如：背单词 30 分钟">
+          <input id="inp-reminder-time" type="time">
+          <button id="btn-add-reminder" class="btn small soft">加</button>
+        </div>
+        <div id="preset-reminders" class="chips"></div>
+        <div id="reminder-list" class="rem-list"></div>
+        <button id="btn-clear-done" class="btn small ghost">清除已完成</button>
+      </section>
+
+      <section class="card">
+        <h2><span class="h-emoji">🎨</span>版式与外观</h2>
+        <div class="row"><span>版式</span>
+          <div id="layout-switch" class="seg">
+            <button class="seg-btn on" data-layout="group">📋 单词组</button>
+            <button class="seg-btn" data-layout="poster">🔠 大字海报</button>
+          </div>
+        </div>
+        <label class="row"><span>壁纸尺寸</span><select id="sel-size"></select></label>
+        <div class="row" id="custom-size-row" hidden>
+          <span>宽 × 高</span>
+          <div class="inline">
+            <input id="inp-cw" type="number" min="100" max="8000" value="1080"> ×
+            <input id="inp-ch" type="number" min="100" max="8000" value="1920">
+          </div>
+        </div>
+        <div class="row"><span>主题配色</span><div id="theme-swatches" class="swatches"></div></div>
+        <div class="row"><span>背景纹理</span><div id="pattern-picker" class="pattern-picker"></div></div>
+        <div class="bg-photo">
+          <div class="mini-label">自定义背景照片（放松 · 专注）</div>
+          <div class="bg-photo-row">
+            <label class="import-tile bg-tile">
+              <input id="file-bgphoto" type="file" accept="image/*">
+              <span class="it-icon">🖼️</span><b>上传照片</b><i>铺满壁纸</i>
+            </label>
+            <div id="bgphoto-preview" class="bgphoto-preview" hidden>
+              <img id="bgphoto-thumb" alt="背景预览">
+              <button id="btn-bgphoto-clear" class="btn small ghost" type="button">移除</button>
+            </div>
+          </div>
+          <label class="row slider-row" id="bgscrim-row" hidden>
+            <span>照片上方留白</span>
+            <input id="rng-bgscrim" type="range" min="0" max="0.85" step="0.05" value="0.42">
+            <b id="bgscrim-val">42%</b>
+          </label>
+        </div>
+        <div class="checks">
+          <label><input id="chk-phonetic" type="checkbox" checked> 显示音标</label>
+          <label><input id="chk-example" type="checkbox" checked> 显示例句</label>
+          <label><input id="chk-reminders" type="checkbox" checked> 显示提醒</label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2><span class="h-emoji">🔤</span>字体与排版</h2>
+        <label class="row slider-row">
+          <span>字号大小</span>
+          <input id="rng-fontscale" type="range" min="0.7" max="1.6" step="0.05" value="1">
+          <b id="fontscale-val">100%</b>
+        </label>
+        <label class="row">
+          <span>字体粗细</span>
+          <select id="sel-weight">
+            <option value="500">细一点</option>
+            <option value="600">中等</option>
+            <option value="700" selected>粗一点</option>
+            <option value="800">特粗</option>
+          </select>
+        </label>
+        <label class="row">
+          <span>字体风格</span>
+          <select id="sel-fontstyle">
+            <option value="hei" selected>黑体 · 清爽</option>
+            <option value="song">宋体 · 书卷</option>
+            <option value="kai">楷体 · 手写</option>
+            <option value="yuan">圆体 · 圆润</option>
+            <option value="heiti">粗黑 · 醒目</option>
+          </select>
+        </label>
+        <div class="row"><span>文字颜色</span><div id="ink-picker" class="ink-picker"></div></div>
+        <label class="row slider-row">
+          <span>字间距</span>
+          <input id="rng-spacing" type="range" min="0" max="20" step="1" value="0">
+          <b id="spacing-val">0px</b>
+        </label>
+        <label class="row slider-row">
+          <span>行距</span>
+          <input id="rng-lineheight" type="range" min="0.8" max="1.4" step="0.05" value="1">
+          <b id="lineheight-val">100%</b>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2><span class="h-emoji">🧲</span>位置布局</h2>
+        <p class="hint">可以点预设，也可以直接在右侧预览上<b>按住拖动</b>单词块、提醒块和自定义文字，随意摆到任意位置。</p>
+        <div class="row"><span>单词位置</span>
+          <div id="anchor-words" class="seg">
+            <button class="seg-btn" data-anchor="top">靠上</button>
+            <button class="seg-btn on" data-anchor="center">居中</button>
+            <button class="seg-btn" data-anchor="bottom">靠下</button>
+          </div>
+        </div>
+        <div class="row"><span>提醒位置</span>
+          <div id="anchor-reminders" class="seg">
+            <button class="seg-btn" data-anchor="top">靠上</button>
+            <button class="seg-btn" data-anchor="center">居中</button>
+            <button class="seg-btn on" data-anchor="bottom">靠下</button>
+          </div>
+        </div>
+        <button id="btn-reset-layout" class="btn small ghost">复位布局</button>
+      </section>
+
+      <section class="card">
+        <h2><span class="h-emoji">🔁</span>自动与轮换</h2>
+        <div class="checks">
+          <label><input id="chk-daily" type="checkbox" checked> 每天自动换一组</label>
+          <label><input id="chk-rotate" type="checkbox"> 定时换单词(分钟)</label>
+        </div>
+        <label class="row" id="rotate-min-row" style="display:none"><span>换词间隔(分钟)</span><input id="inp-rotate-min" type="number" min="1" max="720" value="30"></label>
+        <div class="checks">
+          <label><input id="chk-cycle" type="checkbox"> 周期切换「单词页 / 提醒页」</label>
+        </div>
+        <label class="row" id="cycle-sec-row" style="display:none"><span>切换间隔(秒)</span><input id="inp-cycle-sec" type="number" min="5" max="3600" value="120"></label>
+        <div class="divider"></div>
+        <div class="checks">
+          <label><input id="chk-antitouch" type="checkbox" checked> 实时壁纸防误触(长按唤出)</label>
+        </div>
+        <label class="row" id="anti-ms-row"><span>长按时长(毫秒)</span><input id="inp-anti-ms" type="number" min="300" max="5000" step="100" value="1200"></label>
+      </section>
+
+      <section class="card">
+        <h2><span class="h-emoji">✍️</span>自定义文字</h2>
+        <p class="hint">开启后文字会出现在壁纸上，<b>直接在预览里拖动</b>就能摆到任意位置。</p>
+        <div class="checks"><label><input id="chk-custom" type="checkbox"> 启用自定义文字</label></div>
+        <div id="custom-fields" style="display:none">
+          <input id="inp-custom-title" placeholder="顶部标题，如：坚持 100 天">
+          <input id="inp-custom-footer" placeholder="底部落款，如：@我的名字">
+        </div>
+      </section>
+
+      <section class="card desktop-card">
+        <h2><span class="h-emoji">💻</span>搬到电脑桌面上</h2>
+        <p class="hint">想在 Mac 桌面<b>真正换壁纸</b>、还要一个常驻不遮挡的小窗？下载桌面伴侣，双击就能跑，不用装任何东西。</p>
+        <button id="btn-companion" class="btn soft">⬇️ 下载桌面伴侣</button>
+        <button id="btn-live" class="btn ghost">🔲 或者先试网页实时壁纸</button>
+      </section>
+
+    </aside>
+
+    <!-- ============ preview ============ -->
+    <section class="preview">
+      <div id="preview-stage" class="stage">
+        <canvas id="preview-canvas"></canvas>
+      </div>
+      <div class="meta-bar">
+        <span id="meta"></span>
+        <span class="muted">壁纸每天自动更新 · 在预览上拖动可以微调位置</span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ live (interactive) overlay ============ -->
+<div id="live-overlay" class="live-overlay" hidden>
+  <canvas id="live-canvas"></canvas>
+  <button id="btn-exit-live" class="live-exit" title="退出实时壁纸">✕</button>
+  <div id="live-peek" class="live-peek" hidden></div>
+  <div id="unlock-ring" class="unlock-ring" hidden></div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+<script src="js/store.js"></script>
+<script src="js/words.js"></script>
+<script src="js/importer.js"></script>
+<script src="js/ocr.js"></script>
+<script src="js/reminders.js"></script>
+<script src="js/render.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
