@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
 
 const DEFAULT_PORT = Number(process.env.PORT || 8770);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -43,12 +44,41 @@ function serveStatic(req, res) {
   });
 }
 
+/* Build the companion zip (companion + double-click launcher + word data) and
+ * stream it back. Rebuilt on each request so the download is always current. */
+function serveCompanionZip(req, res) {
+  const script = path.join(__dirname, 'scripts', 'package_companion.py');
+  execFile('python3', [script], { timeout: 30000 }, (err, stdout, stderr) => {
+    if (err) {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('打包失败：' + (stderr || err.message));
+      return;
+    }
+    const zipPath = path.join(__dirname, 'scripts', '每日壁纸伴侣.zip');
+    fs.readFile(zipPath, (e2, data) => {
+      if (e2) {
+        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('读取安装包失败');
+        return;
+      }
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': 'attachment; filename="daily-wallpaper-companion.zip"; filename*=UTF-8\'\'%E6%AF%8F%E6%97%A5%E5%A3%81%E7%BA%B8%E4%BC%B4%E4%BE%A3.zip',
+        'Cache-Control': 'no-cache',
+      });
+      res.end(data);
+    });
+  });
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
     return;
   }
+  const pathname = req.url.split('?')[0];
+  if (pathname === '/companion.zip') return serveCompanionZip(req, res);
   serveStatic(req, res);
 });
 

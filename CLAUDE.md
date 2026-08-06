@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 node server.js                 # 开发服务器 http://localhost:8770（端口被占自动 +1）
-python3 scripts/e2e.py         # 端到端验证（29 项断言，自带独立空闲端口，不碰 8770）
+python3 scripts/e2e.py         # 端到端验证（31 项断言，自带独立空闲端口，不碰 8770）
 python3 scripts/render_v3.py   # v3 渲染验证：真渲染 PNG 到 scripts/out_v3/ 并做像素级断言
 python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json（需 /tmp/ecdict.csv）
 ```
@@ -45,6 +45,8 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 **桌面伴侣 `companion.js`**（Node，零依赖）：起一个静态服务器（同网站）+ macOS 上 (a) 用 `buildSVG` 生成 SVG、`sips` 转 PNG、`osascript` 设为桌面壁纸（`pushWallpaper`，定时），(b) 用 JXA+Cocoa+WKWebView 做一个**无边框置顶小窗**（`startPet`，显示今日单词+提醒），(c) `/ocr` 端点走 Apple Vision OCR 供网页「截图导入」。它的 `buildSVG` 独立复刻 group/poster 版面（也已移除日期/时钟）。配置 `companion-config.json` 首跑自动生成。
 
+**一键下载**：网页「下载桌面伴侣」按钮不直接给 `.js`，而是打 `/companion.zip`（`server.js` 的 `serveCompanionZip` 即时跑 `scripts/package_companion.py`）——zip 内含 `启动伴侣.command`（bash 启动器，zip 里以 `external_attr` 0o755 落盘可双击）、`companion.js`、`data/words_*.json` ×8、`使用说明.txt`。用户**解压 → 双击启动器**即用，不用敲命令；启动器找不到 node 会给指引并打开 nodejs.org。
+
 **两条设计纪律**：
 - 壁纸正文只用本地系统字体栈（PingFang SC / Hiragino / Microsoft YaHei / Noto Sans CJK SC / Songti / Kaiti 等），**不引入网络字体**。
 - 强调色/印泥红 `#B3402A` 只用于「沙·暖」主题 accent 和 `.btn.danger`，别挪作普通按钮强调（普通强调用 `#17503F`）。
@@ -60,4 +62,4 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 ## 验证矩阵
 
-`scripts/e2e.py`（29 项）覆盖主路径 + v3 控件存在性；`scripts/render_v3.py`（7 项）真渲染 PNG 并做像素级断言（字体栈写入、文字颜色持久化、背景照片铺满且非主题色、**锚点真的移动单词块**、自定义文字拖拽位置持久化、海报+楷体）。手工补查：两版式 × 六主题 × 手机/桌面各抽查一张 PNG（用 canvas 的 `toDataURL` 导出看，别用元素截图）；竖屏 6 词、横屏 6 词都不溢出、不压提醒块；导入 Excel/CSV/粘贴三路径；实时壁纸长按能唤出、短按不唤出。
+`scripts/e2e.py`（31 项）覆盖主路径 + v3 控件存在性 + 伴侣一键包 zip；`scripts/render_v3.py`（7 项）真渲染 PNG 并做像素级断言（字体栈写入、文字颜色持久化、背景照片铺满且非主题色、**锚点真的移动单词块**、自定义文字拖拽位置持久化、海报+楷体）。手工补查：两版式 × 六主题 × 手机/桌面各抽查一张 PNG（用 canvas 的 `toDataURL` 导出看，别用元素截图）；竖屏 6 词、横屏 6 词都不溢出、不压提醒块；导入 Excel/CSV/粘贴三路径；实时壁纸长按能唤出、短按不唤出。

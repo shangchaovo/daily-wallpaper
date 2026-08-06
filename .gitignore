@@ -6,5 +6,8 @@ companion-config.json
 # render-test output
 scripts/out_v3/
 
+# companion one-click zip (rebuilt on demand by server /companion.zip)
+scripts/每日壁纸伴侣.zip
+
 # OS / editor
 .DS_Store

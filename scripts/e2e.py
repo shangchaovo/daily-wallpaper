@@ -164,6 +164,18 @@ def main():
             check("设为桌面壁纸按钮", page.locator("#btn-set-wallpaper").count() == 1)
             check("下载桌面伴侣按钮", page.locator("#btn-companion").count() == 1)
 
+            # companion one-click zip route serves a real zip with launcher + data
+            import urllib.request, zipfile, io
+            zdata = urllib.request.urlopen(f"http://127.0.0.1:{port}/companion.zip", timeout=15).read()
+            zf = zipfile.ZipFile(io.BytesIO(zdata))
+            names = zf.namelist()
+            check("伴侣一键包(zip含启动器+词库)",
+                  any(n.endswith("启动伴侣.command") for n in names)
+                  and any(n.endswith("companion.js") for n in names)
+                  and sum(1 for n in names if n.startswith("每日壁纸伴侣/data/words_")) == 8)
+            launcher = next(i for i in zf.infolist() if i.filename.endswith(".command"))
+            check("启动器可执行(+x)", (launcher.external_attr >> 16) & 0o111 != 0)
+
             # live mode
             page.click("#btn-live")
             page.wait_for_timeout(400)

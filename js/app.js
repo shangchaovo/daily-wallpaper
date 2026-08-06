@@ -612,8 +612,10 @@
   }
 
   function downloadCompanion() {
-    window.location.href = 'companion.js';
-    toast('正在下载桌面伴侣 companion.js');
+    // one click → a zip with the companion + a double-clickable launcher + data.
+    // much simpler than the raw .js (which needed `node` on the command line).
+    toast('正在打包桌面伴侣… 解压后双击「启动伴侣.command」就能用');
+    window.location.href = 'companion.zip';
   }
 
   /* ---------- live (interactive) mode ---------- */
