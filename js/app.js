@@ -799,6 +799,10 @@
     loadBgImage();
     await refresh(false);
     window.Engine.markDay();
+    if (!window.Store.read('dragHint', false)) {
+      setTimeout(() => toast('💡 按住预览里的单词块 / 提醒块 / 自定义文字，可以直接拖到任意位置'), 1500);
+      window.Store.write('dragHint', true);
+    }
     window.addEventListener('resize', () => { if (!liveActive) paintSelectionDebounced(); else paintLive(cyclePage); });
     setInterval(async () => {
       if (settings.autoRefreshDaily && window.Engine.isNewDay()) { await refresh(false); window.Engine.markDay(); }
