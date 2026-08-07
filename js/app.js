@@ -162,7 +162,11 @@
     $('#btn-live').addEventListener('click', enterLive);
     $('#btn-exit-live').addEventListener('click', exitLive);
     $('#btn-set-wallpaper').addEventListener('click', setDesktopWallpaper);
-    $('#btn-companion').addEventListener('click', downloadCompanion);
+    $('#btn-companion').addEventListener('click', enableCompanion);
+    const dl = $('#btn-companion-dl');
+    if (dl) dl.addEventListener('click', e => { e.preventDefault(); downloadCompanion(); });
+
+    syncCompanionButton();
 
     bindImport();
     bindReminders();
@@ -612,10 +616,37 @@
   }
 
   function downloadCompanion() {
-    // one click → a zip with the companion + a double-clickable launcher + data.
-    // much simpler than the raw .js (which needed `node` on the command line).
-    toast('正在打包桌面伴侣… 解压后双击「启动伴侣.command」就能用');
+    // fallback for when the site isn't running on the user's own Mac: a zip with
+    // a double-clickable launcher. 解压 → 双击「启动伴侣.command」。
+    toast('正在打包… 解压后双击「启动伴侣.command」就能用');
     window.location.href = 'companion.zip';
+  }
+
+  /* 一键启用：告诉本机 server 直接把桌面伴侣拉起来（零下载、零解压、零双击）。
+   * 如果页面本身由 companion 提供（说明它已在跑），或 /companion/start 探测到它，
+   * 按钮就只显示"运行中"。*/
+  async function enableCompanion() {
+    const btn = $('#btn-companion');
+    btn.disabled = true;
+    try {
+      const resp = await fetch('companion/start', { method: 'POST' });
+      const j = await resp.json();
+      if (!j.ok) { toast('启动失败：' + (j.error || '未知错误')); return; }
+      if (j.already) toast('桌面伴侣已在运行 ✓');
+      else toast('桌面伴侣已启动 ✓ 桌面壁纸已换好，角落的小窗也开了');
+      syncCompanionButton();
+    } catch (e) {
+      toast('启动失败：' + e.message + '（请用 node server.js 打开本站）');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function syncCompanionButton() {
+    const btn = $('#btn-companion');
+    fetch('status.json').then(r => r.ok ? r.json() : Promise.reject()).then(j => {
+      if (j && j.config) { btn.textContent = '✅ 桌面伴侣运行中'; btn.disabled = true; }
+    }).catch(() => {});
   }
 
   /* ---------- live (interactive) mode ---------- */

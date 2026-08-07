@@ -1,7 +1,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { execFile } = require('child_process');
+const os = require('os');
+const { execFile, spawn } = require('child_process');
 
 const DEFAULT_PORT = Number(process.env.PORT || 8770);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -71,6 +72,49 @@ function serveCompanionZip(req, res) {
   });
 }
 
+function json(res, code, obj) {
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(obj));
+}
+
+/* Probe whether the desktop companion is already up on its default port 8771. */
+function probeCompanion(cb) {
+  const req = http.get({ host: '127.0.0.1', port: 8771, path: '/status.json', timeout: 1200 }, res => {
+    let body = '';
+    res.on('data', c => (body += c));
+    res.on('end', () => {
+      try { cb(Boolean(JSON.parse(body).config)); } catch { cb(false); }
+    });
+  });
+  req.on('error', () => cb(false));
+  req.on('timeout', () => { req.destroy(); cb(false); });
+}
+
+/* 一键启用：直接在用户自己的 Mac 上把 companion 拉起来，零下载。
+ * server.js 本来就在用户的机器上跑（`node server.js`），companion.js 也就在本仓库，
+ * 所以不用下载 / 解压 / 双击，点一下按钮即可。*/
+function startCompanion(req, res) {
+  if (req.url.includes('dry=1')) return json(res, 200, { ok: true, dry: true }); // e2e only
+  probeCompanion(up => {
+    if (up) return json(res, 200, { ok: true, already: true });
+    const companionJs = path.join(__dirname, 'companion.js');
+    if (!fs.existsSync(companionJs)) return json(res, 500, { ok: false, error: 'companion.js 不存在（可改用下载独立版）' });
+    const logPath = path.join(os.homedir(), 'Library', 'Logs', 'daily-wallpaper-companion.log');
+    let logFd = 2;
+    try { logFd = fs.openSync(logPath, 'a'); } catch {}
+    const child = spawn(process.execPath, [companionJs], { cwd: __dirname, detached: true, stdio: ['ignore', logFd, logFd] });
+    child.unref(); // keep running after this server responds / exits
+    if (logFd !== 2) { try { fs.closeSync(logFd); } catch {} } // child already inherited its copy
+    const startAt = Date.now();
+    const timer = setInterval(() => {
+      probeCompanion(up2 => {
+        if (up2) { clearInterval(timer); json(res, 200, { ok: true, spawned: true }); }
+        else if (Date.now() - startAt > 8000) { clearInterval(timer); json(res, 200, { ok: false, error: '启动超时，看日志 ' + logPath }); }
+      });
+    }, 500);
+  });
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -79,6 +123,12 @@ const server = http.createServer((req, res) => {
   }
   const pathname = req.url.split('?')[0];
   if (pathname === '/companion.zip') return serveCompanionZip(req, res);
+  if (pathname === '/companion/start') {
+    if (req.method !== 'POST') { res.writeHead(405); res.end(); return; }
+    return startCompanion(req, res);
+  }
+  // same-origin probe: the main server is NOT the companion, so no config.
+  if (pathname === '/status.json') return json(res, 200, { ok: true, companion: false });
   serveStatic(req, res);
 });
 

@@ -176,6 +176,21 @@ def main():
             launcher = next(i for i in zf.infolist() if i.filename.endswith(".command"))
             check("启动器可执行(+x)", (launcher.external_attr >> 16) & 0o111 != 0)
 
+            # one-click enable endpoint: POST /companion/start (dry mode for tests)
+            import urllib.request, urllib.error, json
+            try:
+                dryr = urllib.request.urlopen(urllib.request.Request(
+                    f"http://127.0.0.1:{port}/companion/start?dry=1", method="POST"), timeout=10)
+                dryj = json.loads(dryr.read())
+                check("一键启用端点(dry)", dryj.get("ok") is True and dryj.get("dry") is True)
+            except Exception as e:
+                check("一键启用端点(dry)", False)
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/companion/start", timeout=10)
+                check("一键启用非POST返回405", False)
+            except urllib.error.HTTPError as e:
+                check("一键启用非POST返回405", e.code == 405)
+
             # live mode
             page.click("#btn-live")
             page.wait_for_timeout(400)
