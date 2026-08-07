@@ -219,6 +219,20 @@
     return Math.max(pad - blockH, Math.min(H - pad, y));
   }
 
+  /* Dashed outline around the block currently being dragged — live feedback
+   * so dragging visibly "grabs" something. Drawn from settings.hl. */
+  function drawHlRect(ctx, theme, x, y, w, h) {
+    if (!w || !h) return;
+    ctx.save();
+    ctx.strokeStyle = theme.accent;
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = Math.max(2, Math.round(w * 0.003));
+    ctx.setLineDash([Math.max(8, Math.round(w * 0.009)), Math.max(6, Math.round(w * 0.005))]);
+    var pad = Math.round(w * 0.008);
+    ctx.strokeRect(x - pad, y - pad, w + pad * 2, h + pad * 2);
+    ctx.restore();
+  }
+
   /* ---------- free custom text blocks (title / footer) ---------- */
   function drawCustomBlocks(ctx, W, H, theme, settings, margin) {
     if (!(settings.custom && settings.custom.enabled)) return;
@@ -237,6 +251,10 @@
       var cy = Math.round(H * (pos.y != null ? pos.y : b.defY));
       ctx.fillText(b.text, cx, cy);
       ctx.textAlign = 'left';
+      if (settings.hl && settings.hl.kind === 'custom' && settings.hl.key === b.key) {
+        var tw = ctx.measureText(b.text).width;
+        drawHlRect(ctx, theme, cx - tw / 2 - fs * 0.5, cy - fs * 0.85, tw + fs * 1.0, fs * 1.7);
+      }
     });
     ctx.textBaseline = 'alphabetic';
   }
@@ -326,6 +344,11 @@
     });
 
     if (remH) drawReminders(ctx, W, H, theme, reminders, settings, margin + Math.round((settings.offReminders.x || 0) * W), remTop, minutesUntilFn);
+
+    if (settings.hl) {
+      if (settings.hl.kind === 'reminders' && remH) drawHlRect(ctx, theme, margin + Math.round((settings.offReminders.x || 0) * W), remTop, W - 2 * margin, remH);
+      else if (settings.hl.kind === 'words') drawHlRect(ctx, theme, margin + xNudge, blockTop, W - 2 * margin, blockH);
+    }
   }
 
   /* ---------- POSTER layout ---------- */
@@ -369,6 +392,7 @@
     var y = anchorY(settings.anchorWords || 'center', availTop, availBottom, blockH, 0.42) + Math.round((settings.offWords.y || 0) * H);
     var xN = Math.round((settings.offWords.x || 0) * W);
     y = Math.max(topBand, y);
+    var blockTop = y;
 
     ctx.textBaseline = 'top';
     ctx.fillStyle = theme.accent;
@@ -400,6 +424,11 @@
     }
 
     if (remH) drawReminders(ctx, W, H, theme, reminders, settings, margin + Math.round((settings.offReminders.x || 0) * W), remTop, minutesUntilFn);
+
+    if (settings.hl) {
+      if (settings.hl.kind === 'reminders' && remH) drawHlRect(ctx, theme, margin + Math.round((settings.offReminders.x || 0) * W), remTop, W - 2 * margin, remH);
+      else if (settings.hl.kind === 'words') drawHlRect(ctx, theme, margin + xN, blockTop, W - 2 * margin, blockH);
+    }
   }
 
   /* letter-spacing helpers (canvas has no tracking, so draw per-char). */

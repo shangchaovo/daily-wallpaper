@@ -53,6 +53,8 @@
   let cyclePage = 'words';
   let libCounts = {};
   let bgImageEl = null; // decoded Image for settings.bgImage (dataURL), kept out of the settings object
+  let dragHl = null;    // {kind:'words'|'reminders'|'custom', key?} while dragging — render.js draws an outline
+  let dragFrame = null; // rAF handle: coalesce drag re-renders to one per frame
 
   const $ = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
@@ -480,14 +482,16 @@
     let drag = null; // { kind:'words'|'reminders'|'custom', key?, startX,startY, origX,origY }
     disp.style.touchAction = 'none';
     disp.addEventListener('pointerdown', e => {
-      const rect = disp.getBoundingClientRect();
-      const fx = (e.clientX - rect.left) / rect.width;
-      const fy = (e.clientY - rect.top) / rect.height;
-      const hit = hitTestBlock(fx, fy);
+      const rect0 = disp.getBoundingClientRect();
+      const hit = hitTestBlock((e.clientX - rect0.left) / rect0.width, (e.clientY - rect0.top) / rect0.height);
       if (!hit) return;
-      drag = { kind: hit.kind, key: hit.key, startX: fx, startY: fy, origX: hit.x, origY: hit.y };
+      dragHl = { kind: hit.kind, key: hit.key };
+      applyDisplaySize(disp, disp, true); // fit the whole wallpaper into view while dragging
+      const rect = disp.getBoundingClientRect();
+      drag = { kind: hit.kind, key: hit.key, startX: (e.clientX - rect.left) / rect.width, startY: (e.clientY - rect.top) / rect.height, origX: hit.x, origY: hit.y };
       disp.setPointerCapture(e.pointerId);
       disp.classList.add('grabbing');
+      refresh(false);
       e.preventDefault();
     });
     disp.addEventListener('pointermove', e => {
@@ -505,12 +509,15 @@
         off.x = clamp(drag.origX + dx, -0.5, 0.5);
         off.y = clamp(drag.origY + dy, -1.0, 1.0);
       }
-      refresh(false);
+      // coalesce renders to one per animation frame so the drag stays smooth
+      if (!dragFrame) dragFrame = requestAnimationFrame(() => { dragFrame = null; refresh(false); });
     });
     const end = () => {
       if (!drag) return;
-      drag = null;
+      drag = null; dragHl = null;
+      if (dragFrame) { cancelAnimationFrame(dragFrame); dragFrame = null; }
       disp.classList.remove('grabbing');
+      refresh(false);
       saveSettings();
       toast('位置已调整，点「复位布局」可还原');
     };
@@ -563,10 +570,22 @@
     updateMeta(sel);
   }
 
+  /* Scale the preview to fill the stage width normally; while dragging, shrink
+   * it to fit the viewport so the WHOLE wallpaper stays visible as the block
+   * moves anywhere on a tall canvas. */
+  function applyDisplaySize(disp, canvas, fitToScreen) {
+    const stage = $('#preview-stage');
+    let s = Math.min(1, (stage.clientWidth - 24) / canvas.width);
+    if (fitToScreen) s = Math.min(s, Math.max(0.18, (window.innerHeight - 200) / canvas.height));
+    disp.style.width = Math.round(canvas.width * s) + 'px';
+    disp.style.height = Math.round(canvas.height * s) + 'px';
+    return s;
+  }
+
   function paintSelection(sel, page, canvasSel) {
     const { w, h } = getSize();
     const theme = THEMES[settings.theme] || THEMES.cream;
-    const renderSettings = Object.assign({}, settings, { bgImage: bgImageEl });
+    const renderSettings = Object.assign({}, settings, { bgImage: bgImageEl, hl: dragHl });
     currentCanvas = window.Render.render({
       width: w, height: h, layout: settings.layout, page, theme,
       words: sel.words, reminders: window.Reminders.list(), settings: renderSettings, dateStr: sel.dateStr,
@@ -576,11 +595,7 @@
     const ctx = disp.getContext('2d');
     disp.width = currentCanvas.width; disp.height = currentCanvas.height;
     ctx.drawImage(currentCanvas, 0, 0);
-    const stage = $('#preview-stage');
-    const stageW = stage.clientWidth - 24;
-    const scale = Math.min(1, stageW / currentCanvas.width);
-    disp.style.width = Math.round(currentCanvas.width * scale) + 'px';
-    disp.style.height = Math.round(currentCanvas.height * scale) + 'px';
+    applyDisplaySize(disp, currentCanvas, !!dragHl);
   }
 
   function updateMeta(sel) {
@@ -677,7 +692,7 @@
     const { w, h } = getSize();
     const theme = THEMES[settings.theme] || THEMES.cream;
     window.Engine.current(settings).then(sel => {
-      const renderSettings = Object.assign({}, settings, { bgImage: bgImageEl });
+      const renderSettings = Object.assign({}, settings, { bgImage: bgImageEl, hl: dragHl });
       const c = window.Render.render({
         width: w, height: h, layout: settings.layout, page, theme,
         words: sel.words, reminders: window.Reminders.list(), settings: renderSettings, dateStr: sel.dateStr,

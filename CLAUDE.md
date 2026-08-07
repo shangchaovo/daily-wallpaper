@@ -37,7 +37,7 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 - **自定义文字 `drawCustomBlocks`**：title/footer 是**自由浮动块**，位置存 `settings.custom.pos[key] = {x, y, scale}`（0..1 分数），居中绘制在该点。
 - 新增会被画出来的字段，空值时要跳过（词库 schema 本就省略空字段）。
 
-**可视化拖拽**（`app.js` 的 `bindDrag`/`hitTestBlock`）：`pointerdown` 命中测试决定抓的是哪块（自定义文字优先，其次按 `remindersSplitY()` 分单词/提醒），`pointermove` 把位移写回 `offWords/offReminders`（分数偏移，clamp ±0.5）或 `custom.pos[key]`（绝对分数位置，clamp 0.02..0.98），随后 `refresh(false)` 实时重画。偏移都是**分数**（相对 W/H），换尺寸不漂移。
+**可视化拖拽**（`app.js` 的 `bindDrag`/`hitTestBlock`）：`pointerdown` 命中测试决定抓的是哪块（自定义文字优先，其次按 `remindersSplitY()` 分单词/提醒），按下即 `applyDisplaySize(disp, disp, true)` **把预览缩到视口内**（整个壁纸都在视野里，拖哪儿都看得见），`pointermove` 把位移写回 `offWords/offReminders`（分数偏移，x clamp ±0.5、y clamp ±1.0）或 `custom.pos[key]`（绝对分数位置，clamp 0.02..0.98），重画用 **rAF 合帧**（一帧只重画一次，拖拽顺滑）。拖拽期间 `dragHl={kind,key}` 传入渲染，`render.js` 的 `drawHlRect` 画主题色**虚线框**标出正在拖的块；抬起后 `dragHl` 清空、预览恢复大尺寸、`saveSettings()`。偏移都是**分数**（相对 W/H），换尺寸不漂移。`render.js` 的 `blockTopFor` 只把块钳在「至少露出一部分」的范围内，**不再限制在自由带内**——可以拖到画布任意位置（含压到提醒块上）。
 
 **持久化键**（`store.js`，前缀 `wp:`）：`wp:settings`（合并到 `DEFAULT_SETTINGS` 之上，升级时新键自动出现；`custom.pos`/`offWords`/`offReminders` 单独深合并）、`wp:customWords`、`wp:reminders`、`wp:engine`、`wp:seeded`。改 `DEFAULT_SETTINGS` 加新键时，UI 默认值要在 `applySettingsToUI` 里同步。
 
