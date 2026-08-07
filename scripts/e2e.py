@@ -150,6 +150,18 @@ def main():
             page.wait_for_timeout(400)
             check("换一组后仍有画布", page.evaluate("() => document.querySelector('#preview-canvas').width > 0"))
 
+            # visual drag: press on the words block and pull down -> offWords.y changes
+            box = page.locator("#preview-canvas").bounding_box()
+            before = page.evaluate("() => (JSON.parse(localStorage.getItem('wp:settings')||'{}').offWords||{}).y")
+            cx, cy = box["x"] + box["width"] * 0.5, box["y"] + box["height"] * 0.35
+            page.mouse.move(cx, cy); page.mouse.down()
+            for i in range(6):
+                page.mouse.move(cx, cy + 20 * (i + 1), steps=3); page.wait_for_timeout(20)
+            page.mouse.up()
+            page.wait_for_timeout(250)
+            after = page.evaluate("() => (JSON.parse(localStorage.getItem('wp:settings')||'{}').offWords||{}).y")
+            check("预览拖动单词块", before != after)
+
             # PNG download
             with page.expect_download() as dl:
                 page.click("#btn-download")
@@ -190,6 +202,13 @@ def main():
                 check("一键启用非POST返回405", False)
             except urllib.error.HTTPError as e:
                 check("一键启用非POST返回405", e.code == 405)
+
+            # companion's own server carries the same endpoints (page is served from 8771 too)
+            with open(os.path.join(ROOT, "companion.js"), encoding="utf-8") as f:
+                companion_src = f.read()
+            check("伴侣服务同款一键/下载端点",
+                  "'/companion/start'" in companion_src and "'/companion.zip'" in companion_src
+                  and "freshWallpaperFile" in companion_src)
 
             # live mode
             page.click("#btn-live")

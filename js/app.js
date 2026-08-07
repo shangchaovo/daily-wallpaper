@@ -503,7 +503,7 @@
       } else {
         const off = drag.kind === 'reminders' ? settings.offReminders : settings.offWords;
         off.x = clamp(drag.origX + dx, -0.5, 0.5);
-        off.y = clamp(drag.origY + dy, -0.5, 0.5);
+        off.y = clamp(drag.origY + dy, -1.0, 1.0);
       }
       refresh(false);
     });

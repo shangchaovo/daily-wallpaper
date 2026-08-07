@@ -208,11 +208,15 @@
     return availTop + Math.round(span * (bias == null ? 0.5 : bias)); // center
   }
 
-  /* Resolve a block's top Y given anchor + fractional offset, over a band. */
+  /* Resolve a block's top Y given anchor + fractional offset, over a band.
+   * The anchor baseline comes from the band, but an explicit drag offset may
+   * take the block anywhere on the canvas (even over the other block) — so we
+   * only clamp to keep it at least partly visible. */
   function blockTopFor(anchor, offY, availTop, availBottom, blockH, H) {
     var base = anchorY(anchor, availTop, availBottom, blockH, 0.5);
     var y = base + Math.round((offY || 0) * H);
-    return Math.max(availTop - blockH, Math.min(availBottom, y));
+    var pad = Math.round(H * 0.03);
+    return Math.max(pad - blockH, Math.min(H - pad, y));
   }
 
   /* ---------- free custom text blocks (title / footer) ---------- */

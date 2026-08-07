@@ -344,16 +344,34 @@ function pushWallpaper(cb) {
     width: W, height: H, layout: CFG.layout, theme: THEMES[CFG.theme] || THEMES.cream,
     words: picked, reminders: CFG.reminders || [], settings: buildSettings(), dateStr: today,
   });
-  const out = path.join(ROOT, 'current-wallpaper.png');
+  // fresh filename EVERY push: macOS only redraws the desktop when the picture
+  // path changes — re-setting the same path is a silent no-op, so the wallpaper
+  // would look "stuck" forever.
+  const out = freshWallpaperFile('wallpaper');
   rasterizeSVG(svg, out, W, H, (err, png) => {
     if (err) { console.error('[companion] render failed:', err.message); return cb && cb(err); }
     if (!CFG.autoSetWallpaper) { console.log('[companion] rendered', out, '(autoSet off)'); return cb && cb(null, out); }
     setMacWallpaper(out, (e2) => {
+      cleanupOldWallpapers('wallpaper', 4);
       if (e2) console.error('[companion] set wallpaper failed:', e2.message);
       else console.log(`[companion] desktop wallpaper updated ${new Date().toLocaleTimeString()} (${picked.length} words)`);
       cb && cb(e2, out);
     });
   });
+}
+/* Fresh wallpaper file per set; macOS won't refresh the desktop if the picture
+ * path stays the same. Old files get pruned, keeping the newest few. */
+function freshWallpaperFile(prefix) {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  return path.join(ROOT, `${prefix}-${stamp}.png`);
+}
+function cleanupOldWallpapers(prefix, keep) {
+  try {
+    const files = fs.readdirSync(ROOT).filter(f => f.startsWith(prefix + '-') && f.endsWith('.png')).sort();
+    files.slice(0, Math.max(0, files.length - keep)).forEach(f => { try { fs.unlinkSync(path.join(ROOT, f)); } catch {} });
+  } catch {}
 }
 function rotationBucket() {
   const now = new Date();
@@ -412,6 +430,26 @@ function readBody(req, cb) {
   req.on('end', () => cb(Buffer.concat(chunks)));
 }
 
+/* Same one-click-enable + standalone-zip endpoints as server.js, so the desktop
+ * card buttons work whether the page is served from the main site (8770) or
+ * from here (8771, the page the companion auto-opens). */
+function serveCompanionZip(req, res) {
+  const script = path.join(ROOT, 'scripts', 'package_companion.py');
+  execFile('python3', [script], { timeout: 30000 }, (err, stdout, stderr) => {
+    if (err) { res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('打包失败：' + (stderr || err.message)); }
+    const zipPath = path.join(ROOT, 'scripts', '每日壁纸伴侣.zip');
+    fs.readFile(zipPath, (e2, data) => {
+      if (e2) { res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('读取安装包失败'); }
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': 'attachment; filename="daily-wallpaper-companion.zip"; filename*=UTF-8\'\'%E6%AF%8F%E6%97%A5%E5%A3%81%E7%BA%B8%E4%BC%B4%E4%BE%A3.zip',
+        'Cache-Control': 'no-cache',
+      });
+      res.end(data);
+    });
+  });
+}
+
 /* naive multipart/form-data parse (enough for a single file field) */
 function parseMultipart(buf, boundary) {
   const s = buf.toString('binary');
@@ -456,9 +494,10 @@ const server = http.createServer((req, res) => {
       const boundary = (req.headers['content-type'] || '').split('boundary=')[1];
       const img = boundary ? parseMultipart(body, boundary) : body;
       if (!img) { res.writeHead(400); return res.end(JSON.stringify({ error: 'no image' })); }
-      const out = path.join(ROOT, 'custom-wallpaper.png');
+      const out = freshWallpaperFile('custom');
       fs.writeFileSync(out, img);
       setMacWallpaper(out, err => {
+        cleanupOldWallpapers('custom', 3);
         res.writeHead(err ? 500 : 200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(err ? { error: err.message } : { ok: true }));
       });
@@ -470,6 +509,14 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ mac: isMac, config: CFG }));
   }
+
+  // one-click enable: this server IS the companion, so it's already running.
+  if (url === '/companion/start') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    return res.end(JSON.stringify({ ok: true, already: true }));
+  }
+  // standalone download zip (same as the main server).
+  if (url === '/companion.zip') return serveCompanionZip(req, res);
 
   serveStatic(req, res, url);
 });
