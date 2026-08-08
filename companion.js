@@ -219,16 +219,17 @@ function buildSVG(opts) {
 }
 
 function rasterizeSVG(svg, outPng, W, H, cb) {
-  const tmpSvg = path.join(os.tmpdir(), 'dw_wallpaper.svg');
+  const tag = Date.now() + '_' + Math.floor(Math.random() * 1e6);
+  const tmpSvg = path.join(os.tmpdir(), 'dw_' + tag + '.svg');
   fs.writeFileSync(tmpSvg, svg);
   // sips rasterizes SVG -> PNG at the SVG's own dimensions (macOS built-in).
   // (qlmanage would letterbox to a square thumbnail, so we don't use it.)
-  const tmpPng = path.join(os.tmpdir(), 'dw_wallpaper_sips.png');
+  const tmpPng = path.join(os.tmpdir(), 'dw_' + tag + '.png');
   execFile('sips', ['-s', 'format', 'png', tmpSvg, '--out', tmpPng], { timeout: 20000 }, (err) => {
     if (err || !fs.existsSync(tmpPng)) {
       // fallback: try qlmanage
       return execFile('qlmanage', ['-t', '-s', String(W), '-o', os.tmpdir(), tmpSvg], { timeout: 20000 }, (e2) => {
-        const produced = path.join(os.tmpdir(), 'dw_wallpaper.svg.png');
+        const produced = path.join(os.tmpdir(), 'dw_' + tag + '.svg.png');
         if (e2 || !fs.existsSync(produced)) return cb(new Error('rasterize failed'), null);
         fs.renameSync(produced, outPng);
         cb(null, outPng);
@@ -244,62 +245,109 @@ function rasterizeSVG(svg, outPng, W, H, cb) {
  * HTML in a borderless-ish WKWebView. No install, no focus stealing (Accessory
  * policy), lives on every Space. Respawned on a timer to refresh its content;
  * killed on companion exit. */
-function buildPetHTML(words, reminders, theme) {
-  const t = theme;
-  const wrows = words.map((w, i) =>
-    `<div class="row"><span class="idx">${String(i + 1).padStart(2, '0')}</span>` +
-    `<div class="wl"><b>${esc(w.word)}</b>${w.phonetic ? `<span class="ph">${esc(w.phonetic)}</span>` : ''}` +
-    `<div class="mn">${esc((w.pos ? w.pos + ' ' : '') + (w.meaning || ''))}</div></div></div>`).join('');
-  const rrows = (reminders && reminders.length)
-    ? `<div class="rh">今日提醒</div>` + reminders.slice(0, 5).map(r =>
-        `<div class="rr"><span class="box"></span>${esc(r.text)}${r.time ? `<span class="rt">${esc(r.time)}</span>` : ''}</div>`).join('')
-    : '';
-  return `<!doctype html><meta charset="utf-8"><style>
-    *{box-sizing:border-box;margin:0}
-    html,body{height:100%}
-    body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
-      background:linear-gradient(135deg,${t.bg},${t.bg2 || t.bg});color:${t.ink};
-      padding:14px 15px;border-radius:16px;overflow:hidden;-webkit-user-select:none;cursor:default}
-    .hd{font-size:11px;color:${t.sub};letter-spacing:.04em;margin-bottom:8px;display:flex;justify-content:space-between}
-    .row{display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px solid ${t.line || 'rgba(128,128,128,.14)'}}
-    .row:last-of-type{border-bottom:0}
-    .idx{font-size:10px;color:${t.sub};flex:0 0 auto}
-    .wl{flex:1;min-width:0}
-    b{font-size:16px;font-weight:700}
-    .ph{font-size:10.5px;color:${t.sub};margin-left:7px}
-    .mn{font-size:11px;color:${t.sub};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .rh{font-size:12px;font-weight:600;color:${t.accent};margin:9px 0 5px}
-    .rr{font-size:12px;padding:3px 0;display:flex;align-items:center;gap:7px}
-    .box{width:11px;height:11px;border:1.5px solid ${t.sub};border-radius:3px;flex:0 0 auto}
-    .rt{color:${t.sub};margin-left:auto;font-size:10.5px}
-  </style>
-  <div class="hd"><span>🌱 每日壁纸</span></div>
-  ${wrows}${rrows}`;
+/* Render the pet card as SVG (rasterized to PNG later). The pet WINDOW is a
+ * borderless draggable grip that just draws this image — no WKWebView, because
+ * a web view swallows the mouse drag (movableByWindowBackground won't work). */
+function buildPetSVG(words, reminders, theme, W, H) {
+  const s = 2; // render at 2x so it's crisp on retina
+  const w = W * s, h = H * s;
+  const padX = 15 * s, padY = 14 * s;
+  const parts = [];
+  parts.push(`<defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">` +
+    `<stop offset="0" stop-color="${theme.bg}"/><stop offset="1" stop-color="${theme.bg2 || theme.bg}"/></linearGradient></defs>`);
+  parts.push(`<rect x="0" y="0" width="${w}" height="${h}" rx="${16 * s}" fill="url(#pg)"/>`);
+  const fam = 'PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif';
+  const txt = (x, y, str, size, fill, weight) =>
+    `<text x="${x}" y="${y}" font-family="${fam}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ''}>${esc(str)}</text>`;
+  const maxW = w - 2 * padX;
+  const estW = (str, fs) => { let u = 0; for (const ch of String(str)) u += /[　-鿿豈-﫿]/.test(ch) ? 1 : (ch === ' ' ? 0.3 : 0.55); return u * fs; };
+  parts.push(txt(padX, padY + Math.round(11 * s * 0.85), '🌱 每日壁纸', 11 * s, theme.sub));
+  const y0 = padY + 24 * s;
+  const n = Math.max(1, words.length);
+  const rowH = Math.round((H - padY - 24 - padY) / n * s);
+  words.slice(0, n).forEach((wd, i) => {
+    const rowTop = y0 + i * rowH;
+    const mid = rowTop + rowH / 2;
+    parts.push(txt(padX, mid + Math.round(4 * s), String(i + 1).padStart(2, '0'), 10 * s, theme.sub));
+    const ix = padX + 28 * s;
+    parts.push(txt(ix, mid - Math.round(5 * s), wd.word, 16 * s, theme.ink, 700));
+    if (wd.phonetic) {
+      const ww = Math.round(estW(wd.word, 16 * s));
+      parts.push(txt(ix + ww + 7 * s, mid - Math.round(5 * s), wd.phonetic, 10.5 * s, theme.sub));
+    }
+    const meaning = (wd.pos ? wd.pos + ' ' : '') + (wd.meaning || '');
+    parts.push(txt(ix, mid + Math.round(11 * s), truncate(meaning, 11 * s, maxW - 28 * s), 11 * s, theme.sub));
+    if (i < n - 1) parts.push(`<line x1="${padX}" y1="${rowTop + rowH}" x2="${w - padX}" y2="${rowTop + rowH}" stroke="${theme.line || 'rgba(128,128,128,0.14)'}" stroke-width="${s}"/>`);
+  });
+  if (reminders && reminders.length) {
+    let ry = y0 + n * rowH + 4 * s;
+    parts.push(txt(padX, ry, '今日提醒', 12 * s, theme.accent, 600));
+    ry += 18 * s;
+    reminders.slice(0, 5).forEach(r => {
+      parts.push(`<rect x="${padX}" y="${ry - 8 * s}" width="${11 * s}" height="${11 * s}" fill="none" stroke="${theme.sub}" stroke-width="${s}"/>`);
+      parts.push(txt(padX + 18 * s, ry, truncate(r.text + (r.time ? ' · ' + r.time : ''), 11 * s, maxW - 18 * s), 11 * s, theme.ink));
+      ry += 16 * s;
+    });
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
+}
+/* crude width estimate + truncate with ellipsis (SVG text doesn't wrap). */
+function truncate(str, fs, maxW) {
+  let out = '';
+  let wid = 0;
+  for (const ch of String(str)) {
+    const cw = /[　-鿿豈-﫿]/.test(ch) ? fs : (ch === ' ' ? fs * 0.3 : fs * 0.55);
+    if (wid + cw > maxW && out) return out.replace(/\s+$/, '') + '…';
+    out += ch; wid += cw;
+  }
+  return out;
 }
 
-function buildPetJXA() {
-  const corner = CFG.petCorner || 'top-right';
-  const W = 320, H = Math.min(560, 90 + (CFG.wordsPerGroup || 6) * 46 + (CFG.reminders && CFG.reminders.length ? 90 : 0));
+function buildPetJXA(W, H) {
   return `
-ObjC.import('Cocoa'); ObjC.import('WebKit');
+ObjC.import('Cocoa');
 function run(argv){
-  var html = argv[0], corner = argv[1], W = ${W}, H = ${H};
+  var pngPath = argv[0], corner = argv[1], posFile = argv[2], savedPos = argv[3], W = ${W}, H = ${H};
+  var img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
+  // 关键：WKWebView 会吞掉鼠标事件导致拖不动。这里不用网页，直接用一个
+  // 「把手」子类（mouseDownCanMoveWindow 返回 YES → 窗口可被按住拖动），
+  // 内容由 drawRect 把渲染好的宠物 PNG 画出来。整个窗口可自由拖动。
+  ObjC.registerSubclass({ name: 'DWGrip', superclass: 'NSView', methods: {
+    'mouseDownCanMoveWindow': function () { return true; },
+    'drawRect:': function (rect) {
+      img.drawInRectFromRectOperationFraction($.NSMakeRect(0, 0, W, H), $.NSZeroRect, $.NSCompositeSourceOver, 1);
+    }
+  }});
   var screen = $.NSScreen.mainScreen.frame;
   var pad = 18;
-  var x = /left/.test(corner) ? pad : screen.size.width - W - pad;
-  var top = /top/.test(corner) ? pad + 22 : screen.size.height - H - pad - 12;
-  var y = screen.size.height - top - H;  // Cocoa y is from bottom
-  var mask = $.NSWindowStyleMaskBorderless | $.NSWindowStyleMaskResizable;
-  var win = $.NSWindow.alloc.initWithContentRectStyleMaskBackingDefer($.NSMakeRect(x, y, W, H), mask, $.NSBackingStoreBuffered, false);
+  var x, y;
+  if (savedPos) {
+    var p = JSON.parse(savedPos);
+    x = p.x; y = p.y;
+    x = Math.max(10, Math.min(x, screen.size.width - W - 10));
+    y = Math.max(10, Math.min(y, screen.size.height - H - 10));
+  } else {
+    x = /left/.test(corner) ? pad : screen.size.width - W - pad;
+    var top = /top/.test(corner) ? pad + 22 : screen.size.height - H - pad - 12;
+    y = screen.size.height - top - H;  // Cocoa y is from bottom
+  }
+  var win = $.NSWindow.alloc.initWithContentRectStyleMaskBackingDefer($.NSMakeRect(x, y, W, H), $.NSWindowStyleMaskBorderless, $.NSBackingStoreBuffered, false);
   win.opaque = false; win.backgroundColor = $.NSColor.clearColor;
   win.level = $.NSFloatingWindowLevel;
   win.collectionBehavior = $.NSWindowCollectionBehaviorCanJoinAllSpaces | $.NSWindowCollectionBehaviorStationary | $.NSWindowCollectionBehaviorIgnoresCycle;
   win.hasShadow = true;
-  var web = $.WKWebView.alloc.initWithFrameConfiguration($.NSMakeRect(0,0,W,H), $.WKWebViewConfiguration.alloc.init);
-  web.setValueForKey(false, 'drawsBackground');
-  win.contentView.addSubview(web);
-  web.loadHTMLStringBaseURL(html, $.NSURL.URLWithString('about:blank'));
+  win.movableByWindowBackground = true;
+  var grip = $.DWGrip.alloc.initWithFrame($.NSMakeRect(0, 0, W, H));
+  grip.autoresizingMask = $.NSViewWidthSizable | $.NSViewHeightSizable;
+  win.contentView.addSubview(grip);
   win.orderFrontRegardless;
+  // 每 3 秒存一次当前位置，下次重启小窗留在你放的地方
+  function savePos(){
+    var f = win.frame;
+    var s = JSON.stringify({x: f.origin.x, y: f.origin.y, w: f.size.width, h: f.size.height});
+    $.NSString.stringWithString(s).writeToFileAtomicallyEncodingError(posFile, true, $.NSUTF8StringEncoding, $());
+  }
+  $.NSTimer.scheduledTimerWithTimeIntervalRepeatsBlock(3, true, function(){ savePos(); });
   $.NSApplication.sharedApplication.setActivationPolicy($.NSApplicationActivationPolicyAccessory);
   $.NSApplication.sharedApplication.run;
 }`;
@@ -314,15 +362,29 @@ function startPet() {
   if (!isMac || !CFG.petEnabled) return;
   const words = loadWords(CFG.library);
   const picked = pickForDate(words, CFG.wordsPerGroup || 6, dateKey(new Date()), 'random');
-  const html = buildPetHTML(picked, CFG.reminders || [], THEMES[CFG.theme] || THEMES.cream);
-  const jxa = buildPetJXA();
-  const scriptPath = path.join(os.tmpdir(), 'dw_pet.jxa.js');
-  fs.writeFileSync(scriptPath, jxa);
-  const { spawn } = require('child_process');
-  petChild = spawn('osascript', ['-l', 'JavaScript', scriptPath, html, CFG.petCorner || 'top-right'], { stdio: 'ignore' });
-  petChild.on('error', () => { petChild = null; });
-  petChild.unref();
-  console.log(`[companion] 桌面宠物已显示（${CFG.petCorner}，每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
+  const theme = THEMES[CFG.theme] || THEMES.cream;
+  const W = 320;
+  const H = Math.min(560, 90 + (CFG.wordsPerGroup || 6) * 46 + (CFG.reminders && CFG.reminders.length ? 90 : 0));
+  const svg = buildPetSVG(picked, CFG.reminders || [], theme, W, H);
+  // remember where the user last dragged the pet window
+  const posFile = path.join(ROOT, 'pet-position.json');
+  let savedPos = '';
+  try {
+    const p = JSON.parse(fs.readFileSync(posFile, 'utf8'));
+    if (p && typeof p.x === 'number' && typeof p.y === 'number') savedPos = JSON.stringify({ x: p.x, y: p.y });
+  } catch {}
+  const pngPath = path.join(os.tmpdir(), 'dw_pet.png');
+  rasterizeSVG(svg, pngPath, W * 2, H * 2, (err) => {
+    if (err) { console.error('[companion] pet render failed:', err.message); return; }
+    const jxa = buildPetJXA(W, H);
+    const scriptPath = path.join(os.tmpdir(), 'dw_pet.jxa.js');
+    fs.writeFileSync(scriptPath, jxa);
+    const { spawn } = require('child_process');
+    petChild = spawn('osascript', ['-l', 'JavaScript', scriptPath, pngPath, CFG.petCorner || 'top-right', posFile, savedPos], { stdio: 'ignore' });
+    petChild.on('error', () => { petChild = null; });
+    petChild.unref();
+    console.log(`[companion] 桌面宠物已显示（按住可自由拖动位置，每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
+  });
 }
 
 /* ---------------- set the REAL macOS desktop wallpaper ---------------- */

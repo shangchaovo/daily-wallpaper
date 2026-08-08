@@ -3,6 +3,7 @@
 wallpaper-*.png
 custom-*.png
 companion-config.json
+pet-position.json
 
 # render-test output
 scripts/out_v3/
