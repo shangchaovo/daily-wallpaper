@@ -4,6 +4,7 @@ wallpaper-*.png
 custom-*.png
 companion-config.json
 pet-position.json
+pet-closed
 
 # render-test output
 scripts/out_v3/

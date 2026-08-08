@@ -262,6 +262,11 @@ function buildPetSVG(words, reminders, theme, W, H) {
   const maxW = w - 2 * padX;
   const estW = (str, fs) => { let u = 0; for (const ch of String(str)) u += /[　-鿿豈-﫿]/.test(ch) ? 1 : (ch === ' ' ? 0.3 : 0.55); return u * fs; };
   parts.push(txt(padX, padY + Math.round(11 * s * 0.85), '🌱 每日壁纸', 11 * s, theme.sub));
+  // 右上角关闭按钮（✕），点击可关闭小窗
+  const cR = 14 * s;
+  const cX = w - padX - cR, cY = padY + cR;
+  parts.push(`<circle cx="${cX}" cy="${cY}" r="${cR}" fill="${theme.sub}" opacity="0.55"/>`);
+  parts.push(`<path d="M ${cX - 6 * s} ${cY - 6 * s} L ${cX + 6 * s} ${cY + 6 * s} M ${cX + 6 * s} ${cY - 6 * s} L ${cX - 6 * s} ${cY + 6 * s}" stroke="#ffffff" stroke-width="${2 * s}" stroke-linecap="round"/>`);
   const y0 = padY + 24 * s;
   const n = Math.max(1, words.length);
   const rowH = Math.round((H - padY - 24 - padY) / n * s);
@@ -307,16 +312,36 @@ function buildPetJXA(W, H) {
   return `
 ObjC.import('Cocoa');
 function run(argv){
-  var pngPath = argv[0], corner = argv[1], posFile = argv[2], savedPos = argv[3], W = ${W}, H = ${H};
+  var pngPath = argv[0], corner = argv[1], posFile = argv[2], savedPos = argv[3], closeFile = argv[4], W = ${W}, H = ${H};
   var img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
-  // 关键：WKWebView 会吞掉鼠标事件导致拖不动。这里不用网页，直接用一个
-  // 「把手」子类（mouseDownCanMoveWindow 返回 YES → 窗口可被按住拖动），
-  // 内容由 drawRect 把渲染好的宠物 PNG 画出来。整个窗口可自由拖动。
+  // 自定义拖动 + 右上角 ✕ 关闭：mouseDownCanMoveWindow 走系统机制会吞掉鼠标事件
+  // 导致无法检测 ✕ 点击，所以这里自己实现拖动（mouseDown/Dragged/Up + setFrameOrigin）。
+  var startX = 0, startY = 0, oX = 0, oY = 0, dragging = false;
   ObjC.registerSubclass({ name: 'DWGrip', superclass: 'NSView', methods: {
-    'mouseDownCanMoveWindow': function () { return true; },
+    'mouseDownCanMoveWindow': function () { return false; },
     'drawRect:': function (rect) {
       img.drawInRectFromRectOperationFraction($.NSMakeRect(0, 0, W, H), $.NSZeroRect, $.NSCompositeSourceOver, 1);
-    }
+    },
+    'mouseDown:': function (e) {
+      var p = e.locationInWindow;
+      if (p.x > W - 38 && p.y > H - 38) {   // 右上角 ✕ 区域
+        $.NSString.stringWithString('1').writeToFileAtomicallyEncodingError(closeFile, true, $.NSUTF8StringEncoding, $());
+        win.orderOut($());
+        $.NSApplication.sharedApplication.terminate($());   // 彻底退出，窗口消失
+        return;
+      }
+      var m = $.NSEvent.mouseLocation;
+      startX = m.x; startY = m.y;
+      var f = win.frame;
+      oX = f.origin.x; oY = f.origin.y;
+      dragging = true;
+    },
+    'mouseDragged:': function (e) {
+      if (!dragging) return;
+      var m = $.NSEvent.mouseLocation;
+      win.setFrameOrigin($.NSMakePoint(oX + (m.x - startX), oY + (m.y - startY)));
+    },
+    'mouseUp:': function (e) { dragging = false; }
   }});
   var screen = $.NSScreen.mainScreen.frame;
   var pad = 18;
@@ -336,7 +361,6 @@ function run(argv){
   win.level = $.NSFloatingWindowLevel;
   win.collectionBehavior = $.NSWindowCollectionBehaviorCanJoinAllSpaces | $.NSWindowCollectionBehaviorStationary | $.NSWindowCollectionBehaviorIgnoresCycle;
   win.hasShadow = true;
-  win.movableByWindowBackground = true;
   var grip = $.DWGrip.alloc.initWithFrame($.NSMakeRect(0, 0, W, H));
   grip.autoresizingMask = $.NSViewWidthSizable | $.NSViewHeightSizable;
   win.contentView.addSubview(grip);
@@ -360,6 +384,8 @@ function stopPet() {
 function startPet() {
   stopPet();
   if (!isMac || !CFG.petEnabled) return;
+  const closeFile = path.join(ROOT, 'pet-closed');
+  if (fs.existsSync(closeFile)) { console.log('[companion] 小窗已被关闭（点 ✕），重启伴侣后恢复'); return; }
   const words = loadWords(CFG.library);
   const picked = pickForDate(words, CFG.wordsPerGroup || 6, dateKey(new Date()), 'random');
   const theme = THEMES[CFG.theme] || THEMES.cream;
@@ -380,10 +406,10 @@ function startPet() {
     const scriptPath = path.join(os.tmpdir(), 'dw_pet.jxa.js');
     fs.writeFileSync(scriptPath, jxa);
     const { spawn } = require('child_process');
-    petChild = spawn('osascript', ['-l', 'JavaScript', scriptPath, pngPath, CFG.petCorner || 'top-right', posFile, savedPos], { stdio: 'ignore' });
+    petChild = spawn('osascript', ['-l', 'JavaScript', scriptPath, pngPath, CFG.petCorner || 'top-right', posFile, savedPos, closeFile], { stdio: 'ignore' });
     petChild.on('error', () => { petChild = null; });
     petChild.unref();
-    console.log(`[companion] 桌面宠物已显示（按住可自由拖动位置，每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
+    console.log(`[companion] 桌面宠物已显示（按住可拖动，右上角 ✕ 关闭；每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
   });
 }
 
@@ -609,6 +635,7 @@ server.listen(CFG.port, '127.0.0.1', () => {
     }
     // floating always-on-top pet window, refreshed on a timer
     if (CFG.petEnabled) {
+      try { fs.unlinkSync(path.join(ROOT, 'pet-closed')); } catch {} // ✕ 关闭只对本次运行有效，重启伴侣恢复
       startPet();
       setInterval(startPet, Math.max(5, CFG.intervalMinutes) * 60000);
       const cleanup = () => { stopPet(); process.exit(0); };

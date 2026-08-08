@@ -45,7 +45,7 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 **桌面伴侣 `companion.js`**（Node，零依赖）：起一个静态服务器（同网站）+ macOS 上 (a) 用 `buildSVG` 生成 SVG、`sips` 转 PNG、`osascript` 设为桌面壁纸（`pushWallpaper`，定时），(b) 做一个**无边框置顶小窗**（`startPet`，显示今日单词+提醒），(c) `/ocr` 端点走 Apple Vision OCR 供网页「截图导入」。它的 `buildSVG` 独立复刻 group/poster 版面（也已移除日期/时钟）。配置 `companion-config.json` 首跑自动生成。
 
-**小窗为什么不用 WKWebView**：实测 WKWebView 会吞掉鼠标事件，`movableByWindowBackground` / 盖透明把手都拖不动窗口（也踩过本机 JXA `ObjC.registerSubclass` 的 protocol 崩溃坑）。所以小窗改成 `buildPetSVG` 把卡片渲成 SVG → `rasterizeSVG`(sips) 出 PNG → JXA 里 `registerSubclass` 一个 `DWGrip`（`mouseDownCanMoveWindow` 返回 YES → 按住即可**自由拖动**，`drawRect:` 把 PNG 画出来，窗口就是纯内容，可整窗拖动）。位置每 3s 存 `pet-position.json`，下次启动留在原位。
+**小窗为什么不用 WKWebView**：实测 WKWebView 会吞掉鼠标事件，`movableByWindowBackground` / 盖透明把手都拖不动窗口（也踩过本机 JXA `ObjC.registerSubclass` 的 protocol 崩溃坑）。所以小窗改成 `buildPetSVG` 把卡片渲成 SVG → `rasterizeSVG`(sips) 出 PNG → JXA 里 `registerSubclass` 一个 `DWGrip`：**自定义拖动**（`mouseDown:/mouseDragged:/mouseUp:` + `NSEvent.mouseLocation` + `setFrameOrigin`，按住任意位置即拖，右上角 ✕ 区域则 `orderOut` + `terminate` 关闭小窗并写 `pet-closed` 标记），`drawRect:` 把 PNG 画出来。位置每 3s 存 `pet-position.json`，重启留在原位；`pet-closed` 在伴侣启动时清掉，所以**重启伴侣即可恢复小窗**。
 
 **一键启用（主路径，零下载）**：网页「一键启用桌面伴侣」按钮 POST `/companion/start`（`server.js` 的 `startCompanion`）。前提是 server 就跑在用户自己 Mac 上（本来就是 `node server.js`）：先 `probeCompanion()` 探测 8771 是否已有 companion（`/status.json` 返回带 `config`），没有就 `spawn(process.execPath, [companion.js], {cwd, detached, stdio 落到 ~/Library/Logs/daily-wallpaper-companion.log})` 拉起并轮询等它起来，返回 `{ok, already|spawned}`。`child.unref()` 让它在 server 退出后继续跑。`?dry=1` 只返回不真正拉起（e2e 用）。主 server 也回 `/status.json` 为 `{ok:true, companion:false}`，供前端 `syncCompanionButton` 区分「本页是不是伴侣提供的」。
 
