@@ -343,17 +343,36 @@ function buildPetSVG(words, reminders, theme, W, H) {
   const shown = words.slice(0, n);
   const meaning = wd => (wd.pos ? wd.pos + ' ' : '') + (wd.meaning || '');
   if (mode === 'wide') {
-    // 横版宽条：每词一列，词上释义下，居中（字号随卡片缩放）
-    const cols = Math.min(n, Math.max(1, Math.floor(waW / (96 * scale))));
+    // 横版宽条：每词一格（词上释义下，居中）。列数放不下就自动换行成多行网格，
+    // 保证全部单词都显示——旧版 slice(0, cols) 会在拉伸时「丢失」后面的词。
+    const minCol = 80 * scale;                                 // 每列最小宽度
+    const cols = Math.max(1, Math.min(n, Math.floor(waW / minCol) || 1));
+    const rows = Math.ceil(n / cols);
     const colW = waW / cols;
-    shown.slice(0, cols).forEach((wd, i) => {
-      const cx = waX + i * colW + colW / 2;
-      const top = waY + 3 * scale;
-      parts.push(ctxt(cx * s, (top + 18 * scale) * s, wd.word, 14 * s * scale, theme.ink, 700));
-      let yy = top + 34 * scale;
-      if (wd.phonetic) { parts.push(ctxt(cx * s, yy * s, wd.phonetic, 9 * s * scale, theme.sub)); yy += 14 * scale; }
-      parts.push(ctxt(cx * s, yy * s, truncate(meaning(wd), 9.5 * s * scale, (colW - 6) * s), 9.5 * s * scale, theme.sub));
-      if (i < cols - 1) parts.push(`<line x1="${(waX + (i + 1) * colW) * s}" y1="${waY * s}" x2="${(waX + (i + 1) * colW) * s}" y2="${(waY + waH) * s}" stroke="${theme.line || 'rgba(128,128,128,0.14)'}" stroke-width="${s}"/>`);
+    const rowH = waH / rows;
+    // 行高不够时略缩字号，避免挤爆
+    const cellScale = Math.min(scale, Math.max(0.55, rowH / 56));
+    shown.forEach((wd, i) => {
+      const c = i % cols, r = Math.floor(i / cols);
+      const cx = waX + c * colW + colW / 2;
+      const mid = waY + r * rowH + rowH / 2;
+      const wordFs = 14 * cellScale;
+      const subFs = 9.5 * cellScale;
+      // 词 + 音标 + 释义垂直居中于该格
+      const blockH = (wd.phonetic ? 3 : 2) * (subFs + 4) + wordFs * 0.2;
+      let yy = mid - blockH / 2 + wordFs * 0.75;
+      parts.push(ctxt(cx * s, yy * s, wd.word, wordFs * s, theme.ink, 700));
+      yy += wordFs * 0.95;
+      if (wd.phonetic) { parts.push(ctxt(cx * s, yy * s, wd.phonetic, 9 * s * cellScale, theme.sub)); yy += subFs + 3; }
+      parts.push(ctxt(cx * s, yy * s, truncate(meaning(wd), subFs * s, (colW - 8) * s), subFs * s, theme.sub));
+      // 列分隔线（最后一列不画；多行时整列通高）
+      if (c < cols - 1 && r === 0) {
+        parts.push(`<line x1="${(waX + (c + 1) * colW) * s}" y1="${waY * s}" x2="${(waX + (c + 1) * colW) * s}" y2="${(waY + waH) * s}" stroke="${theme.line || 'rgba(128,128,128,0.14)'}" stroke-width="${s}"/>`);
+      }
+      // 行分隔线
+      if (r < rows - 1 && c === 0) {
+        parts.push(`<line x1="${waX * s}" y1="${(waY + (r + 1) * rowH) * s}" x2="${(waX + waW) * s}" y2="${(waY + (r + 1) * rowH) * s}" stroke="${theme.line || 'rgba(128,128,128,0.14)'}" stroke-width="${s}"/>`);
+      }
     });
   } else if (mode === 'square') {
     // 方形：两列网格，序号 + 词 + 释义（字号随卡片缩放）
@@ -466,16 +485,26 @@ function run(argv){
       btnX0: bx0, btnX1: bx0 + bw + BTN.gap, btnW: bw
     };
   }
-  // 拖动中实时重渲：保持清晰不糊（sips ~50ms，120ms 节流）
-  function renderNow(w, h){
+  // 拖动中实时重渲：用异步请求（不阻塞主线程），窗口全程跟手；
+  // 渲染在服务端 ~50ms 完成，回到主线程后刷新成清晰图（token 保证只应用最新一次）
+  var renderToken = 0, lastRenderAt = 0, lastRendered = '';
+  function renderAsync(w, h){
+    var nw = Math.round(w), nh = Math.round(h);
+    var key = nw + 'x' + nh;
+    if (key === lastRendered) return;             // 尺寸没变，跳过
     var now = Date.now();
-    if (now - lastRenderAt < 120) return;
+    if (now - lastRenderAt < 90) return;          // 节流 ~11fps，不阻塞
     lastRenderAt = now;
-    var req = $.NSMutableURLRequest.alloc.initWithURL($.NSURL.URLWithString(renderUrl + '?w=' + Math.round(w) + '&h=' + Math.round(h)));
+    lastRendered = key;
+    renderToken++;
+    var tok = renderToken;
+    var req = $.NSMutableURLRequest.alloc.initWithURL($.NSURL.URLWithString(renderUrl + '?w=' + nw + '&h=' + nh));
     req.setHTTPMethod('POST');
-    $.NSURLConnection.sendSynchronousRequestReturningResponseError(req, $(), $());
-    img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
-    grip.setNeedsDisplay(true);
+    $.NSURLConnection.sendAsynchronousRequestQueueCompletionHandler(req, $.NSOperationQueue.mainQueue, function(resp, data, err){
+      if (tok !== renderToken) return;            // 已有更新请求，丢弃这次
+      img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
+      grip.setNeedsDisplay(true);
+    });
   }
   var spawnedAt = Date.now();   // 新窗口预热期：spawn 后 1.5s 内忽略鼠标事件，挡幽灵事件
   ObjC.registerSubclass({ name: 'DWGrip', superclass: 'NSView', methods: {
@@ -522,7 +551,7 @@ function run(argv){
         nh = Math.max(MINH, Math.min(MAXS, nh));
         var f = win.frame;
         win.setFrameDisplay($.NSMakeRect(f.origin.x, f.origin.y + f.size.height - nh, nw, nh), true);   // setFrame:display:
-        renderNow(nw, nh);
+        renderAsync(nw, nh);
         return;
       }
       if (!dragging) return;
@@ -531,10 +560,15 @@ function run(argv){
       win.setFrameOrigin($.NSMakePoint(oX + (m.x - startX), oY + (m.y - startY)));
     },
     'mouseUp:': function (e) {
-      if (resizing) {   // 松手：保存尺寸，重渲由 /pet-size.php 完成、宠物轮询自动加载
+      if (resizing) {   // 松手：同步保存尺寸（/pet-size.php 渲染完才响应）→ 立刻加载最终高清图
         resizing = false;
         var f2 = win.frame;
+        // 同步 POST：服务端串行渲染完才返回，保证读到的是最终尺寸的完整 PNG
         postUrl(sizeUrl + '?w=' + Math.round(f2.size.width) + '&h=' + Math.round(f2.size.height));
+        img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
+        grip.setNeedsDisplay(true);
+        lastRendered = Math.round(f2.size.width) + 'x' + Math.round(f2.size.height);
+        renderToken++;   // 作废任何还在飞的异步重渲，避免旧尺寸覆盖最终图
         return;
       }
       dragging = false;
@@ -681,14 +715,36 @@ function startHotkey() {
   console.log(`[companion] 全局快捷键已开启：${label}（需在 系统设置→隐私与安全性→输入监控 里给 osascript 授权才生效，否则热键无响应）`);
 }
 /* Render the pet card PNG at a given size (shared by spawn + live resize +
- * shape change). sips is fast (~50ms), so it can run during a resize drag. */
+ * shape change). sips is fast (~50ms), so it can run during a resize drag.
+ * Serialized: concurrent POSTs during a fast drag would otherwise race on the
+ * same /tmp/dw_pet.png and leave a half-written (blank / partial) image. */
+let petRenderBusy = false;
+let petRenderPending = null;   // {W,H,cbs:[]} — only the latest size is kept
 function renderPetPng(W, H, cb) {
-  const words = loadWords(CFG.library);
-  const picked = pickForDate(words, CFG.wordsPerGroup || 6, todaySeed(), 'random');
-  const theme = THEMES[CFG.theme] || THEMES.cream;
-  const svg = buildPetSVG(picked, CFG.reminders || [], theme, W, H);
-  const pngPath = path.join(os.tmpdir(), 'dw_pet.png');
-  rasterizeSVG(svg, pngPath, W * 2, H * 2, cb);
+  if (petRenderBusy) {
+    if (!petRenderPending) petRenderPending = { W, H, cbs: [] };
+    else { petRenderPending.W = W; petRenderPending.H = H; }
+    if (cb) petRenderPending.cbs.push(cb);
+    return;
+  }
+  petRenderBusy = true;
+  const doOne = (w, h, cbs) => {
+    const words = loadWords(CFG.library);
+    const picked = pickForDate(words, CFG.wordsPerGroup || 6, todaySeed(), 'random');
+    const theme = THEMES[CFG.theme] || THEMES.cream;
+    const svg = buildPetSVG(picked, CFG.reminders || [], theme, w, h);
+    const pngPath = path.join(os.tmpdir(), 'dw_pet.png');
+    rasterizeSVG(svg, pngPath, w * 2, h * 2, (err) => {
+      for (const c of cbs) { try { c(err); } catch {} }
+      if (petRenderPending) {
+        const p = petRenderPending; petRenderPending = null;
+        doOne(p.W, p.H, p.cbs);
+      } else {
+        petRenderBusy = false;
+      }
+    });
+  };
+  doOne(W, H, cb ? [cb] : []);
 }
 
 function startPet() {
