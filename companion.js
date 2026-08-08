@@ -44,6 +44,11 @@ function loadConfig() {
     petEnabled: true,
     petCorner: 'top-right',       // 'top-right'|'top-left'|'bottom-right'|'bottom-left'
     reminders: [],                // optional: hard-code reminders for wallpaper
+    // one-key switch to the next word group + refresh the desktop wallpaper
+    advanceByClick: true,         // single-click the pet = advance, shift-click = back
+    hotkeyEnabled: false,         // global hotkey (needs Input Monitoring; off by default)
+    hotkey: 'ctrl+alt+w',         // format: ctrl/alt/shift/cmd + '+' + a-z or 'space'
+    hotkeyBack: 'ctrl+alt+shift+w', // back (undo last advance)
   };
   try {
     const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
@@ -54,6 +59,41 @@ function loadConfig() {
   }
 }
 const CFG = loadConfig();
+
+/* Manual-advance state: each "next" (pet click or global hotkey) bumps the
+ * counter, which is mixed into the pick seed so the wallpaper + pet jump to a
+ * new word group right away (the auto interval still rotates by bucket). */
+const STATE_PATH = path.join(ROOT, 'companion-state.json');
+let state = { bump: 0 };
+try { state = Object.assign({ bump: 0 }, JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'))); } catch {}
+function bumpDelta(d) {
+  state.bump = (((state.bump + d) % 1000000) + 1000000) % 1000000;
+  try { fs.writeFileSync(STATE_PATH, JSON.stringify(state)); } catch {}
+}
+function bumpNext() { bumpDelta(1); }
+function bumpPrev() { bumpDelta(-1); }
+/* Same seed for wallpaper & pet so both show the same group. When bump is 0 the
+ * seed is byte-identical to the old behaviour, so first-run is unchanged. */
+function todaySeed() {
+  return dateKey(new Date()) + '#' + rotationBucket() + (state.bump ? '#bump' + state.bump : '');
+}
+/* Parse 'ctrl+alt+w'-style hotkey into { keyCode, mask, label }. */
+const KEYCODES = { a:0,b:11,c:8,d:2,e:14,f:3,g:5,h:4,i:34,j:38,k:40,l:37,m:46,n:45,o:31,p:35,q:12,r:15,s:1,t:17,u:32,v:9,w:13,x:7,y:16,z:6, space:49 };
+function parseHotkey(spec) {
+  const parts = String(spec).split('+').map(s => s.trim().toLowerCase());
+  const key = parts.pop();
+  const keyCode = KEYCODES[key];
+  if (keyCode == null) return null;
+  let mask = 0;
+  for (const p of parts) {
+    if (p === 'ctrl' || p === 'control') mask |= 1;                 // control
+    else if (p === 'alt' || p === 'option' || p === 'opt') mask |= 2; // option
+    else if (p === 'shift') mask |= 4;                              // shift
+    else if (p === 'cmd' || p === 'command' || p === 'meta') mask |= 8; // command
+    else return null;
+  }
+  return { keyCode, mask, label: spec };
+}
 
 /* ---------------- word data ---------------- */
 function loadWords(library) {
@@ -245,13 +285,37 @@ function rasterizeSVG(svg, outPng, W, H, cb) {
  * HTML in a borderless-ish WKWebView. No install, no focus stealing (Accessory
  * policy), lives on every Space. Respawned on a timer to refresh its content;
  * killed on companion exit. */
+/* Pet card footer: a hint line + two visible ←回退 / 前进→ buttons, so the
+ * window is self-explanatory without remembering click gestures. These geometry
+ * constants feed BOTH the SVG (where buttons are drawn) and the JXA (where they
+ * are hit-tested), so they must stay in sync. */
+const PET_FOOTER_H = 62;                       // 底部提示行 + 按钮栏总高 (pt)
+const PET_BTN = { w: 96, h: 32, bottomPad: 8, gap: 16 };  // 按钮宽/高/距底边距/间距 (pt)
+const PET_RESIZE = { pad: 4, size: 32 };       // 右下角拉伸手柄尺寸 (pt) — 大一点好抓
+const MIN_PET_W = 250, MIN_PET_H = 170, MAX_PET = 900;   // 宠物可拉伸的尺寸范围 (pt)
+
+/* 形状 → 排列模式：竖版窄条=逐行堆叠；横版宽条=每词一列；方形=两列网格。 */
+function petMode(W, H) {
+  const r = W / H;
+  if (r >= 1.5) return 'wide';
+  if (r <= 0.75) return 'tall';
+  return 'square';
+}
+/* 文字等比缩放：相对默认卡（320×428）的几何平均比例，放大卡片字也跟着放大。
+ * clamp 到 0.7–2.6 防止极小/极大窗口下文字失控。 */
+function petScale(W, H) {
+  const s = Math.sqrt((W / 320) * (H / 428));
+  return Math.max(0.7, Math.min(2.6, s));
+}
+
 /* Render the pet card as SVG (rasterized to PNG later). The pet WINDOW is a
  * borderless draggable grip that just draws this image — no WKWebView, because
  * a web view swallows the mouse drag (movableByWindowBackground won't work). */
 function buildPetSVG(words, reminders, theme, W, H) {
   const s = 2; // render at 2x so it's crisp on retina
   const w = W * s, h = H * s;
-  const padX = 15 * s, padY = 14 * s;
+  const padX = 15, padY = 14;                  // pt
+  const footerH = PET_FOOTER_H;
   const parts = [];
   parts.push(`<defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">` +
     `<stop offset="0" stop-color="${theme.bg}"/><stop offset="1" stop-color="${theme.bg2 || theme.bg}"/></linearGradient></defs>`);
@@ -259,40 +323,100 @@ function buildPetSVG(words, reminders, theme, W, H) {
   const fam = 'PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif';
   const txt = (x, y, str, size, fill, weight) =>
     `<text x="${x}" y="${y}" font-family="${fam}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ''}>${esc(str)}</text>`;
-  const maxW = w - 2 * padX;
+  const ctxt = (cx, cy, str, size, fill, weight) =>
+    `<text x="${cx}" y="${cy}" text-anchor="middle" font-family="${fam}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ''}>${esc(str)}</text>`;
+  const maxW = w - 2 * padX * s;
   const estW = (str, fs) => { let u = 0; for (const ch of String(str)) u += /[　-鿿豈-﫿]/.test(ch) ? 1 : (ch === ' ' ? 0.3 : 0.55); return u * fs; };
-  parts.push(txt(padX, padY + Math.round(11 * s * 0.85), '🌱 每日壁纸', 11 * s, theme.sub));
+  parts.push(txt(padX * s, padY * s + Math.round(11 * s * 0.85), '🌱 每日壁纸', 11 * s, theme.sub));
   // 右上角关闭按钮（✕），点击可关闭小窗
   const cR = 14 * s;
-  const cX = w - padX - cR, cY = padY + cR;
+  const cX = w - padX * s - cR, cY = padY * s + cR;
   parts.push(`<circle cx="${cX}" cy="${cY}" r="${cR}" fill="${theme.sub}" opacity="0.55"/>`);
   parts.push(`<path d="M ${cX - 6 * s} ${cY - 6 * s} L ${cX + 6 * s} ${cY + 6 * s} M ${cX + 6 * s} ${cY - 6 * s} L ${cX - 6 * s} ${cY + 6 * s}" stroke="#ffffff" stroke-width="${2 * s}" stroke-linecap="round"/>`);
-  const y0 = padY + 24 * s;
+  // 单词区（底部预留 footerH 给提示行 + 按钮栏）
+  const mode = petMode(W, H);
+  const scale = petScale(W, H);              // 文字等比缩放：卡片越大字越大
+  const footerTop = (H - footerH);                       // pt
+  const waX = padX, waY = padY + 24;
+  const waW = W - 2 * padX, waH = H - footerH - padY - 24 - padY;
   const n = Math.max(1, words.length);
-  const rowH = Math.round((H - padY - 24 - padY) / n * s);
-  words.slice(0, n).forEach((wd, i) => {
-    const rowTop = y0 + i * rowH;
-    const mid = rowTop + rowH / 2;
-    parts.push(txt(padX, mid + Math.round(4 * s), String(i + 1).padStart(2, '0'), 10 * s, theme.sub));
-    const ix = padX + 28 * s;
-    parts.push(txt(ix, mid - Math.round(5 * s), wd.word, 16 * s, theme.ink, 700));
-    if (wd.phonetic) {
-      const ww = Math.round(estW(wd.word, 16 * s));
-      parts.push(txt(ix + ww + 7 * s, mid - Math.round(5 * s), wd.phonetic, 10.5 * s, theme.sub));
-    }
-    const meaning = (wd.pos ? wd.pos + ' ' : '') + (wd.meaning || '');
-    parts.push(txt(ix, mid + Math.round(11 * s), truncate(meaning, 11 * s, maxW - 28 * s), 11 * s, theme.sub));
-    if (i < n - 1) parts.push(`<line x1="${padX}" y1="${rowTop + rowH}" x2="${w - padX}" y2="${rowTop + rowH}" stroke="${theme.line || 'rgba(128,128,128,0.14)'}" stroke-width="${s}"/>`);
-  });
-  if (reminders && reminders.length) {
-    let ry = y0 + n * rowH + 4 * s;
-    parts.push(txt(padX, ry, '今日提醒', 12 * s, theme.accent, 600));
-    ry += 18 * s;
-    reminders.slice(0, 5).forEach(r => {
-      parts.push(`<rect x="${padX}" y="${ry - 8 * s}" width="${11 * s}" height="${11 * s}" fill="none" stroke="${theme.sub}" stroke-width="${s}"/>`);
-      parts.push(txt(padX + 18 * s, ry, truncate(r.text + (r.time ? ' · ' + r.time : ''), 11 * s, maxW - 18 * s), 11 * s, theme.ink));
-      ry += 16 * s;
+  const shown = words.slice(0, n);
+  const meaning = wd => (wd.pos ? wd.pos + ' ' : '') + (wd.meaning || '');
+  if (mode === 'wide') {
+    // 横版宽条：每词一列，词上释义下，居中（字号随卡片缩放）
+    const cols = Math.min(n, Math.max(1, Math.floor(waW / (96 * scale))));
+    const colW = waW / cols;
+    shown.slice(0, cols).forEach((wd, i) => {
+      const cx = waX + i * colW + colW / 2;
+      const top = waY + 3 * scale;
+      parts.push(ctxt(cx * s, (top + 18 * scale) * s, wd.word, 14 * s * scale, theme.ink, 700));
+      let yy = top + 34 * scale;
+      if (wd.phonetic) { parts.push(ctxt(cx * s, yy * s, wd.phonetic, 9 * s * scale, theme.sub)); yy += 14 * scale; }
+      parts.push(ctxt(cx * s, yy * s, truncate(meaning(wd), 9.5 * s * scale, (colW - 6) * s), 9.5 * s * scale, theme.sub));
+      if (i < cols - 1) parts.push(`<line x1="${(waX + (i + 1) * colW) * s}" y1="${waY * s}" x2="${(waX + (i + 1) * colW) * s}" y2="${(waY + waH) * s}" stroke="${theme.line || 'rgba(128,128,128,0.14)'}" stroke-width="${s}"/>`);
     });
+  } else if (mode === 'square') {
+    // 方形：两列网格，序号 + 词 + 释义（字号随卡片缩放）
+    const cols = 2, rows = Math.max(1, Math.ceil(n / 2));
+    const colW = (waW - padX) / cols;
+    const rowH = waH / rows;
+    shown.forEach((wd, i) => {
+      const c = i % cols, r = Math.floor(i / cols);
+      const x = waX + c * (colW + padX);
+      const mid = waY + r * rowH + rowH / 2;
+      parts.push(txt(x * s, mid * s + Math.round(4 * s * scale), String(i + 1).padStart(2, '0'), 9 * s * scale, theme.sub));
+      const ix = x + 22 * scale;
+      parts.push(txt(ix * s, (mid - 6 * scale) * s, wd.word, 14 * s * scale, theme.ink, 700));
+      parts.push(txt(ix * s, (mid + 11 * scale) * s, truncate(meaning(wd), 9.5 * s * scale, (colW - 30 * scale) * s), 9.5 * s * scale, theme.sub));
+    });
+  } else {
+    // 竖版窄条：逐行堆叠（词 + 音标 + 释义，字号随卡片缩放）
+    const rowH = waH / n;
+    shown.forEach((wd, i) => {
+      const rowTop = waY + i * rowH;
+      const mid = rowTop + rowH / 2;
+      parts.push(txt(padX * s, mid * s + Math.round(4 * s * scale), String(i + 1).padStart(2, '0'), 10 * s * scale, theme.sub));
+      const ix = padX + 28 * scale;
+      parts.push(txt(ix * s, (mid - 5 * scale) * s, wd.word, 16 * s * scale, theme.ink, 700));
+      if (wd.phonetic) {
+        const ww = Math.round(estW(wd.word, 16 * s * scale));
+        parts.push(txt((ix + ww + 7 * scale) * s, (mid - 5 * scale) * s, wd.phonetic, 10.5 * s * scale, theme.sub));
+      }
+      parts.push(txt(ix * s, (mid + 11 * scale) * s, truncate(meaning(wd), 11 * s * scale, maxW - 28 * s * scale), 11 * s * scale, theme.sub));
+      if (i < n - 1) parts.push(`<line x1="${padX * s}" y1="${(rowTop + rowH) * s}" x2="${(w - padX * s)}" y2="${(rowTop + rowH) * s}" stroke="${theme.line || 'rgba(128,128,128,0.14)'}" stroke-width="${s}"/>`);
+    });
+  }
+  // 提醒（横版太矮放不下，只竖版/方形画；字号随卡片缩放）
+  if (reminders && reminders.length && mode !== 'wide') {
+    let ry = waY + (mode === 'square' ? Math.ceil(n / 2) * (waH / Math.max(1, Math.ceil(n / 2))) : n * (waH / n)) + 4 * scale;
+    parts.push(txt(padX * s, ry * s, '今日提醒', 12 * s * scale, theme.accent, 600));
+    ry += 18 * scale;
+    reminders.slice(0, 5).forEach(r => {
+      if (ry > footerTop - 14 * scale) return;   // 不压到按钮栏
+      parts.push(`<rect x="${padX * s}" y="${(ry - 8 * scale) * s}" width="${11 * s * scale}" height="${11 * s * scale}" fill="none" stroke="${theme.sub}" stroke-width="${s}"/>`);
+      parts.push(txt(padX * s + 18 * s * scale, ry * s, truncate(r.text + (r.time ? ' · ' + r.time : ''), 11 * s * scale, maxW - 18 * s * scale), 11 * s * scale, theme.ink));
+      ry += 16 * scale;
+    });
+  }
+  // ---- 底部提示行（标注，降低使用门槛）----
+  parts.push(ctxt(w / 2, (H - footerH + 13) * s, '单击卡片＝前进 · Shift＋单击＝回退', 10.5 * s, theme.sub));
+  // ---- 底部可视化按钮：◀ 回退 / 前进 ▶（窄窗口自动变窄，避开右下拉伸手柄）----
+  const btn = PET_BTN;
+  const btnW = Math.min(btn.w, Math.floor((W - 3 * padX - btn.gap - PET_RESIZE.size) / 2));
+  const btnTop = (H - btn.h - btn.bottomPad);
+  const btnX0 = Math.round((W - (2 * btnW + btn.gap)) / 2);
+  const btnX1 = btnX0 + btnW + btn.gap;
+  const btnC = (x0, label) =>
+    `<rect x="${x0 * s}" y="${btnTop * s}" width="${btnW * s}" height="${btn.h * s}" rx="${12 * s}" fill="${theme.accentSoft}" stroke="${theme.line}" stroke-width="${s}"/>` +
+    `<text x="${(x0 + btnW / 2) * s}" y="${(btnTop + btn.h / 2) * s + Math.round(4.5 * s)}" text-anchor="middle" font-family="${fam}" font-size="${13 * s}" font-weight="600" fill="${theme.ink}">${esc(label)}</text>`;
+  parts.push(btnC(btnX0, '◀ 回退'));
+  parts.push(btnC(btnX1, '前进 ▶'));
+  // ---- 右下角拉伸手柄（三条斜线，明显的"可拖拽调大小"提示）----
+  const rs = PET_RESIZE;
+  const gx = (W - rs.pad - rs.size) * s, gy = (H - rs.pad - rs.size) * s, gs = rs.size * s;
+  for (let i = 0; i < 3; i++) {
+    const o = i * 8 * s;
+    parts.push(`<line x1="${gx + gs - 4 - o}" y1="${gy + 10 + o}" x2="${gx + gs - 12 - o}" y2="${gy + 18 + o}" stroke="${theme.sub}" stroke-width="${2 * s}" stroke-linecap="round" opacity="0.55"/>`);
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
 }
@@ -309,40 +433,141 @@ function truncate(str, fs, maxW) {
 }
 
 function buildPetJXA(W, H) {
+  const meta = JSON.stringify({ btn: PET_BTN, rsz: PET_RESIZE, minW: MIN_PET_W, minH: MIN_PET_H, max: MAX_PET, port: CFG.port, advance: CFG.advanceByClick !== false });
   return `
 ObjC.import('Cocoa');
 function run(argv){
   var pngPath = argv[0], corner = argv[1], posFile = argv[2], savedPos = argv[3], closeFile = argv[4], W = ${W}, H = ${H};
+  var META = ${meta};
+  var BTN = META.btn, RSZ = META.rsz, MINW = META.minW, MINH = META.minH, MAXS = META.max, PORT = META.port, clickEnabled = META.advance;
+  var nextUrl = 'http://127.0.0.1:' + PORT + '/next.php';
+  var prevUrl = 'http://127.0.0.1:' + PORT + '/prev.php';
+  var sizeUrl = 'http://127.0.0.1:' + PORT + '/pet-size.php';
+  var renderUrl = 'http://127.0.0.1:' + PORT + '/pet-render.php';
   var img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
-  // 自定义拖动 + 右上角 ✕ 关闭：mouseDownCanMoveWindow 走系统机制会吞掉鼠标事件
-  // 导致无法检测 ✕ 点击，所以这里自己实现拖动（mouseDown/Dragged/Up + setFrameOrigin）。
-  var startX = 0, startY = 0, oX = 0, oY = 0, dragging = false;
+  var startX = 0, startY = 0, oX = 0, oY = 0, dragging = false, moved = false, downTime = 0;
+  var resizing = false, rStartX = 0, rStartY = 0, rW0 = 0, rH0 = 0, lastRenderAt = 0;
+  function postUrl(u){
+    var req = $.NSMutableURLRequest.alloc.initWithURL($.NSURL.URLWithString(u));
+    req.setHTTPMethod('POST');
+    $.NSURLConnection.sendSynchronousRequestReturningResponseError(req, $(), $());
+  }
+  // 动态布局：所有命中区都按“当前窗口尺寸”算，拉伸后无需重启窗口
+  function layout(){
+    var fs = win.frame.size;
+    var W2 = fs.width, H2 = fs.height;
+    var bw = Math.min(BTN.w, Math.floor((W2 - 45 - BTN.gap - RSZ.size) / 2));
+    var bx0 = Math.round((W2 - (2 * bw + BTN.gap)) / 2);
+    return {
+      W: W2, H: H2,
+      closeX: W2 - 38, closeY: H2 - 38,
+      rszX: W2 - RSZ.pad - RSZ.size, rszY0: RSZ.pad, rszY1: RSZ.pad + RSZ.size,
+      btnY0: BTN.bottomPad, btnY1: BTN.bottomPad + BTN.h,
+      btnX0: bx0, btnX1: bx0 + bw + BTN.gap, btnW: bw
+    };
+  }
+  // 拖动中实时重渲：保持清晰不糊（sips ~50ms，120ms 节流）
+  function renderNow(w, h){
+    var now = Date.now();
+    if (now - lastRenderAt < 120) return;
+    lastRenderAt = now;
+    var req = $.NSMutableURLRequest.alloc.initWithURL($.NSURL.URLWithString(renderUrl + '?w=' + Math.round(w) + '&h=' + Math.round(h)));
+    req.setHTTPMethod('POST');
+    $.NSURLConnection.sendSynchronousRequestReturningResponseError(req, $(), $());
+    img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
+    grip.setNeedsDisplay(true);
+  }
+  var spawnedAt = Date.now();   // 新窗口预热期：spawn 后 1.5s 内忽略鼠标事件，挡幽灵事件
   ObjC.registerSubclass({ name: 'DWGrip', superclass: 'NSView', methods: {
     'mouseDownCanMoveWindow': function () { return false; },
     'drawRect:': function (rect) {
-      img.drawInRectFromRectOperationFraction($.NSMakeRect(0, 0, W, H), $.NSZeroRect, $.NSCompositeSourceOver, 1);
+      var fs = win.frame.size;
+      img.drawInRectFromRectOperationFraction($.NSMakeRect(0, 0, fs.width, fs.height), $.NSZeroRect, $.NSCompositeSourceOver, 1);
     },
     'mouseDown:': function (e) {
+      var L = layout();
       var p = e.locationInWindow;
-      if (p.x > W - 38 && p.y > H - 38) {   // 右上角 ✕ 区域
+      if (p.x > L.closeX && p.y > L.closeY) {   // 右上角 ✕ 区域
         $.NSString.stringWithString('1').writeToFileAtomicallyEncodingError(closeFile, true, $.NSUTF8StringEncoding, $());
         win.orderOut($());
         $.NSApplication.sharedApplication.terminate($());   // 彻底退出，窗口消失
         return;
       }
+      if (Date.now() - spawnedAt < 1500) return;   // 预热期：不响应幽灵按下
+      if (p.x >= L.rszX && p.y >= L.rszY0 && p.y <= L.rszY1) {   // 右下角拉伸手柄
+        var rm = $.NSEvent.mouseLocation;
+        rStartX = rm.x; rStartY = rm.y;
+        var rf = win.frame;
+        rW0 = rf.size.width; rH0 = rf.size.height;
+        resizing = true; moved = true;
+        return;
+      }
+      if (p.y >= L.btnY0 && p.y <= L.btnY1) {   // 底部可视化按钮（优先于拖动）
+        if (p.x >= L.btnX0 && p.x <= L.btnX0 + L.btnW) { postUrl(prevUrl); return; }
+        if (p.x >= L.btnX1 && p.x <= L.btnX1 + L.btnW) { postUrl(nextUrl); return; }
+      }
       var m = $.NSEvent.mouseLocation;
       startX = m.x; startY = m.y;
+      moved = false; downTime = Date.now();
       var f = win.frame;
       oX = f.origin.x; oY = f.origin.y;
       dragging = true;
     },
     'mouseDragged:': function (e) {
+      if (resizing) {   // 拉伸：保持左上角位置，右下角跟随鼠标；边拉边重渲
+        var m = $.NSEvent.mouseLocation;
+        var nw = Math.round(rW0 + (m.x - rStartX));
+        var nh = Math.round(rH0 + (rStartY - m.y));   // Cocoa y 向上，鼠标下移=变高
+        nw = Math.max(MINW, Math.min(MAXS, nw));
+        nh = Math.max(MINH, Math.min(MAXS, nh));
+        var f = win.frame;
+        win.setFrameDisplay($.NSMakeRect(f.origin.x, f.origin.y + f.size.height - nh, nw, nh), true);   // setFrame:display:
+        renderNow(nw, nh);
+        return;
+      }
       if (!dragging) return;
       var m = $.NSEvent.mouseLocation;
+      if (Math.abs(m.x - startX) > 4 || Math.abs(m.y - startY) > 4) moved = true;
       win.setFrameOrigin($.NSMakePoint(oX + (m.x - startX), oY + (m.y - startY)));
     },
-    'mouseUp:': function (e) { dragging = false; }
+    'mouseUp:': function (e) {
+      if (resizing) {   // 松手：保存尺寸，重渲由 /pet-size.php 完成、宠物轮询自动加载
+        resizing = false;
+        var f2 = win.frame;
+        postUrl(sizeUrl + '?w=' + Math.round(f2.size.width) + '&h=' + Math.round(f2.size.height));
+        return;
+      }
+      dragging = false;
+      if (Date.now() - spawnedAt < 1500 || downTime === 0) return;   // 预热期 / 没有真实按下
+      // 单击＝前进；Shift+单击＝回退。按钮点击在 mouseDown 已 POST，且 downTime 未
+      // 设置（=0）→ Date.now()-0 远超 400ms，不会在这里重复触发。
+      if (clickEnabled && !moved && Date.now() - downTime < 400) {
+        var back = (e.modifierFlags & ${FLAG_SHIFT}) ? true : false;
+        postUrl(back ? prevUrl : nextUrl);
+      }
+    }
   }});
+  // 轮询 PNG 变化：外部重渲（网页换形状 / 定时刷新 / 拉伸重渲）自动重载，不用重启窗口
+  var lastMtime = 0;
+  try {
+    var at0 = $.NSFileManager.defaultManager.attributesOfItemAtPathError(pngPath, $());
+    if (at0) { var d0 = at0.objectForKey($.NSFileModificationDate); if (d0) lastMtime = d0.timeIntervalSince1970 || 0; }
+  } catch (e) {}
+  $.NSTimer.scheduledTimerWithTimeIntervalRepeatsBlock(0.6, true, function(){
+    try {
+      var at = $.NSFileManager.defaultManager.attributesOfItemAtPathError(pngPath, $());
+      if (!at) return;
+      var d = at.objectForKey($.NSFileModificationDate);
+      if (!d) return;
+      var mt = d.timeIntervalSince1970 || 0;
+      if (mt > lastMtime + 0.05) {
+        lastMtime = mt;
+        img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
+        grip.setNeedsDisplay(true);
+      }
+    } catch (e) {}
+  });
+  var screen = $.NSScreen.mainScreen.frame;
   var screen = $.NSScreen.mainScreen.frame;
   var pad = 18;
   var x, y;
@@ -378,20 +603,104 @@ function run(argv){
 }
 
 let petChild = null;
+let petVisible = false;   // whether the floating pet window is currently shown
 function stopPet() {
+  petVisible = false;
   if (petChild) { try { petChild.kill(); } catch {} petChild = null; }
 }
+
+/* ---------------- global hotkey (zero-dep, via a JXA event monitor) ------- */
+/* A dedicated osascript listener stays alive while the companion runs. Global
+ * key monitors need the host process to be Accessibility-trusted (System
+ * Settings → 隐私与安全性 → 辅助功能 → add osascript / your terminal), else the
+ * events never arrive — the pet click still works without it. */
+const FLAG_CTRL = 262144, FLAG_OPT = 524288, FLAG_SHIFT = 131072, FLAG_CMD = 1048576;
+function buildHotkeyJXA(combos, port) {
+  const spec = combos.map(c => ({
+    keyCode: c.keyCode,
+    wantC: (c.mask & 1) ? 1 : 0, wantO: (c.mask & 2) ? 1 : 0,
+    wantS: (c.mask & 4) ? 1 : 0, wantM: (c.mask & 8) ? 1 : 0,
+    dir: c.dir, last: 0,
+  }));
+  return `ObjC.import('AppKit'); ObjC.import('Foundation');
+function run(){
+  var combos = ${JSON.stringify(spec)};
+  var events = 0, fires = 0;
+  function fire(dir){
+    var urlStr = 'http://127.0.0.1:${port}/' + (dir > 0 ? 'next' : 'prev') + '.php';
+    var req = $.NSMutableURLRequest.alloc.initWithURL($.NSURL.URLWithString(urlStr));
+    req.setHTTPMethod('POST');
+    $.NSURLConnection.sendSynchronousRequestReturningResponseError(req, $(), $());
+  }
+  $.NSEvent.addGlobalMonitorForEventsMatchingMaskHandler($.NSEventMaskKeyDown, function(e){
+    events++;
+    if (e.isARepeat) return;                 // 长按自动重复只算一次
+    var f = e.modifierFlags;
+    var gotC = (f & ${FLAG_CTRL}) ? 1 : 0, gotO = (f & ${FLAG_OPT}) ? 1 : 0, gotS = (f & ${FLAG_SHIFT}) ? 1 : 0, gotM = (f & ${FLAG_CMD}) ? 1 : 0;
+    for (var i = 0; i < combos.length; i++){
+      var c = combos[i];
+      if (e.keyCode !== c.keyCode) continue;
+      if (gotC !== c.wantC || gotO !== c.wantO || gotS !== c.wantS || gotM !== c.wantM) continue;
+      var now = Date.now();
+      if (now - c.last < 400) break;         // 快速重按节流
+      c.last = now; fires++;
+      fire(c.dir);
+      break;
+    }
+  });
+  $.NSTimer.scheduledTimerWithTimeIntervalRepeatsBlock(2, true, function(){
+    $.NSString.stringWithString('{"events":' + events + ',"fires":' + fires + ',"t":' + Date.now() + '}').writeToFileAtomicallyEncodingError('/tmp/dw_hotkey_beat.json', true, $.NSUTF8StringEncoding, $());
+  });
+  while (true) { $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.5)); }
+}
+`;
+}
+let hotkeyChild = null;
+let hotkeyAlive = false;
+function hotkeyStatus() {
+  let beat = { events: 0, fires: 0 };
+  try { beat = Object.assign(beat, JSON.parse(fs.readFileSync('/tmp/dw_hotkey_beat.json', 'utf8'))); } catch {}
+  return { enabled: CFG.hotkeyEnabled !== false, alive: hotkeyAlive, events: beat.events || 0, fires: beat.fires || 0 };
+}
+function startHotkey() {
+  if (!isMac || !CFG.hotkeyEnabled) return;
+  if (hotkeyChild) { try { hotkeyChild.kill(); } catch {} hotkeyChild = null; }
+  const fwd = parseHotkey(CFG.hotkey || 'ctrl+alt+w');
+  if (!fwd) { console.log('[companion] 快捷键配置无法识别，已跳过：' + CFG.hotkey); return; }
+  const back = parseHotkey(CFG.hotkeyBack || 'ctrl+alt+shift+w');
+  const combos = [{ keyCode: fwd.keyCode, mask: fwd.mask, dir: 1 }];
+  if (back) combos.push({ keyCode: back.keyCode, mask: back.mask, dir: -1 });
+  const scriptPath = path.join(os.tmpdir(), 'dw_hotkey.jxa.js');
+  try { fs.writeFileSync(scriptPath, buildHotkeyJXA(combos, CFG.port)); } catch (err) { console.error('[companion] hotkey script failed:', err.message); return; }
+  const { spawn } = require('child_process');
+  hotkeyChild = spawn('osascript', ['-l', 'JavaScript', scriptPath], { stdio: 'ignore' });
+  hotkeyChild.on('error', () => { hotkeyChild = null; hotkeyAlive = false; });
+  hotkeyChild.unref();
+  hotkeyAlive = true;
+  const label = fwd.label + (back ? ' / ' + back.label : '');
+  console.log(`[companion] 全局快捷键已开启：${label}（需在 系统设置→隐私与安全性→输入监控 里给 osascript 授权才生效，否则热键无响应）`);
+}
+/* Render the pet card PNG at a given size (shared by spawn + live resize +
+ * shape change). sips is fast (~50ms), so it can run during a resize drag. */
+function renderPetPng(W, H, cb) {
+  const words = loadWords(CFG.library);
+  const picked = pickForDate(words, CFG.wordsPerGroup || 6, todaySeed(), 'random');
+  const theme = THEMES[CFG.theme] || THEMES.cream;
+  const svg = buildPetSVG(picked, CFG.reminders || [], theme, W, H);
+  const pngPath = path.join(os.tmpdir(), 'dw_pet.png');
+  rasterizeSVG(svg, pngPath, W * 2, H * 2, cb);
+}
+
 function startPet() {
   stopPet();
   if (!isMac || !CFG.petEnabled) return;
   const closeFile = path.join(ROOT, 'pet-closed');
   if (fs.existsSync(closeFile)) { console.log('[companion] 小窗已被关闭（点 ✕），重启伴侣后恢复'); return; }
-  const words = loadWords(CFG.library);
-  const picked = pickForDate(words, CFG.wordsPerGroup || 6, dateKey(new Date()), 'random');
-  const theme = THEMES[CFG.theme] || THEMES.cream;
-  const W = 320;
-  const H = Math.min(560, 90 + (CFG.wordsPerGroup || 6) * 46 + (CFG.reminders && CFG.reminders.length ? 90 : 0));
-  const svg = buildPetSVG(picked, CFG.reminders || [], theme, W, H);
+  // 用上次拉伸保存的尺寸；没有就用默认（竖版卡片）
+  const saved = state.petSize;
+  const W = (saved && saved.w) ? Math.max(MIN_PET_W, Math.min(MAX_PET, saved.w)) : 320;
+  const defH = Math.min(560, 90 + (CFG.wordsPerGroup || 6) * 46 + (CFG.reminders && CFG.reminders.length ? 90 : 0) + PET_FOOTER_H);
+  const H = (saved && saved.h) ? Math.max(MIN_PET_H, Math.min(MAX_PET, saved.h)) : defH;
   // remember where the user last dragged the pet window
   const posFile = path.join(ROOT, 'pet-position.json');
   let savedPos = '';
@@ -399,17 +708,18 @@ function startPet() {
     const p = JSON.parse(fs.readFileSync(posFile, 'utf8'));
     if (p && typeof p.x === 'number' && typeof p.y === 'number') savedPos = JSON.stringify({ x: p.x, y: p.y });
   } catch {}
-  const pngPath = path.join(os.tmpdir(), 'dw_pet.png');
-  rasterizeSVG(svg, pngPath, W * 2, H * 2, (err) => {
+  renderPetPng(W, H, (err) => {
     if (err) { console.error('[companion] pet render failed:', err.message); return; }
+    const pngPath = path.join(os.tmpdir(), 'dw_pet.png');
     const jxa = buildPetJXA(W, H);
     const scriptPath = path.join(os.tmpdir(), 'dw_pet.jxa.js');
     fs.writeFileSync(scriptPath, jxa);
     const { spawn } = require('child_process');
+    petVisible = true;
     petChild = spawn('osascript', ['-l', 'JavaScript', scriptPath, pngPath, CFG.petCorner || 'top-right', posFile, savedPos, closeFile], { stdio: 'ignore' });
-    petChild.on('error', () => { petChild = null; });
+    petChild.on('error', () => { petChild = null; petVisible = false; });
     petChild.unref();
-    console.log(`[companion] 桌面宠物已显示（按住可拖动，右上角 ✕ 关闭；每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
+    console.log(`[companion] 桌面宠物已显示（底部按钮可切换；单击卡片＝前进，Shift+单击＝回退；按住可拖动，拖右下角 ⤡ 可调大小；右上角 ✕ 关闭；每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
   });
 }
 
@@ -426,7 +736,7 @@ function pushWallpaper(cb) {
   const words = loadWords(CFG.library);
   const today = dateKey(new Date());
   const count = CFG.layout === 'poster' ? 1 : CFG.wordsPerGroup;
-  const picked = pickForDate(words, count, today + '#' + rotationBucket(), 'random');
+  const picked = pickForDate(words, count, todaySeed(), 'random');
   const [W, H] = SIZES[CFG.size] || SIZES['desktop-1920x1080'];
   const svg = buildSVG({
     width: W, height: H, layout: CFG.layout, theme: THEMES[CFG.theme] || THEMES.cream,
@@ -464,6 +774,22 @@ function cleanupOldWallpapers(prefix, keep) {
 function rotationBucket() {
   const now = new Date();
   return Math.floor((now.getHours() * 60 + now.getMinutes()) / Math.max(1, CFG.intervalMinutes));
+}
+
+/* One-key advance: bump the pick seed, render + set a fresh wallpaper, and
+ * refresh the pet window so it shows the same new group. Renders are serialized
+ * (sips is single-threaded enough that overlapping pushes race) — rapid clicks
+ * bump immediately and queue one trailing render. */
+let advancing = false;
+let pendingDir = 0;
+let lastAdvanceAt = 0;   // 服务端安全阀：500ms 内重复推进直接吞掉，防幽灵连发
+function runAdvance(dir) {
+  advancing = true;
+  pushWallpaper(() => {
+    startPet();
+    advancing = false;
+    if (pendingDir) { const d = pendingDir; pendingDir = 0; runAdvance(d); }
+  });
 }
 
 /* ---------------- Apple Vision OCR (zero-dep, via JXA) ---------------- */
@@ -592,10 +918,87 @@ const server = http.createServer((req, res) => {
     });
   }
 
+  // one-key switch: pet click / hotkey POST /next.php (+1) or /prev.php (-1)
+  const handleAdvance = (req, res, dir) => {
+    if (req.method === 'HEAD') { res.writeHead(isMac ? 200 : 404); return res.end(); }
+    const now = Date.now();
+    if (now - lastAdvanceAt < 500) {   // 服务端安全阀：500ms 内重复请求直接吞掉，防幽灵连发
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, bump: state.bump }));
+    }
+    lastAdvanceAt = now;
+    bumpDelta(dir);
+    if (advancing) pendingDir = dir; else runAdvance(dir);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true, bump: state.bump }));
+  };
+  if (url === '/next.php') return handleAdvance(req, res, 1);
+  if (url === '/prev.php') return handleAdvance(req, res, -1);
+
+  // summon / hide the floating pet (called by the website control panel)
+  if (url === '/pet.php') {
+    if (req.method === 'HEAD') { res.writeHead(isMac ? 200 : 404); return res.end(); }
+    let action = 'status';
+    try { action = new URL(req.url, 'http://localhost').searchParams.get('action') || 'status'; } catch {}
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    if (action === 'open') {
+      try { fs.unlinkSync(path.join(ROOT, 'pet-closed')); } catch {}   // ✕ 关闭只对本次有效，召唤时清掉标记
+      startPet();
+      return res.end(JSON.stringify({ ok: true, pet: true }));
+    }
+    if (action === 'close') {
+      try { fs.writeFileSync(path.join(ROOT, 'pet-closed'), '1'); } catch {}
+      stopPet();
+      return res.end(JSON.stringify({ ok: true, pet: false }));
+    }
+    return res.end(JSON.stringify({ ok: true, pet: petVisible }));
+  }
+
+  // live re-render during a resize drag: render PNG at the new size and respond
+  // ONLY when sips finished, so the pet's synchronous POST + reload gets the new
+  // image. No window respawn — stays sharp while dragging.
+  if (url === '/pet-render.php') {
+    let w = 0, h = 0;
+    try {
+      const q = new URL(req.url, 'http://localhost').searchParams;
+      w = Math.max(MIN_PET_W, Math.min(MAX_PET, parseInt(q.get('w') || '0', 10) || 0));
+      h = Math.max(MIN_PET_H, Math.min(MAX_PET, parseInt(q.get('h') || '0', 10) || 0));
+    } catch {}
+    const done = () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, w, h }));
+    };
+    if (w > 0 && h > 0) return renderPetPng(w, h, done);
+    return done();
+  }
+
+  // final resize: save the size to state + re-render crisp, respond when done.
+  // The pet reloads the new PNG itself (poll timer) — no window restart.
+  if (url === '/pet-size.php') {
+    if (req.method === 'HEAD') { res.writeHead(isMac ? 200 : 404); return res.end(); }
+    let w = 0, h = 0;
+    try {
+      const q = new URL(req.url, 'http://localhost').searchParams;
+      w = Math.max(MIN_PET_W, Math.min(MAX_PET, parseInt(q.get('w') || '0', 10) || 0));
+      h = Math.max(MIN_PET_H, Math.min(MAX_PET, parseInt(q.get('h') || '0', 10) || 0));
+    } catch {}
+    const done = () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, w, h }));
+    };
+    if (w > 0 && h > 0) {
+      state.petSize = { w, h };
+      try { fs.writeFileSync(STATE_PATH, JSON.stringify(state)); } catch {}
+      try { fs.unlinkSync(path.join(ROOT, 'pet-closed')); } catch {}   // 换形状时把宠物叫回来
+      return renderPetPng(w, h, done);
+    }
+    return done();
+  }
+
   // status endpoint
   if (url === '/status.json') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ mac: isMac, config: CFG }));
+    return res.end(JSON.stringify({ mac: isMac, config: CFG, pet: petVisible, hotkey: hotkeyStatus() }));
   }
 
   // one-click enable: this server IS the companion, so it's already running.
@@ -638,10 +1041,16 @@ server.listen(CFG.port, '127.0.0.1', () => {
       try { fs.unlinkSync(path.join(ROOT, 'pet-closed')); } catch {} // ✕ 关闭只对本次运行有效，重启伴侣恢复
       startPet();
       setInterval(startPet, Math.max(5, CFG.intervalMinutes) * 60000);
-      const cleanup = () => { stopPet(); process.exit(0); };
-      process.on('SIGINT', cleanup);
-      process.on('SIGTERM', cleanup);
     }
+    // global hotkey listener (independent of the pet; survives pet ✕ close)
+    startHotkey();
+    const cleanup = () => {
+      stopPet();
+      if (hotkeyChild) { try { hotkeyChild.kill(); } catch {} }
+      process.exit(0);
+    };
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
   } else {
     console.log('  （非 macOS：只提供网站，不改桌面壁纸 / 不做 OCR）');
   }

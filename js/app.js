@@ -165,6 +165,13 @@
     $('#btn-exit-live').addEventListener('click', exitLive);
     $('#btn-set-wallpaper').addEventListener('click', setDesktopWallpaper);
     $('#btn-companion').addEventListener('click', enableCompanion);
+    const petBtn = $('#btn-pet-toggle');
+    if (petBtn) petBtn.addEventListener('click', togglePet);
+    const petPrev = $('#btn-pet-prev');
+    if (petPrev) petPrev.addEventListener('click', () => petSwitch(-1));
+    const petNext = $('#btn-pet-next');
+    if (petNext) petNext.addEventListener('click', () => petSwitch(1));
+    document.querySelectorAll('[data-pet-shape]').forEach(b => b.addEventListener('click', () => setPetShape(b.dataset.petShape)));
     const dl = $('#btn-companion-dl');
     if (dl) dl.addEventListener('click', e => { e.preventDefault(); downloadCompanion(); });
 
@@ -660,8 +667,62 @@
   function syncCompanionButton() {
     const btn = $('#btn-companion');
     fetch('status.json').then(r => r.ok ? r.json() : Promise.reject()).then(j => {
-      if (j && j.config) { btn.textContent = '✅ 桌面伴侣运行中'; btn.disabled = true; }
+      // 伴侣页（8771）给 config；主 server（8770）探测到伴侣后给 companion:true
+      const running = !!(j && (j.config || j.companion));
+      if (running) {
+        btn.textContent = '✅ 桌面伴侣运行中';
+        btn.disabled = true;
+        syncPetControls(j.pet);
+      }
     }).catch(() => {});
+  }
+
+  let petOn = false;
+  function syncPetControls(petVisible) {
+    const box = $('#pet-controls');
+    if (!box) return;
+    box.style.display = 'block';
+    petOn = !!petVisible;
+    const btn = $('#btn-pet-toggle');
+    if (btn) btn.textContent = petOn ? '🙈 隐藏宠物' : '🐾 召唤宠物';
+    const hint = $('#pet-hint');
+    if (hint) hint.textContent = '宠物窗口底部有 ◀回退 / 前进▶ 按钮；单击卡片＝前进，Shift+单击＝回退，按住可拖动；拖右下角 ⤡ 可自由调大小（形状变了排列自动跟随）。';
+  }
+
+  const PET_SHAPES = { tall: { w: 320, h: 428 }, square: { w: 400, h: 400 }, wide: { w: 600, h: 220 } };
+  async function setPetShape(shape) {
+    const s = PET_SHAPES[shape];
+    if (!s) return;
+    try {
+      const r = await fetch('pet-size.php?w=' + s.w + '&h=' + s.h, { method: 'POST' });
+      const j = await r.json();
+      if (j && j.ok) toast('已切换为' + (shape === 'tall' ? '竖版' : shape === 'square' ? '方形' : '横版') + ' ✓');
+      else toast('切换失败');
+    } catch (e) { toast('切换失败：' + e.message); }
+  }
+
+  async function petSwitch(dir) {
+    try {
+      const r = await fetch((dir > 0 ? 'next' : 'prev') + '.php', { method: 'POST' });
+      const j = await r.json();
+      if (j && j.ok) toast(dir > 0 ? '切到下一组词 ✓' : '回到上一组词 ✓');
+      else toast('切换失败');
+    } catch (e) { toast('切换失败：' + e.message); }
+  }
+
+  async function togglePet() {
+    const btn = $('#btn-pet-toggle');
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      const action = petOn ? 'close' : 'open';
+      const r = await fetch('pet.php?action=' + action, { method: 'POST' });
+      const j = await r.json();
+      petOn = !!j.pet;
+      btn.textContent = petOn ? '🙈 隐藏宠物' : '🐾 召唤宠物';
+      toast(petOn ? '宠物已召唤 ✓（单击=下一组，Shift+单击=回退）' : '宠物已隐藏');
+    } catch (e) { toast('操作失败：' + e.message); }
+    btn.disabled = false;
   }
 
   /* ---------- live (interactive) mode ---------- */

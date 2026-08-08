@@ -3,6 +3,7 @@
 wallpaper-*.png
 custom-*.png
 companion-config.json
+companion-state.json
 pet-position.json
 pet-closed
 

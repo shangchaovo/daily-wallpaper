@@ -90,6 +90,25 @@ function probeCompanion(cb) {
   req.on('timeout', () => { req.destroy(); cb(false); });
 }
 
+/* Forward a companion-only endpoint (e.g. /pet.php) to the companion on 8771.
+ * The main server itself has no pet — the floating window belongs to companion.js. */
+function proxyToCompanion(req, res, path) {
+  let done = false;
+  const send = obj => { if (!done) { done = true; json(res, 200, obj); } };
+  const r = http.request({ host: '127.0.0.1', port: 8771, path, method: req.method, timeout: 2000 }, r2 => {
+    let b = '';
+    r2.on('data', c => (b += c));
+    r2.on('end', () => {
+      done = true;
+      res.writeHead(r2.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(b);
+    });
+  });
+  r.on('error', () => send({ ok: false, companion: false }));
+  r.on('timeout', () => { r.destroy(); send({ ok: false, companion: false }); });
+  r.end();
+}
+
 /* 一键启用：直接在用户自己的 Mac 上把 companion 拉起来，零下载。
  * server.js 本来就在用户的机器上跑（`node server.js`），companion.js 也就在本仓库，
  * 所以不用下载 / 解压 / 双击，点一下按钮即可。*/
@@ -127,8 +146,27 @@ const server = http.createServer((req, res) => {
     if (req.method !== 'POST') { res.writeHead(405); res.end(); return; }
     return startCompanion(req, res);
   }
-  // same-origin probe: the main server is NOT the companion, so no config.
-  if (pathname === '/status.json') return json(res, 200, { ok: true, companion: false });
+  // pet summon/hide lives on the companion; proxy it if the companion is up.
+  if (pathname === '/pet.php') return proxyToCompanion(req, res, req.url);
+  if (pathname === '/pet-size.php') return proxyToCompanion(req, res, req.url);
+  // same-origin probe: report the companion's full status when it's up so the
+  // website can show pet visibility + hotkey health from either port.
+  if (pathname === '/status.json') {
+    const r2 = http.get({ host: '127.0.0.1', port: 8771, path: '/status.json', timeout: 1200 }, res2 => {
+      let b = '';
+      res2.on('data', c => (b += c));
+      res2.on('end', () => {
+        try {
+          const j = JSON.parse(b);
+          if (j.config) return json(res, 200, { ok: true, companion: true, pet: j.pet, hotkey: j.hotkey });
+        } catch {}
+        json(res, 200, { ok: true, companion: false });
+      });
+    });
+    r2.on('error', () => json(res, 200, { ok: true, companion: false }));
+    r2.on('timeout', () => { r2.destroy(); json(res, 200, { ok: true, companion: false }); });
+    return;
+  }
   serveStatic(req, res);
 });
 
