@@ -105,6 +105,7 @@
     $('#fontscale-val').textContent = Math.round(settings.fontScale * 100) + '%';
     $('#spacing-val').textContent = settings.letterSpacing + 'px';
     $('#lineheight-val').textContent = Math.round(settings.lineHeight * 100) + '%';
+    const cv = $('#count-val'); if (cv) cv.textContent = settings.wordsPerGroup + ' 词';
   }
 
   function syncDependentUI() {
@@ -120,7 +121,7 @@
     $('#inp-cw').addEventListener('change', e => { settings.customW = clampInt(e.target.value, 100, 8000, 1080); commit(); });
     $('#inp-ch').addEventListener('change', e => { settings.customH = clampInt(e.target.value, 100, 8000, 1920); commit(); });
     $('#sel-order').addEventListener('change', e => { settings.order = e.target.value; commit(); });
-    $('#inp-count').addEventListener('change', e => { settings.wordsPerGroup = clampInt(e.target.value, 1, 12, 6); commit(); });
+    $('#inp-count').addEventListener('input', e => { settings.wordsPerGroup = clampInt(e.target.value, 1, 36, 6); updateTypoLabels(); commit(true); });
     $('#chk-daily').addEventListener('change', e => { settings.autoRefreshDaily = e.target.checked; commit(); });
     $('#chk-rotate').addEventListener('change', e => { settings.rotateEnabled = e.target.checked; syncDependentUI(); commit(); });
     $('#inp-rotate-min').addEventListener('change', e => { settings.rotateMinutes = clampInt(e.target.value, 1, 720, 30); commit(); });
@@ -179,7 +180,6 @@
     if (petPrev) petPrev.addEventListener('click', () => petSwitch(-1));
     const petNext = $('#btn-pet-next');
     if (petNext) petNext.addEventListener('click', () => petSwitch(1));
-    document.querySelectorAll('[data-pet-shape]').forEach(b => b.addEventListener('click', () => setPetShape(b.dataset.petShape)));
     const dl = $('#btn-companion-dl');
     if (dl) dl.addEventListener('click', e => { e.preventDefault(); downloadCompanion(); });
 
@@ -313,11 +313,6 @@
       file.value = '';
     });
     $('#btn-bgphoto-clear').addEventListener('click', () => { setBgImage(null); toast('已换回主题背景'); });
-    $('#rng-bgscrim').addEventListener('input', e => {
-      settings.bgScrim = Number(e.target.value);
-      $('#bgscrim-val').textContent = Math.round(settings.bgScrim * 100) + '%';
-      commit(true);
-    });
   }
   function setBgImage(dataUrl) {
     if (!dataUrl) { settings.bgImage = null; bgImageEl = null; applyBgPhotoUI(); commit(); return; }
@@ -329,12 +324,7 @@
   function applyBgPhotoUI() {
     const has = !!settings.bgImage;
     $('#bgphoto-preview').hidden = !has;
-    $('#bgscrim-row').hidden = !has;
-    if (has) {
-      $('#bgphoto-thumb').src = settings.bgImage;
-      $('#rng-bgscrim').value = (settings.bgScrim == null ? 0.42 : settings.bgScrim);
-      $('#bgscrim-val').textContent = Math.round((settings.bgScrim == null ? 0.42 : settings.bgScrim) * 100) + '%';
-    }
+    if (has) $('#bgphoto-thumb').src = settings.bgImage;
   }
   // Rehydrate the decoded Image on load (settings.bgImage is a dataURL string).
   function loadBgImage() {
@@ -617,7 +607,9 @@
   function applyDisplaySize(disp, canvas, fitToScreen) {
     const stage = $('#preview-stage');
     let s = Math.min(1, (stage.clientWidth - 24) / canvas.width);
-    if (fitToScreen) s = Math.min(s, Math.max(0.18, (window.innerHeight - 200) / canvas.height));
+    // 也让预览高度适配视口：整页一屏看全，不用上下滚动
+    const availH = window.innerHeight - (fitToScreen ? 150 : 195);
+    if (availH > 120) s = Math.min(s, Math.max(0.14, availH / canvas.height));
     disp.style.width = Math.round(canvas.width * s) + 'px';
     disp.style.height = Math.round(canvas.height * s) + 'px';
     return s;
@@ -788,30 +780,8 @@
     petOn = !!(j && j.pet);
     const btn = $('#btn-pet-toggle');
     if (btn) btn.textContent = petOn ? '🙈 隐藏宠物' : '🐾 召唤宠物';
-    // 从伴侣的 petSize 反推当前形状（与 companion.js 的 petMode 一致的比例阈值）
-    const ps = j && j.config && j.config.petSize;
-    if (ps && ps.w && ps.h) {
-      const r = ps.w / ps.h;
-      markPetShape(r >= 1.5 ? 'wide' : r <= 0.75 ? 'tall' : 'square');
-    } else markPetShape('square');
     const hint = $('#pet-hint');
     if (hint) hint.textContent = '单击卡片＝前进 · Shift＋单击＝回退 · 按住拖动 · 拖右下角 ⤡ 调大小';
-  }
-
-  const PET_SHAPES = { tall: { w: 320, h: 428 }, square: { w: 400, h: 400 }, wide: { w: 600, h: 220 } };
-  function markPetShape(shape) {
-    document.querySelectorAll('[data-pet-shape]').forEach(b => b.classList.toggle('on', b.dataset.petShape === shape));
-  }
-  async function setPetShape(shape) {
-    const s = PET_SHAPES[shape];
-    if (!s) return;
-    markPetShape(shape);
-    try {
-      const r = await fetch('pet-size.php?w=' + s.w + '&h=' + s.h, { method: 'POST' });
-      const j = await r.json();
-      if (j && j.ok) toast('已切换为' + (shape === 'tall' ? '竖版' : shape === 'square' ? '方形' : '横版') + ' ✓');
-      else toast('切换失败');
-    } catch (e) { toast('切换失败：' + e.message); }
   }
 
   async function petSwitch(dir) {

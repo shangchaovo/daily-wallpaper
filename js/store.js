@@ -9,7 +9,8 @@
     size: 'phone-1080x2400',   // see SIZES in app.js
     theme: 'cream',            // theme key, see THEMES in app.js
     bgPattern: 'soft',         // 'none'|'soft'|'dots'|'grid'|'diag'|'waves'|'blobs'
-    wordsPerGroup: 6,          // words shown in 'group' layout
+    wordsPerGroup: 6,          // words shown in 'group' layout (multi-col wraps 7+)
+    wordCols: 0,               // 0 = 自动列数（按词数+宽高比），1-3 = 强制列数
     order: 'sequential',       // 'sequential' | 'random'
     // typography
     fontScale: 1.0,            // 0.7 – 1.6 multiplier on word sizes

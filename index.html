@@ -15,6 +15,10 @@
 <span class="float-deco" style="right:4%; top:58%; --fs:20px; --dur:10s;">🌟</span>
 <span class="float-deco" style="left:46%; top:6%;  --fs:18px; --dur:8.5s;">✦</span>
 <span class="float-deco" style="right:30%; top:80%; --fs:22px; --dur:9.5s;">🎈</span>
+<span class="float-deco" style="left:26%; top:40%; --fs:16px; --dur:11s;">✧</span>
+<span class="float-deco" style="right:18%; top:34%; --fs:18px; --dur:7s;">🍬</span>
+<span class="float-deco" style="left:60%; top:88%; --fs:20px; --dur:8.8s;">🌈</span>
+<span class="float-deco" style="right:44%; top:48%; --fs:15px; --dur:10.5s;">✩</span>
 
 <div class="app">
   <!-- ============ top bar ============ -->
@@ -34,38 +38,9 @@
   </header>
 
   <main class="workbench">
-    <!-- ============ control panel ============ -->
-    <aside class="panel">
-
-      <section class="card desktop-card">
-        <h2><span class="h-emoji">💻</span>搬到电脑桌面上</h2>
-        <p class="hint">想在 Mac 桌面<b>真正换壁纸</b>、还要一个常驻不遮挡的小宠物？点一下下面按钮就行，<b>不用下载、不用解压、不用敲命令</b>。</p>
-        <button id="btn-companion" class="btn soft">⚡ 一键启用桌面伴侣</button>
-        <div class="pack-row dl-row">
-          <span class="mini-label">没在本机跑本站？</span>
-          <button id="btn-companion-dl" class="chip">⬇️ 下载独立版</button>
-        </div>
-        <div id="pet-controls" style="display:none">
-          <div class="pet-group">
-            <div class="pet-group-label">🐾 宠物</div>
-            <div class="pet-group-btns">
-              <button id="btn-pet-toggle" class="chip">召唤宠物</button>
-              <button id="btn-pet-prev" class="chip">◀ 回退</button>
-              <button id="btn-pet-next" class="chip">前进 ▶</button>
-            </div>
-          </div>
-          <div class="pet-group">
-            <div class="pet-group-label">🧩 形状</div>
-            <div class="seg shape-seg">
-              <button class="seg-btn" data-pet-shape="tall"><i class="shape-ic ic-tall"></i>竖版</button>
-              <button class="seg-btn" data-pet-shape="square"><i class="shape-ic ic-square"></i>方形</button>
-              <button class="seg-btn" data-pet-shape="wide"><i class="shape-ic ic-wide"></i>横版</button>
-            </div>
-          </div>
-          <p class="mini-label pet-hint" id="pet-hint"></p>
-        </div>
-        <button id="btn-live" class="btn ghost">🔲 或者先试网页实时壁纸</button>
-      </section>
+    <!-- ============ left panel: 内容（词库 + 提醒） ============ -->
+    <aside class="panel panel-left">
+      <div class="panel-col">
 
       <section class="card">
         <div class="card-head">
@@ -80,9 +55,10 @@
             <option value="random">每天随机抽</option>
           </select>
         </label>
-        <label class="row" id="count-row">
+        <label class="row slider-row" id="count-row">
           <span>每组单词数</span>
-          <input id="inp-count" type="number" min="1" max="12" value="6">
+          <input id="inp-count" type="range" min="1" max="36" step="1" value="6">
+          <b id="count-val">6 词</b>
         </label>
       </section>
 
@@ -112,6 +88,48 @@
         </div>
       </section>
 
+      <details class="card">
+        <summary><span class="h-emoji">🔁</span>自动与轮换</summary>
+        <div class="card-body">
+        <div class="checks">
+          <label><input id="chk-daily" type="checkbox" checked> 每天自动换一组</label>
+          <label><input id="chk-rotate" type="checkbox"> 定时换单词(分钟)</label>
+        </div>
+        <label class="row" id="rotate-min-row" style="display:none"><span>换词间隔(分钟)</span><input id="inp-rotate-min" type="number" min="1" max="720" value="30"></label>
+        <div class="checks">
+          <label><input id="chk-cycle" type="checkbox"> 周期切换「单词页 / 提醒页」</label>
+        </div>
+        <label class="row" id="cycle-sec-row" style="display:none"><span>切换间隔(秒)</span><input id="inp-cycle-sec" type="number" min="5" max="3600" value="120"></label>
+        <div class="divider"></div>
+        <div class="checks">
+          <label><input id="chk-antitouch" type="checkbox" checked> 实时壁纸防误触(长按唤出)</label>
+        </div>
+        <label class="row" id="anti-ms-row"><span>长按时长(毫秒)</span><input id="inp-anti-ms" type="number" min="300" max="5000" step="100" value="1200"></label>
+        </div>
+      </details>
+
+      </div>
+    </aside>
+
+    <!-- ============ preview (主区域：大画布 + 交互) ============ -->
+    <section class="preview">
+      <div class="preview-top">
+        <span id="meta"></span>
+        <div class="meta-actions">
+          <button id="btn-refresh2" class="btn primary small">✨ 换一组</button>
+          <button id="btn-download2" class="btn soft small">⬇️ 下载</button>
+          <button id="btn-set-wallpaper2" class="btn soft small">🖥️ 设壁纸</button>
+        </div>
+      </div>
+      <div id="preview-stage" class="stage">
+        <canvas id="preview-canvas"></canvas>
+      </div>
+    </section>
+
+    <!-- ============ right panel: 外观（版式 + 字体） ============ -->
+    <aside class="panel panel-right">
+      <div class="panel-col">
+
       <section class="card">
         <h2><span class="h-emoji">🎨</span>版式与外观</h2>
         <div class="row"><span>版式</span>
@@ -129,7 +147,10 @@
           </div>
         </div>
         <div class="row"><span>主题配色</span><div id="theme-swatches" class="swatches"></div></div>
-        <div class="row"><span>背景纹理</span><div id="pattern-picker" class="pattern-picker"></div></div>
+        <div class="bg-photo">
+          <div class="mini-label">背景纹理</div>
+          <div id="pattern-picker" class="pattern-picker"></div>
+        </div>
         <div class="bg-photo">
           <div class="mini-label">自定义背景照片（放松 · 专注）</div>
           <div class="bg-photo-row">
@@ -142,11 +163,6 @@
               <button id="btn-bgphoto-clear" class="btn small ghost" type="button">移除</button>
             </div>
           </div>
-          <label class="row slider-row" id="bgscrim-row" hidden>
-            <span>照片上方留白</span>
-            <input id="rng-bgscrim" type="range" min="0" max="0.85" step="0.05" value="0.42">
-            <b id="bgscrim-val">42%</b>
-          </label>
         </div>
         <div class="checks">
           <label><input id="chk-phonetic" type="checkbox" checked> 显示音标</label>
@@ -194,25 +210,27 @@
         </label>
       </section>
 
-      <details class="card">
-        <summary><span class="h-emoji">🔁</span>自动与轮换</summary>
-        <div class="card-body">
-        <div class="checks">
-          <label><input id="chk-daily" type="checkbox" checked> 每天自动换一组</label>
-          <label><input id="chk-rotate" type="checkbox"> 定时换单词(分钟)</label>
+      <section class="card desktop-card">
+        <h2><span class="h-emoji">💻</span>搬到电脑桌面上</h2>
+        <p class="hint">想在 Mac 桌面<b>真正换壁纸</b>、还要一个常驻不遮挡的小宠物？点一下下面按钮就行，<b>不用下载、不用解压、不用敲命令</b>。</p>
+        <button id="btn-companion" class="btn soft">⚡ 一键启用桌面伴侣</button>
+        <div class="pack-row dl-row">
+          <span class="mini-label">没在本机跑本站？</span>
+          <button id="btn-companion-dl" class="chip">⬇️ 下载独立版</button>
         </div>
-        <label class="row" id="rotate-min-row" style="display:none"><span>换词间隔(分钟)</span><input id="inp-rotate-min" type="number" min="1" max="720" value="30"></label>
-        <div class="checks">
-          <label><input id="chk-cycle" type="checkbox"> 周期切换「单词页 / 提醒页」</label>
+        <div id="pet-controls" style="display:none">
+          <div class="pet-group">
+            <div class="pet-group-label">🐾 宠物</div>
+            <div class="pet-group-btns">
+              <button id="btn-pet-toggle" class="chip">召唤宠物</button>
+              <button id="btn-pet-prev" class="chip">◀ 回退</button>
+              <button id="btn-pet-next" class="chip">前进 ▶</button>
+            </div>
+          </div>
+          <p class="mini-label pet-hint" id="pet-hint"></p>
         </div>
-        <label class="row" id="cycle-sec-row" style="display:none"><span>切换间隔(秒)</span><input id="inp-cycle-sec" type="number" min="5" max="3600" value="120"></label>
-        <div class="divider"></div>
-        <div class="checks">
-          <label><input id="chk-antitouch" type="checkbox" checked> 实时壁纸防误触(长按唤出)</label>
-        </div>
-        <label class="row" id="anti-ms-row"><span>长按时长(毫秒)</span><input id="inp-anti-ms" type="number" min="300" max="5000" step="100" value="1200"></label>
-        </div>
-      </details>
+        <button id="btn-live" class="btn ghost">🔲 或者先试网页实时壁纸</button>
+      </section>
 
       <details class="card">
         <summary><span class="h-emoji">✍️</span>自定义文字</summary>
@@ -226,22 +244,8 @@
         </div>
       </details>
 
+      </div>
     </aside>
-
-    <!-- ============ preview ============ -->
-    <section class="preview">
-      <div id="preview-stage" class="stage">
-        <canvas id="preview-canvas"></canvas>
-      </div>
-      <div class="meta-bar">
-        <span id="meta"></span>
-        <div class="meta-actions">
-          <button id="btn-refresh2" class="btn primary small">✨ 换一组</button>
-          <button id="btn-download2" class="btn soft small">⬇️ 下载</button>
-          <button id="btn-set-wallpaper2" class="btn soft small">🖥️ 设壁纸</button>
-        </div>
-      </div>
-    </section>
   </main>
 </div>
 
@@ -307,14 +311,14 @@
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <!-- ?v= busts browser cache — bump after any js/ change -->
-<script src="js/store.js?v=20260808d"></script>
-<script src="js/words.js?v=20260808d"></script>
-<script src="js/importer.js?v=20260808d"></script>
-<script src="js/ocr.js?v=20260808d"></script>
-<script src="js/reminders.js?v=20260808d"></script>
-<script src="js/review.js?v=20260808d"></script>
-<script src="js/render.js?v=20260808d"></script>
-<script src="js/engine.js?v=20260808d"></script>
-<script src="js/app.js?v=20260808d"></script>
+<script src="js/store.js?v=20260809a"></script>
+<script src="js/words.js?v=20260809a"></script>
+<script src="js/importer.js?v=20260809a"></script>
+<script src="js/ocr.js?v=20260809a"></script>
+<script src="js/reminders.js?v=20260809a"></script>
+<script src="js/review.js?v=20260809a"></script>
+<script src="js/render.js?v=20260809a"></script>
+<script src="js/engine.js?v=20260809a"></script>
+<script src="js/app.js?v=20260809a"></script>
 </body>
 </html>

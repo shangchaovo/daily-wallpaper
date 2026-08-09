@@ -332,77 +332,144 @@
     // band — so the block is smaller than the free space and the anchor
     // (靠上/居中/靠下) can actually move it. Cap the fill so very few words on
     // a tall canvas don't become absurdly sparse.
+    // 字号 slider drives the font DIRECTLY; 行距 slider drives the gap. The block
+    // is still centered by the anchor, but we never shrink the font back down just
+    // because there's extra room — that's what made the sliders feel dead.
+    // ---- 列数与排版模式 -----------------------------------------------------
+    // 单词多了就排成多列（更整齐美观），而不是一条竖到底。列数按内容量 + 画布宽高比
+    // 决定；用户也可以用 settings.wordCols 强制指定（0/缺省 = 自动）。
+    var aspect = W / H;
+    var autoCols;
+    if (n <= 7) autoCols = 1;
+    else if (n <= 12) autoCols = (aspect >= 1.05 ? 2 : 1);
+    else if (n <= 22) autoCols = 2;
+    else autoCols = Math.min(3, Math.max(2, Math.round(aspect * 2)));
+    var cols = (settings.wordCols | 0) || autoCols;
+    cols = Math.max(1, Math.min(n, cols, 3));
+
     var avail = Math.max(1, wordsBottom - wordsTop);
-    var wordFs = Math.max(Math.round(W * 0.018), Math.round(W * 0.052 * scale));
-    var rowH = Math.round(wordFs * 3.0 * lineHMul);   // line-height slider breathes the rows
-    var maxFillRowH = Math.floor(avail / n);
-    rowH = Math.min(rowH, maxFillRowH);
-    // if the band is tight, shrink the font so rows still breathe
-    wordFs = Math.max(Math.round(W * 0.016), Math.min(wordFs, Math.round(rowH * 0.34)));
-    var blockH = rowH * n;
+    var wordFs = Math.round(W * 0.052 * scale);
+    wordFs = Math.max(Math.round(W * 0.016), wordFs);
+    var gap = Math.round(W * 0.045);                       // 列间距
+    var colW = Math.round((W - 2 * margin - gap * (cols - 1)) / cols);
+    var rows = Math.ceil(n / cols);                        // 每列行数（均分）
+    var per = rows;                                        // 前 rem 列多放一个
+    var rem = n - per * (cols - 1);
+    if (rem <= 0) { rem = cols; per = Math.floor(n / cols); }
+
+    var single = cols === 1;
+    // 行高：单列按内容（大字 + 词性释义横排），多列用「单词在上、释义在下」的紧凑卡片，
+    // 窄列里才不会挤成一团。字号/行距滑块直接驱动，仅在整块溢出时才收缩。
+    var rowH = single
+      ? Math.round(wordFs * 3.0 * lineHMul)
+      : Math.round(wordFs * 2.35 * lineHMul);
+    var maxFillRowH = Math.floor(avail / rows);
+    if (rowH > maxFillRowH && maxFillRowH > 0) {
+      rowH = maxFillRowH;
+      wordFs = Math.max(Math.round(W * 0.016), Math.min(wordFs, Math.round(rowH * 0.34)));
+    }
+    var blockH = rowH * rows;
     var blockTop = blockTopFor(settings.anchorWords || 'center', settings.offWords.y, wordsTop, wordsBottom, blockH, H);
     var xNudge = Math.round((settings.offWords.x || 0) * W);
 
-    // 卡通贴纸底卡：每个单词一条极淡的圆角底色，像贴纸卡，不遮字、不盖分隔线。
+    // 单词在列内、列在块内的定位（逐列填充：先排满第一列再第二列）
+    function cellPos(i) {
+      var c = 0, acc = 0;
+      while (c < cols - 1 && i >= acc + (c < rem ? per + 1 : per)) { acc += (c < rem ? per + 1 : per); c++; }
+      var r = i - acc;
+      return { col: c, row: r, x: margin + xNudge + c * (colW + gap), y: blockTop + r * rowH };
+    }
+
+    // 卡通贴纸底卡：每个单词一格极淡圆角底色，像贴纸卡，不遮字。
     if (settings.wordCards !== false && !settings.bgImage) {
       ctx.save();
       ctx.fillStyle = theme.accentSoft || theme.accent || '#ffd9b8';
-      ctx.globalAlpha = 0.16;
+      ctx.globalAlpha = single ? 0.16 : 0.30;
       var padX = Math.round(W * 0.012);
-      var cardX = margin + xNudge - padX;
-      var cardW = W - 2 * margin + padX * 2;
-      var cardH = rowH - Math.round(rowH * 0.10);
       var cardR = Math.min(Math.round(rowH * 0.30), Math.round(W * 0.02));
       for (var ci = 0; ci < n; ci++) {
-        rr(ctx, cardX, blockTop + ci * rowH + Math.round(rowH * 0.05), cardW, cardH, cardR);
+        var cp = cellPos(ci);
+        var cwid = single ? (W - 2 * margin + padX * 2) : (colW - Math.round(W * 0.006));
+        var cx0 = single ? (margin + xNudge - padX) : cp.x;
+        rr(ctx, cx0, cp.y + Math.round(rowH * 0.05), cwid, rowH - Math.round(rowH * 0.12), cardR);
         ctx.fill();
       }
       ctx.restore();
     }
 
     words.forEach(function (w, i) {
-      var cy = blockTop + i * rowH;
+      var cp = cellPos(i);
       ctx.textBaseline = 'middle';
-      var midY = cy + rowH / 2;
-      var m = margin + xNudge;
-      ctx.fillStyle = subInk(theme, settings);
-      ctx.font = '500 ' + Math.round(wordFs * 0.5) + 'px ' + F;
-      ctx.fillText(String(i + 1).padStart(2, '0'), m, midY);
-      var ix = m + Math.round(W * 0.075);
+      var midY = cp.y + rowH / 2;
+      var numFs = Math.round(wordFs * 0.5);
+      var numW = single ? Math.round(W * 0.075) : Math.round(wordFs * 1.7);
       var meaning = (w.pos ? w.pos + ' ' : '') + (w.meaning || '');
-      var stacked = rowH >= wordFs * 2.4;
-      if (stacked) {
-        ctx.fillStyle = ink(theme, settings);
-        ctx.font = weight + ' ' + wordFs + 'px ' + F;
-        drawSpaced(ctx, w.word, ix, midY - rowH * 0.16, spacing);
-        var ww = measureSpaced(ctx, w.word, spacing);
-        if (settings.showPhonetic && w.phonetic) {
-          ctx.fillStyle = subInk(theme, settings);
-          ctx.font = '400 ' + Math.round(wordFs * 0.48) + 'px ' + F;
-          ctx.fillText(w.phonetic, ix + ww + Math.round(W * 0.015), midY - rowH * 0.16, W - ix - ww - margin - Math.round(W * 0.015));
-        }
+
+      if (single) {
+        // 原单列排版：序号 + 单词（字间距生效），行高够时释义换行堆叠，否则单行横排
+        var m = cp.x;
         ctx.fillStyle = subInk(theme, settings);
-        ctx.font = '400 ' + Math.round(wordFs * 0.54) + 'px ' + F;
-        ctx.fillText(meaning, ix, midY + rowH * 0.22, W - ix - margin);
+        ctx.font = '500 ' + numFs + 'px ' + F;
+        ctx.fillText(String(i + 1).padStart(2, '0'), m, midY);
+        var ix = m + numW;
+        var stacked = rowH >= wordFs * 2.4;
+        if (stacked) {
+          ctx.fillStyle = ink(theme, settings);
+          ctx.font = weight + ' ' + wordFs + 'px ' + F;
+          drawSpaced(ctx, w.word, ix, midY - rowH * 0.16, spacing);
+          var ww = measureSpaced(ctx, w.word, spacing);
+          if (settings.showPhonetic && w.phonetic) {
+            ctx.fillStyle = subInk(theme, settings);
+            ctx.font = '400 ' + Math.round(wordFs * 0.48) + 'px ' + F;
+            ctx.fillText(w.phonetic, ix + ww + Math.round(W * 0.015), midY - rowH * 0.16, cp.x + colW + gap - ix - ww - Math.round(W * 0.015));
+          }
+          ctx.fillStyle = subInk(theme, settings);
+          ctx.font = '400 ' + Math.round(wordFs * 0.54) + 'px ' + F;
+          ctx.fillText(meaning, ix, midY + rowH * 0.22, cp.x + colW - ix);
+        } else {
+          ctx.fillStyle = ink(theme, settings);
+          ctx.font = weight + ' ' + wordFs + 'px ' + F;
+          drawSpaced(ctx, w.word, ix, midY, spacing);
+          var tx = ix + measureSpaced(ctx, w.word, spacing) + Math.round(W * 0.014);
+          if (settings.showPhonetic && w.phonetic) {
+            ctx.fillStyle = subInk(theme, settings);
+            ctx.font = '400 ' + Math.round(wordFs * 0.48) + 'px ' + F;
+            ctx.fillText(w.phonetic, tx, midY, W * 0.2);
+            tx += ctx.measureText(w.phonetic).width + Math.round(W * 0.014);
+          }
+          ctx.fillStyle = subInk(theme, settings);
+          ctx.font = '400 ' + Math.round(wordFs * 0.5) + 'px ' + F;
+          ctx.fillText(meaning, tx, midY, cp.x + colW + gap - tx);
+        }
+        if (i < n - 1) {
+          ctx.strokeStyle = theme.line || 'rgba(128,128,128,0.18)';
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(cp.x, cp.y + rowH); ctx.lineTo(W - margin + xNudge, cp.y + rowH); ctx.stroke();
+        }
       } else {
+        // 多列紧凑卡片：单词（大字、字间距生效）在上，音标 + 释义（缩小、截断）在下。
+        var inset = Math.round(W * 0.014);
+        var x0 = cp.x + inset;
+        var maxTextW = colW - inset * 2;
+        var wfs = Math.min(wordFs, Math.round(colW * 0.30));
+        ctx.fillStyle = subInk(theme, settings);
+        ctx.font = '500 ' + numFs + 'px ' + F;
+        ctx.fillText(String(i + 1).padStart(2, '0'), x0, cp.y + rowH * 0.26);
+        var wx = x0;
+        var wy = midY - rowH * 0.15;
         ctx.fillStyle = ink(theme, settings);
-        ctx.font = weight + ' ' + wordFs + 'px ' + F;
-        drawSpaced(ctx, w.word, ix, midY, spacing);
-        var tx = ix + measureSpaced(ctx, w.word, spacing) + Math.round(W * 0.014);
+        ctx.font = weight + ' ' + wfs + 'px ' + F;
+        drawSpaced(ctx, w.word, wx, wy, spacing);
+        var wordW = measureSpaced(ctx, w.word, spacing);
         if (settings.showPhonetic && w.phonetic) {
           ctx.fillStyle = subInk(theme, settings);
-          ctx.font = '400 ' + Math.round(wordFs * 0.48) + 'px ' + F;
-          ctx.fillText(w.phonetic, tx, midY, W * 0.2);
-          tx += ctx.measureText(w.phonetic).width + Math.round(W * 0.014);
+          ctx.font = '400 ' + Math.round(wfs * 0.42) + 'px ' + F;
+          var phW = maxTextW - wordW - Math.round(W * 0.012);
+          if (phW > wfs) ctx.fillText(w.phonetic, wx + wordW + Math.round(W * 0.012), wy, phW);
         }
         ctx.fillStyle = subInk(theme, settings);
-        ctx.font = '400 ' + Math.round(wordFs * 0.5) + 'px ' + F;
-        ctx.fillText(meaning, tx, midY, W - tx - margin);
-      }
-      if (i < n - 1) {
-        ctx.strokeStyle = theme.line || 'rgba(128,128,128,0.18)';
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(margin + xNudge, cy + rowH); ctx.lineTo(W - margin + xNudge, cy + rowH); ctx.stroke();
+        ctx.font = '400 ' + Math.round(wfs * 0.46) + 'px ' + F;
+        ctx.fillText(meaning, x0, cp.y + rowH * 0.72, maxTextW);
       }
     });
 
