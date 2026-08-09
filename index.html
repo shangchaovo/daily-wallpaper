@@ -85,6 +85,20 @@
         <button id="btn-clear-done" class="btn small ghost">清除已完成</button>
       </section>
 
+      <section class="card srs-card">
+        <div class="card-head">
+          <h2><span class="h-emoji">🧠</span>记忆复习</h2>
+          <label class="srs-switch"><input id="chk-srs" type="checkbox" checked><span>艾宾浩斯</span></label>
+        </div>
+        <p class="hint">按<b>遗忘曲线</b>安排复习：记好的词会在 20分钟 / 1小时 / 1天… 后回到壁纸。</p>
+        <div id="srs-status" class="srs-status">已记 0 组 · 待复习 0 组</div>
+        <button id="btn-learned" class="btn primary srs-learn">✅ 这组记好了，换一组</button>
+        <div id="srs-countdown" class="srs-countdown" hidden>
+          <span class="srs-cd-icon">⏰</span>
+          <span class="srs-cd-text">下次复习 <b id="srs-cd-time">--:--</b></span>
+        </div>
+      </section>
+
       <section class="card">
         <h2><span class="h-emoji">🎨</span>版式与外观</h2>
         <div class="row"><span>版式</span>
@@ -280,13 +294,14 @@
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <!-- ?v= busts browser cache — bump after any js/ change -->
-<script src="js/store.js?v=20260808b"></script>
-<script src="js/words.js?v=20260808b"></script>
-<script src="js/importer.js?v=20260808b"></script>
-<script src="js/ocr.js?v=20260808b"></script>
-<script src="js/reminders.js?v=20260808b"></script>
-<script src="js/render.js?v=20260808b"></script>
-<script src="js/engine.js?v=20260808b"></script>
-<script src="js/app.js?v=20260808b"></script>
+<script src="js/store.js?v=20260808c"></script>
+<script src="js/words.js?v=20260808c"></script>
+<script src="js/importer.js?v=20260808c"></script>
+<script src="js/ocr.js?v=20260808c"></script>
+<script src="js/reminders.js?v=20260808c"></script>
+<script src="js/review.js?v=20260808c"></script>
+<script src="js/render.js?v=20260808c"></script>
+<script src="js/engine.js?v=20260808c"></script>
+<script src="js/app.js?v=20260808c"></script>
 </body>
 </html>

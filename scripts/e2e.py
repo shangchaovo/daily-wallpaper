@@ -176,6 +176,26 @@ def main():
                 page.click("#btn-download")
             check("PNG 下载", dl.value.suggested_filename.endswith(".png"))
 
+            # SRS (艾宾浩斯) — 记忆复习 card. The paste-import step above switched the
+            # library to 我的词库 (custom), where 记忆轮换 is intentionally disabled — so
+            # first switch back to a built-in library (四级) before exercising 记好了.
+            check("记忆复习卡片存在", page.locator("#btn-learned").count() == 1)
+            page.locator("#library-cards .lib-card", has_text="四级").first.click()
+            page.wait_for_timeout(500)
+            lib = page.evaluate("() => JSON.parse(localStorage.getItem('wp:settings')||'{}').library")
+            check("切到内置词库(四级)", lib == "cet4")
+            before = page.evaluate("l => window.Review.stats(l).total", lib)
+            page.click("#btn-learned")  # 这组记好了，换一组
+            page.wait_for_timeout(500)
+            after = page.evaluate("l => window.Review.stats(l).total", lib)
+            check("记好了登记一组复习", after == before + 1)
+            check("复习倒计时出现", page.eval_on_selector("#srs-countdown", "e=>!e.hidden"))
+            page.uncheck("#chk-srs")
+            page.wait_for_timeout(300)
+            check("关闭艾宾浩斯后倒计时隐藏", page.eval_on_selector("#srs-countdown", "e=>e.hidden"))
+            page.check("#chk-srs")  # restore
+            page.wait_for_timeout(200)
+
             # page-cycling checkbox reveals interval row (自动与轮换 card is a collapsed <details> — open it first)
             page.locator("details.card summary", has_text="自动与轮换").click()
             page.wait_for_timeout(150)

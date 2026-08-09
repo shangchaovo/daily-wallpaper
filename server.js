@@ -149,6 +149,9 @@ const server = http.createServer((req, res) => {
   // pet summon/hide lives on the companion; proxy it if the companion is up.
   if (pathname === '/pet.php') return proxyToCompanion(req, res, req.url);
   if (pathname === '/pet-size.php') return proxyToCompanion(req, res, req.url);
+  // SRS 记好了 / 换一组 also nudges the desktop pet; proxy so the main server
+  // doesn't 404 when the companion is down (graceful {ok:false} instead).
+  if (pathname === '/next.php' || pathname === '/prev.php') return proxyToCompanion(req, res, req.url);
   // same-origin probe: report the companion's full status when it's up so the
   // website can show pet visibility + hotkey health from either port.
   if (pathname === '/status.json') {

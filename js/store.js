@@ -35,6 +35,7 @@
     showPhonetic: true,
     showExample: true,
     showReminders: true,
+    srsEnabled: true,          // 艾宾浩斯记忆轮换：到期的旧单词组混回壁纸复习
     antiTouch: true,           // require long-press to interact (live mode)
     antiTouchMs: 1200,         // long-press duration to unlock
     custom: {                  // custom text overlay (free-floating blocks)
@@ -102,6 +103,17 @@
     },
     saveEngine(obj) {
       write('engine', obj);
+    },
+
+    // SRS (艾宾浩斯) review state, per library:
+    // { [libId]: { cursor: n,
+    //   groups: { [groupKey]: { words:[], learnedAt, stage, due, learnedCount, learnedLog:[] } } } }
+    getReview() {
+      const r = read('review', {});
+      return (r && typeof r === 'object') ? r : {};
+    },
+    saveReview(obj) {
+      write('review', obj);
     },
 
     getSeeded() {

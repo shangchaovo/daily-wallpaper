@@ -10,7 +10,7 @@ WordPaper（原「每日壁纸」）— 把每日单词 + 当天提醒做成手�
 
 ```bash
 node server.js                 # 开发服务器 http://localhost:8770（端口被占自动 +1）
-python3 scripts/e2e.py         # 端到端验证（33 项断言，自带独立空闲端口，不碰 8770）
+python3 scripts/e2e.py         # 端到端验证（43 项断言，自带独立空闲端口，不碰 8770）
 python3 scripts/render_v3.py   # v3 渲染验证：真渲染 PNG 到 scripts/out_v3/ 并做像素级断言
 python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json（需 /tmp/ecdict.csv）
 ```
@@ -22,8 +22,8 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 ## Architecture — 跨文件才看得懂的点
 
 **运行时模型**：无打包器、无 ESM。`index.html` 按固定顺序加载
-`store → words → importer → ocr → reminders → render → engine → app`；
-每个文件是 IIFE，向外暴露一个具名全局（`Store / Words / Importer / OCR / Reminders / Render / Engine / App`），彼此直接读全局。**改加载顺序或把某文件改成 ESM 会破坏这条链。** SheetJS（Excel 导入）走 CDN `defer`，是**可选**的——没有它 CSV/粘贴导入照常工作。
+`store → words → importer → ocr → reminders → review → render → engine → app`；
+每个文件是 IIFE，向外暴露一个具名全局（`Store / Words / Importer / OCR / Reminders / Review / Render / Engine / App`），彼此直接读全局。**改加载顺序或把某文件改成 ESM 会破坏这条链。** SheetJS（Excel 导入）走 CDN `defer`，是**可选**的——没有它 CSV/粘贴导入照常工作。
 
 **核心数据流**：`app.js` 的 `refresh(manual)` 是唯一渲染入口。它向 `Engine.current(settings)`（或手动时 `Engine.reshuffle`）要「当前该显示哪些词」，拿到 `{dateStr, words}` 后交给 `Render.render({width,height,layout,page,theme,words,reminders,settings,dateStr})` 画到一个离屏 canvas，再 `drawImage` 进 `#preview-canvas`（预览）和 `#live-canvas`（实时模式）。**任何设置变更都走 `commit()` → `saveSettings()` + `refresh()`，别绕过它单独重画。**
 
@@ -70,4 +70,14 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 ## 验证矩阵
 
-`scripts/e2e.py`（33 项）覆盖主路径 + v3 控件存在性 + 伴侣一键包 zip + 一键启用端点；`scripts/render_v3.py`（7 项）真渲染 PNG 并做像素级断言（字体栈写入、文字颜色持久化、背景照片铺满且非主题色、**锚点真的移动单词块**、自定义文字拖拽位置持久化、海报+楷体）。手工补查：两版式 × 六主题 × 手机/桌面各抽查一张 PNG（用 canvas 的 `toDataURL` 导出看，别用元素截图）；竖屏 6 词、横屏 6 词都不溢出、不压提醒块；导入 Excel/CSV/粘贴三路径；实时壁纸长按能唤出、短按不唤出。
+`scripts/e2e.py`（43 项）覆盖主路径 + v3 控件存在性 + 伴侣一键包 zip + 一键启用端点 + 记忆复习（SRS）；`scripts/render_v3.py`（7 项）真渲染 PNG 并做像素级断言（字体栈写入、文字颜色持久化、背景照片铺满且非主题色、**锚点真的移动单词块**、自定义文字拖拽位置持久化、海报+楷体）。手工补查：两版式 × 六主题 × 手机/桌面各抽查一张 PNG（用 canvas 的 `toDataURL` 导出看，别用元素截图）；竖屏 6 词、横屏 6 词都不溢出、不压提醒块；导入 Excel/CSV/粘贴三路径；实时壁纸长按能唤出、短按不唤出。
+
+## 记忆复习（艾宾浩斯 SRS）
+
+`review.js` 是**按「组」做的间隔重复**（非逐词）。用户点「✅ 这组记好了，换一组」→ `Review.learn(lib, words)` 把当前这组登记进复习队列（`stage=0`，20 分钟后首次到期），并推进该库游标换一组新词。到期的旧组会在 `refresh()` 里由 `mixReviews()` ** prepend 回壁纸**复习，看完一次 `advanceStage` 推进到下一档。间隔（分钟）：`[20, 60, 540, 1440, 2880, 4320, 8640, 17280]` = 20分钟/1小时/9小时/1天/2天/3天/6天/15天，走完 8 档即「记牢」。
+
+- **状态**：`localStorage` 键 `wp:review`，按词库分桶 `{[libId]:{cursor, groups:{[groupKey]:{words,learnedAt,stage,due,learnedCount,learnedLog}}}}`。`groupKey` = 组内各词 `word|meaning` 排序连接（顺序无关）。
+- **UI**：`index.html` 的「🧠 记忆复习」卡片（`#chk-srs` 开关 / `#srs-status` 统计 / `#btn-learned` 记好了 / `#srs-countdown` 倒计时闹钟）。`app.js` 的 `updateSrsUI()` 刷新状态行 + 倒计时，**边沿检测**（`srsWasDue`）在新到期时弹一次 toast 闹钟；`startSrsTicker()` 每 30s 刷新倒计时并在有新到期时 `refresh(false)` 把复习组顶上壁纸。
+- **我的词库（custom）不参与轮换**：`onLearned`/`updateSrsUI` 都对 `library==='custom'` 短路（按钮禁用、提示「不参与记忆轮换」）。
+- **联动桌面宠物**：`onLearned` 里 best-effort `fetch('next.php', {method:'POST'})` 让宠物也切到下一组；主 server 把 `/next.php`/`/prev.php` 代理到伴侣 8771（伴侣不在线时 `proxyToCompanion` 回 200 `{ok:false}`，不会 404）。
+- 开关存 `settings.srsEnabled`（默认 true）。

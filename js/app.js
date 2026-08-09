@@ -26,12 +26,12 @@
   const LIBRARIES = [
     { id: 'chuzhong', icon: '🎒', name: '初中', desc: '中考核心词汇', file: 'words_chuzhong.json' },
     { id: 'gaozhong', icon: '✏️', name: '高中', desc: '高考核心词汇', file: 'words_gaozhong.json' },
-    { id: 'cet4', icon: '📗', name: '四级 CET4', desc: '大学英语四级', file: 'words_cet4.json' },
-    { id: 'cet6', icon: '📘', name: '六级 CET6', desc: '大学英语六级', file: 'words_cet6.json' },
+    { id: 'cet4', icon: '📗', name: '四级', desc: '大学英语四级 CET4', file: 'words_cet4.json' },
+    { id: 'cet6', icon: '📘', name: '六级', desc: '大学英语六级 CET6', file: 'words_cet6.json' },
     { id: 'kaoyan', icon: '📕', name: '考研', desc: '考研英语核心', file: 'words_kaoyan.json' },
-    { id: 'ielts', icon: '🎓', name: '雅思 IELTS', desc: '出国考试核心词', file: 'words_ielts.json' },
-    { id: 'toefl', icon: '🌍', name: '托福 TOEFL', desc: '托福核心词汇', file: 'words_toefl.json' },
-    { id: 'gre', icon: '🗽', name: 'GRE', desc: '出国读研核心', file: 'words_gre.json' },
+    { id: 'ielts', icon: '🎓', name: '雅思', desc: '雅思 IELTS 核心词', file: 'words_ielts.json' },
+    { id: 'toefl', icon: '🌍', name: '托福', desc: '托福 TOEFL 核心', file: 'words_toefl.json' },
+    { id: 'gre', icon: '🗽', name: 'GRE', desc: '出国读研核心词', file: 'words_gre.json' },
     { id: 'custom', icon: '✨', name: '我的词库', desc: '自己导入的单词', file: null },
   ];
 
@@ -76,6 +76,7 @@
     $('#chk-phonetic').checked = settings.showPhonetic;
     $('#chk-example').checked = settings.showExample;
     $('#chk-reminders').checked = settings.showReminders;
+    if ($('#chk-srs')) $('#chk-srs').checked = settings.srsEnabled !== false;
     $('#chk-antitouch').checked = settings.antiTouch;
     $('#chk-custom').checked = settings.custom.enabled;
     $('#inp-custom-title').value = settings.custom.title;
@@ -131,6 +132,11 @@
     $('#chk-antitouch').addEventListener('change', e => { settings.antiTouch = e.target.checked; syncDependentUI(); commit(); });
     $('#inp-anti-ms').addEventListener('change', e => { settings.antiTouchMs = clampInt(e.target.value, 300, 5000, 1200); commit(); });
     $('#chk-custom').addEventListener('change', e => { settings.custom.enabled = e.target.checked; syncDependentUI(); commit(); });
+    // 记忆复习 (SRS)
+    const chkSrs = $('#chk-srs');
+    if (chkSrs) chkSrs.addEventListener('change', e => { settings.srsEnabled = e.target.checked; updateSrsUI(); commit(); });
+    const btnLearned = $('#btn-learned');
+    if (btnLearned) btnLearned.addEventListener('click', onLearned);
     $('#inp-custom-title').addEventListener('input', e => { settings.custom.title = e.target.value; commit(true); });
     $('#inp-custom-footer').addEventListener('input', e => { settings.custom.footer = e.target.value; commit(true); });
 
@@ -575,9 +581,34 @@
 
   async function refresh(manual, page) {
     const sel = manual ? await window.Engine.reshuffle(settings) : await window.Engine.current(settings);
+    sel.words = mixReviews(sel);
     paintSelection(sel, page || 'words', '#preview-canvas');
     if (liveActive) paintLive(page || cyclePage);
     updateMeta(sel);
+    lastSel = sel;
+    updateSrsUI();
+    // 复习组这次被「看过了」→ 推进到下一阶段（下次到期按更长间隔）
+    if (sel.words && sel.words._reviewKeys && window.Review) {
+      sel.words._reviewKeys.forEach(k => window.Review.advanceStage(settings.library, k));
+    }
+  }
+
+  /* 把「到期的复习组」混进当前壁纸单词：到期组排前面，新词补足数量。 */
+  function mixReviews(sel) {
+    if (!settings.srsEnabled || !window.Review) return sel.words;
+    const fresh = sel.words || [];
+    if (settings.library === 'custom') return fresh;   // 我的词库不排复习
+    const count = settings.layout === 'poster' ? 1 : settings.wordsPerGroup;
+    let due = window.Review.dueGroups(settings.library).map(g => g.words);
+    if (!due.length) return fresh;
+    const freshKeys = new Set(fresh.map(w => window.Review.wordKey(w)));
+    const dueWords = [];
+    due.forEach(words => words.forEach(w => { if (!freshKeys.has(window.Review.wordKey(w))) dueWords.push(w); }));
+    if (!dueWords.length) return fresh;
+    const mixed = dueWords.slice(0, count);
+    mixed._reviewKeys = due.map(ws => window.Review.groupKeyFor(ws));   // 这些组「刚被复习」
+    for (const w of fresh) { if (mixed.length >= count) break; mixed.push(w); }
+    return mixed;
   }
 
   /* Scale the preview to fill the stage width normally; while dragging, shrink
@@ -613,6 +644,75 @@
     const libLabel = lib ? lib.name.replace(/\s.*/, '') : sel.library;
     const { w, h } = getSize();
     $('#meta').textContent = `${sel.dateStr} · ${libLabel} · ${sel.words.length} 个词 · ${w}×${h}`;
+  }
+
+  /* ---------- 记忆复习 (SRS) ---------- */
+  let lastSel = null;          // 最近渲染的选择（「记好了」要拿当前这组词）
+  let srsTimer = null;         // 倒计时 / 到期闹钟 ticker
+  let srsWasDue = false;       // 上次是否处于「到期」状态（用于到期瞬间提醒一次）
+
+  function fmtCountdown(ms) {
+    if (ms <= 0) return '到点了';
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return '<1 分钟';
+    if (m < 60) return m + ' 分钟后';
+    const h = Math.floor(m / 60), rm = m % 60;
+    if (h < 24) return rm ? `${h} 小时 ${rm} 分后` : `${h} 小时后`;
+    const d = Math.floor(h / 24), rh = h % 24;
+    return rh ? `${d} 天 ${rh} 小时后` : `${d} 天后`;
+  }
+
+  function updateSrsUI() {
+    const card = $('.srs-card'); if (!card || !window.Review) return;
+    const enabled = !!settings.srsEnabled && settings.library !== 'custom';
+    $('#btn-learned').disabled = !enabled;
+    const st = window.Review.stats(settings.library);
+    $('#srs-status').innerHTML = enabled
+      ? `已记 <b>${st.total}</b> 组 · 待复习 <b>${st.pending}</b> 组 · 记牢 <b>${st.done}</b> 组`
+      : (settings.library === 'custom' ? '我的词库不参与记忆轮换' : '已关闭记忆轮换');
+    const cd = $('#srs-countdown');
+    if (!enabled) { cd.hidden = true; return; }
+    const due = window.Review.dueGroups(settings.library);
+    const soonest = window.Review.soonestDue(settings.library);
+    if (due.length) {
+      cd.hidden = false; cd.classList.add('due');
+      $('#srs-cd-time').textContent = `${due.length} 组到点，正在复习`;
+      if (!srsWasDue) { srsWasDue = true; toast(`⏰ 复习时间到！${due.length} 组单词回来复习啦`); }
+    } else {
+      srsWasDue = false;
+      if (soonest) {
+        cd.hidden = false; cd.classList.remove('due');
+        $('#srs-cd-time').textContent = fmtCountdown(soonest - Date.now());
+      } else {
+        cd.hidden = true;
+      }
+    }
+  }
+
+  async function onLearned() {
+    if (!window.Review || !settings.srsEnabled) return;
+    if (settings.library === 'custom') { toast('我的词库不参与记忆轮换'); return; }
+    const words = (lastSel && lastSel.words) || [];
+    if (!words.length) { toast('当前没有单词可记'); return; }
+    const { cursor } = window.Review.learn(settings.library, words);
+    // 轮换：推进游标后重洗一组新词；同时尽力把桌面宠物也切到下一组
+    await refresh(true);
+    try { fetch('next.php', { method: 'POST' }).catch(() => {}); } catch (e) {}
+    const st = window.Review.stats(settings.library);
+    toast(`✅ 已记下这组（共 ${st.total} 组）· 20 分钟后回来复习`);
+    updateSrsUI();
+  }
+
+  function startSrsTicker() {
+    clearInterval(srsTimer);
+    srsTimer = setInterval(() => {
+      if (!settings.srsEnabled) return;
+      const beforeDue = window.Review ? window.Review.dueGroups(settings.library).length : 0;
+      updateSrsUI();
+      const afterDue = window.Review ? window.Review.dueGroups(settings.library).length : 0;
+      // 有新到期：重绘壁纸把复习组顶上来（闹钟提醒已在 updateSrsUI 里弹）
+      if (afterDue > 0 && beforeDue === 0) refresh(false);
+    }, 30000);
   }
 
   function downloadPNG() {
@@ -862,6 +962,7 @@
     loadLibraryCounts();
     loadBgImage();
     await refresh(false);
+    startSrsTicker();
     window.Engine.markDay();
     if (!window.Store.read('dragHint', false)) {
       setTimeout(() => toast('💡 按住预览里的单词块 / 提醒块 / 自定义文字，可以直接拖到任意位置'), 1500);
