@@ -1,17 +1,17 @@
 [
   {
-    "id": "chuzhong",
-    "name": "初中",
-    "desc": "中考核心词汇",
-    "emoji": "🎒",
-    "count": 1500
+    "id": "jlpt_n5",
+    "name": "日语 JLPT N5",
+    "desc": "入门核心词（分级整理）",
+    "emoji": "あ",
+    "count": 718
   },
   {
-    "id": "gaozhong",
-    "name": "高中",
-    "desc": "高考核心词汇",
-    "emoji": "✏️",
-    "count": 2000
+    "id": "jlpt_n4",
+    "name": "日语 JLPT N4",
+    "desc": "初级进阶词（分级整理）",
+    "emoji": "日",
+    "count": 668
   },
   {
     "id": "cet4",

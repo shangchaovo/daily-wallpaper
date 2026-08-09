@@ -19,6 +19,12 @@
     return cache[id];
   }
 
+  function wordKey(word) { return String(word.word || '') + '\u0000' + String(word.phonetic || ''); }
+  function availableLibrary(id, list) {
+    const known = window.Store.getKnownWords(id);
+    return (list || []).filter(word => !known.has(wordKey(word)));
+  }
+
   // Deterministic 32-bit hash of a string (FNV-1a-ish) for seeding.
   function hash(str) {
     let h = 2166136261;
@@ -74,5 +80,5 @@
     return out;
   }
 
-  window.Words = { loadLibrary, pickForDate, dateKey, hash };
+  window.Words = { loadLibrary, availableLibrary, wordKey, pickForDate, dateKey, hash };
 })();

@@ -13,7 +13,7 @@
     wordCols: 0,               // 0 = 自动列数（按词数+宽高比），1-3 = 强制列数
     order: 'sequential',       // 'sequential' | 'random'
     // typography
-    fontScale: 1.0,            // 0.7 – 1.6 multiplier on word sizes
+    fontScale: 1.0,            // 0.7 – 1.7 multiplier on word sizes
     fontWeight: 700,           // word weight 400–800
     fontStyle: 'yuan',         // 'hei'|'song'|'kai'|'yuan'|'heiti' (system font stacks)
     inkOverride: '',           // '' = use theme.ink; else a css color for ALL text
@@ -21,7 +21,9 @@
     lineHeight: 1.0,           // multiplier on row/line gaps (group + poster)
     // background
     bgImage: null,             // dataURL string of a user-uploaded photo (or null)
-    bgScrim: 0.42,             // 0..1 light overlay over bgImage for legibility
+    bgScrim: 0.22,             // 0..1 light overlay over bgImage for legibility
+    bgImagePos: { x: 0, y: 0 },// -1..1 cover-crop offset; drag empty preview area to adjust
+    bgImageZoom: 1.14,         // keep a small safe crop so photos can pan on both axes
     // layout anchors + free nudge offsets (fractions of W/H, -1..1)
     anchorWords: 'center',     // 'top'|'center'|'bottom'
     anchorReminders: 'bottom', // 'top'|'center'|'bottom'
@@ -74,6 +76,8 @@
       merged.custom.pos = Object.assign({}, (s.custom && s.custom.pos) || {});
       merged.offWords = Object.assign({}, DEFAULT_SETTINGS.offWords, s.offWords || {});
       merged.offReminders = Object.assign({}, DEFAULT_SETTINGS.offReminders, s.offReminders || {});
+      merged.bgImagePos = Object.assign({}, DEFAULT_SETTINGS.bgImagePos, s.bgImagePos || {});
+      merged.bgImageZoom = Math.max(1, Number(s.bgImageZoom) || DEFAULT_SETTINGS.bgImageZoom);
       return merged;
     },
     saveSettings(settings) {
@@ -87,6 +91,26 @@
     },
     saveCustomWords(words) {
       write('customWords', words);
+    },
+
+    // First-pass screening: each library owns a set of words the learner says
+    // they already know. These words are excluded from future daily groups.
+    getKnownWords(library) {
+      const all = read('knownWords', {});
+      const values = all && Array.isArray(all[library]) ? all[library] : [];
+      return new Set(values);
+    },
+    setKnownWord(library, key, known) {
+      const all = read('knownWords', {});
+      const set = new Set(Array.isArray(all[library]) ? all[library] : []);
+      if (known) set.add(key); else set.delete(key);
+      all[library] = Array.from(set);
+      write('knownWords', all);
+      return set;
+    },
+    clearKnownWords(library) {
+      const all = read('knownWords', {});
+      delete all[library]; write('knownWords', all);
     },
 
     // Reminders for "today". Array of {id,text,time?,done?,kind}

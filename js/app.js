@@ -24,8 +24,8 @@
   };
 
   const LIBRARIES = [
-    { id: 'chuzhong', icon: '🎒', name: '初中', desc: '中考核心词', file: 'words_chuzhong.json' },
-    { id: 'gaozhong', icon: '✏️', name: '高中', desc: '高考核心词', file: 'words_gaozhong.json' },
+    { id: 'jlpt_n5', icon: 'あ', name: '日语 JLPT N5', desc: '入门核心词（718）', file: 'words_jlpt_n5.json', source: 'JLPT N5 分级 · 开放词表整理' },
+    { id: 'jlpt_n4', icon: '日', name: '日语 JLPT N4', desc: '初级进阶词（668）', file: 'words_jlpt_n4.json', source: 'JLPT N4 分级 · 开放词表整理' },
     { id: 'cet4', icon: '📗', name: '四级', desc: 'CET4 核心词', file: 'words_cet4.json' },
     { id: 'cet6', icon: '📘', name: '六级', desc: 'CET6 核心词', file: 'words_cet6.json' },
     { id: 'kaoyan', icon: '📕', name: '考研', desc: '考研核心词', file: 'words_kaoyan.json' },
@@ -55,11 +55,20 @@
   let bgImageEl = null; // decoded Image for settings.bgImage (dataURL), kept out of the settings object
   let dragHl = null;    // {kind:'words'|'reminders'|'custom', key?} while dragging — render.js draws an outline
   let dragFrame = null; // rAF handle: coalesce drag re-renders to one per frame
+  let selectedWordIndex = null;
+  let wordCells = [];   // renderer 返回的精确单词格，用于“点词即编辑”
+  let activeLibraryBrowser = null;
+  let activeLibraryWords = [];
 
   const $ = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
 
-  function loadSettings() { settings = window.Store.getSettings(); }
+  function loadSettings() {
+    settings = window.Store.getSettings();
+    // Existing users keep a valid library after 初中/高中词书升级为 JLPT 词书。
+    if (settings.library === 'chuzhong') settings.library = 'jlpt_n5';
+    if (settings.library === 'gaozhong') settings.library = 'jlpt_n4';
+  }
   function saveSettings() { window.Store.saveSettings(settings); }
 
   /* ---------- settings -> UI ---------- */
@@ -84,6 +93,7 @@
     settings.custom.pos = settings.custom.pos || {};
     // typography
     $('#rng-fontscale').value = settings.fontScale;
+    $('#inp-fontscale').value = Math.round(settings.fontScale * 100);
     $('#sel-weight').value = settings.fontWeight;
     $('#sel-fontstyle').value = settings.fontStyle || 'hei';
     $('#rng-spacing').value = settings.letterSpacing;
@@ -102,7 +112,7 @@
   }
 
   function updateTypoLabels() {
-    $('#fontscale-val').textContent = Math.round(settings.fontScale * 100) + '%';
+    const fs = $('#inp-fontscale'); if (fs) fs.value = Math.round(settings.fontScale * 100);
     $('#spacing-val').textContent = settings.letterSpacing + 'px';
     $('#lineheight-val').textContent = Math.round(settings.lineHeight * 100) + '%';
     const cv = $('#count-val'); if (cv) cv.textContent = settings.wordsPerGroup + ' 词';
@@ -121,7 +131,16 @@
     $('#inp-cw').addEventListener('change', e => { settings.customW = clampInt(e.target.value, 100, 8000, 1080); commit(); });
     $('#inp-ch').addEventListener('change', e => { settings.customH = clampInt(e.target.value, 100, 8000, 1920); commit(); });
     $('#sel-order').addEventListener('change', e => { settings.order = e.target.value; commit(); });
-    $('#inp-count').addEventListener('input', e => { settings.wordsPerGroup = clampInt(e.target.value, 1, 36, 6); updateTypoLabels(); commit(true); });
+    $('#inp-count').addEventListener('input', e => {
+      if (e.target.value === '') return;
+      settings.wordsPerGroup = normalizeWordCount(e.target.value);
+      e.target.value = settings.wordsPerGroup;
+      updateTypoLabels(); commit(true);
+    });
+    $('#inp-count').addEventListener('change', e => {
+      if (e.target.value !== '') return;
+      e.target.value = settings.wordsPerGroup;
+    });
     $('#chk-daily').addEventListener('change', e => { settings.autoRefreshDaily = e.target.checked; commit(); });
     $('#chk-rotate').addEventListener('change', e => { settings.rotateEnabled = e.target.checked; syncDependentUI(); commit(); });
     $('#inp-rotate-min').addEventListener('change', e => { settings.rotateMinutes = clampInt(e.target.value, 1, 720, 30); commit(); });
@@ -142,7 +161,18 @@
     $('#inp-custom-footer').addEventListener('input', e => { settings.custom.footer = e.target.value; commit(true); });
 
     // typography
-    $('#rng-fontscale').addEventListener('input', e => { settings.fontScale = Number(e.target.value); updateTypoLabels(); commit(true); });
+    const setFontScale = value => {
+      settings.fontScale = clampNumber(value, 0.7, 1.7, 1);
+      $('#rng-fontscale').value = settings.fontScale;
+      updateTypoLabels(); commit(true);
+    };
+    $('#rng-fontscale').addEventListener('input', e => setFontScale(Number(e.target.value)));
+    $('#inp-fontscale').addEventListener('input', e => {
+      if (e.target.value !== '') setFontScale(Number(e.target.value) / 100);
+    });
+    $('#inp-fontscale').addEventListener('change', e => {
+      if (e.target.value === '') e.target.value = Math.round(settings.fontScale * 100);
+    });
     $('#sel-weight').addEventListener('change', e => { settings.fontWeight = Number(e.target.value); commit(); });
     $('#sel-fontstyle').addEventListener('change', e => { settings.fontStyle = e.target.value; commit(); });
     $('#rng-spacing').addEventListener('input', e => { settings.letterSpacing = Number(e.target.value); updateTypoLabels(); commit(true); });
@@ -172,8 +202,29 @@
     const closeImport = $('#btn-close-import');
     if (closeImport && modal) closeImport.addEventListener('click', () => { modal.hidden = true; });
     if (modal) modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal && !modal.hidden) modal.hidden = true; });
+    const libraryModal = $('#library-modal');
+    const closeLibrary = $('#btn-close-library');
+    if (closeLibrary && libraryModal) closeLibrary.addEventListener('click', closeLibraryBrowser);
+    if (libraryModal) libraryModal.addEventListener('click', e => { if (e.target === libraryModal) closeLibraryBrowser(); });
+    const librarySearch = $('#library-search');
+    if (librarySearch) librarySearch.addEventListener('input', renderLibraryWordList);
+    const markVisibleKnown = $('#btn-mark-visible-known');
+    if (markVisibleKnown) markVisibleKnown.addEventListener('click', markVisibleWordsKnown);
+    const clearKnown = $('#btn-clear-known');
+    if (clearKnown) clearKnown.addEventListener('click', clearLibraryScreening);
+    const browseSelected = $('#btn-browse-selected-library');
+    if (browseSelected) browseSelected.addEventListener('click', () => {
+      const lib = LIBRARIES.find(item => item.id === settings.library);
+      if (lib) openLibraryBrowser(lib);
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      if (modal && !modal.hidden) modal.hidden = true;
+      if (libraryModal && !libraryModal.hidden) closeLibraryBrowser();
+    });
     $('#btn-companion').addEventListener('click', enableCompanion);
+    const companionTop = $('#btn-companion-top');
+    if (companionTop) companionTop.addEventListener('click', enableCompanion);
     const petBtn = $('#btn-pet-toggle');
     if (petBtn) petBtn.addEventListener('click', togglePet);
     const petPrev = $('#btn-pet-prev');
@@ -182,16 +233,27 @@
     if (petNext) petNext.addEventListener('click', () => petSwitch(1));
     const dl = $('#btn-companion-dl');
     if (dl) dl.addEventListener('click', e => { e.preventDefault(); downloadCompanion(); });
+    const petDock = $('#btn-pet-dock');
+    if (petDock) petDock.addEventListener('click', () => petOn ? togglePet() : enableCompanion());
+    const petDockNext = $('#btn-pet-dock-next');
+    if (petDockNext) petDockNext.addEventListener('click', () => petSwitch(1));
 
     syncCompanionButton();
 
     bindImport();
     bindReminders();
     bindBgPhoto();
+    bindWordInspector();
     bindDrag();
   }
 
   function clampInt(v, min, max, dflt) { const n = parseInt(v, 10); return isNaN(n) ? dflt : Math.max(min, Math.min(max, n)); }
+  function clampNumber(v, min, max, dflt) { const n = Number(v); return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : dflt; }
+  // 多词采用双列时，偶数能保证每行两张卡、左右列完全均分。
+  function normalizeWordCount(v) {
+    const count = clampInt(v, 1, 36, 6);
+    return count >= 8 && count % 2 ? count - 1 : count;
+  }
 
   let commitTimer = null;
   function commit(light) {
@@ -204,6 +266,9 @@
   function renderLibraryCards() {
     const box = $('#library-cards');
     box.innerHTML = '';
+    const selected = LIBRARIES.find(lib => lib.id === settings.library) || LIBRARIES[0];
+    const selectedLabel = $('#selected-library-label');
+    if (selectedLabel && selected) selectedLabel.textContent = '已选：' + selected.name;
     LIBRARIES.forEach(lib => {
       const card = document.createElement('button');
       card.type = 'button';
@@ -218,6 +283,7 @@
         renderLibraryCards();
         syncDependentUI();
         commit();
+        toast('已选中「' + lib.name + '」；可点击“浏览并初筛”查看全部词条');
       });
       box.appendChild(card);
     });
@@ -230,6 +296,104 @@
         if (settings.library === lib.id || true) renderLibraryCards();
       }).catch(() => { libCounts[lib.id] = '?'; });
     });
+  }
+
+  /* ---------- library browsing + first-pass screening ---------- */
+  async function openLibraryBrowser(lib) {
+    const modal = $('#library-modal');
+    if (!modal) return;
+    activeLibraryBrowser = lib;
+    activeLibraryWords = [];
+    $('#library-modal-title').textContent = lib.name + ' · 全部词条';
+    $('#library-modal-source').textContent = lib.source || lib.desc;
+    $('#library-search').value = '';
+    $('#library-progress').textContent = '正在加载词书…';
+    $('#library-word-list').innerHTML = '';
+    modal.hidden = false;
+    try {
+      activeLibraryWords = await window.Words.loadLibrary(lib.id);
+      renderLibraryWordList();
+      $('#library-search').focus();
+    } catch (e) {
+      $('#library-progress').textContent = '词书加载失败';
+      $('#library-word-list').textContent = '请检查网络或刷新页面后重试。';
+    }
+  }
+
+  function closeLibraryBrowser() {
+    const modal = $('#library-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  function visibleLibraryWords() {
+    const q = ($('#library-search') && $('#library-search').value || '').trim().toLocaleLowerCase();
+    if (!q) return activeLibraryWords;
+    return activeLibraryWords.filter(word =>
+      [word.word, word.phonetic, word.pos, word.meaning, word.example]
+        .filter(Boolean).join(' ').toLocaleLowerCase().includes(q)
+    );
+  }
+
+  function renderLibraryWordList() {
+    if (!activeLibraryBrowser) return;
+    const box = $('#library-word-list');
+    const visible = visibleLibraryWords();
+    const known = window.Store.getKnownWords(activeLibraryBrowser.id);
+    const remaining = Math.max(0, activeLibraryWords.length - known.size);
+    $('#library-progress').textContent = `共 ${activeLibraryWords.length} · 已掌握 ${known.size} · 待学 ${remaining}`;
+    box.innerHTML = '';
+    if (!visible.length) {
+      box.innerHTML = '<p class="empty-library">没有匹配的词条，换个关键词试试。</p>';
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    visible.forEach(word => {
+      const key = window.Words.wordKey(word);
+      const isKnown = known.has(key);
+      const item = document.createElement('article');
+      item.className = 'library-word' + (isKnown ? ' known' : '');
+      const main = document.createElement('div');
+      main.className = 'library-word-main';
+      const title = document.createElement('b');
+      title.textContent = [word.word, word.phonetic].filter(Boolean).join(' ');
+      const detail = document.createElement('small');
+      detail.textContent = [word.pos, word.meaning].filter(Boolean).join(' · ');
+      main.append(title, detail);
+      const label = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox'; checkbox.checked = isKnown;
+      checkbox.setAttribute('aria-label', `标记 ${word.word} 为已掌握`);
+      checkbox.addEventListener('change', () => {
+        window.Store.setKnownWord(activeLibraryBrowser.id, key, checkbox.checked);
+        refresh(false);
+        renderLibraryCards();
+        renderLibraryWordList();
+      });
+      label.append(checkbox, document.createTextNode('已掌握'));
+      item.append(main, label);
+      fragment.appendChild(item);
+    });
+    box.appendChild(fragment);
+  }
+
+  function markVisibleWordsKnown() {
+    if (!activeLibraryBrowser) return;
+    const visible = visibleLibraryWords();
+    if (!visible.length) return;
+    visible.forEach(word => window.Store.setKnownWord(activeLibraryBrowser.id, window.Words.wordKey(word), true));
+    refresh(false);
+    renderLibraryCards();
+    renderLibraryWordList();
+    toast(`已筛除 ${visible.length} 个已掌握词`);
+  }
+
+  function clearLibraryScreening() {
+    if (!activeLibraryBrowser) return;
+    window.Store.clearKnownWords(activeLibraryBrowser.id);
+    refresh(false);
+    renderLibraryCards();
+    renderLibraryWordList();
+    toast('已恢复该词书的全部词条');
   }
 
   /* ---------- theme + pattern pickers ---------- */
@@ -315,15 +479,16 @@
     $('#btn-bgphoto-clear').addEventListener('click', () => { setBgImage(null); toast('已换回主题背景'); });
   }
   function setBgImage(dataUrl) {
-    if (!dataUrl) { settings.bgImage = null; bgImageEl = null; applyBgPhotoUI(); commit(); return; }
+    if (!dataUrl) { settings.bgImage = null; bgImageEl = null; settings.bgImagePos = { x: 0, y: 0 }; settings.bgImageZoom = 1.14; applyBgPhotoUI(); commit(); return; }
     const img = new Image();
-    img.onload = () => { settings.bgImage = dataUrl; bgImageEl = img; applyBgPhotoUI(); commit(); toast('背景照片已应用 🖼️'); };
-    img.onerror = () => toast('这张照片读不出来，换一张试试');
+    img.onload = () => { settings.bgImage = dataUrl; settings.bgImagePos = { x: 0, y: 0 }; settings.bgImageZoom = 1.14; bgImageEl = img; applyBgPhotoUI(); commit(); toast('背景照片已应用 · 可向任意方向拖动调整取景'); };
+    img.onerror = () => { bgImageEl = null; toast('这张照片读不出来，换一张 PNG、JPG 或 WebP 试试'); };
     img.src = dataUrl;
   }
   function applyBgPhotoUI() {
     const has = !!settings.bgImage;
     $('#bgphoto-preview').hidden = !has;
+    const legend = $('#drag-legend'); if (legend) legend.hidden = !has;
     if (has) $('#bgphoto-thumb').src = settings.bgImage;
   }
   // Rehydrate the decoded Image on load (settings.bgImage is a dataURL string).
@@ -489,9 +654,31 @@
     disp.style.touchAction = 'none';
     disp.addEventListener('pointerdown', e => {
       const rect0 = disp.getBoundingClientRect();
-      const hit = hitTestBlock((e.clientX - rect0.left) / rect0.width, (e.clientY - rect0.top) / rect0.height);
+      const fx = (e.clientX - rect0.left) / rect0.width;
+      const fy = (e.clientY - rect0.top) / rect0.height;
+      const wordIndex = hitTestWord(fx, fy);
+      if (wordIndex != null && !e.shiftKey) {
+        selectWord(wordIndex);
+        e.preventDefault();
+        return;
+      }
+      // 使用照片时，拖动预览空白处调整 cover 裁切位置；按住 Shift 仍可拖动文字/提醒块。
+      if (settings.bgImage && bgImageEl && !e.shiftKey) {
+        drag = { kind: 'background', startX: fx, startY: fy,
+          origX: (settings.bgImagePos && settings.bgImagePos.x) || 0,
+          origY: (settings.bgImagePos && settings.bgImagePos.y) || 0 };
+        dragHl = { kind: 'background' };
+        setDragState('正在移动背景取景');
+        disp.setPointerCapture(e.pointerId);
+        disp.classList.add('grabbing');
+        refresh(false);
+        e.preventDefault();
+        return;
+      }
+      const hit = hitTestBlock(fx, fy);
       if (!hit) return;
       dragHl = { kind: hit.kind, key: hit.key };
+      setDragState(hit.kind === 'reminders' ? '正在移动提醒' : hit.kind === 'custom' ? '正在移动自定义文字' : '正在移动单词组');
       applyDisplaySize(disp, disp, true); // fit the whole wallpaper into view while dragging
       const rect = disp.getBoundingClientRect();
       drag = { kind: hit.kind, key: hit.key, startX: (e.clientX - rect.left) / rect.width, startY: (e.clientY - rect.top) / rect.height, origX: hit.x, origY: hit.y };
@@ -501,12 +688,23 @@
       e.preventDefault();
     });
     disp.addEventListener('pointermove', e => {
-      if (!drag) return;
+      if (!drag) {
+        const rect = disp.getBoundingClientRect();
+        const fx = (e.clientX - rect.left) / rect.width, fy = (e.clientY - rect.top) / rect.height;
+        const overWord = hitTestWord(fx, fy) != null;
+        disp.classList.toggle('drag-photo-ready', !!(settings.bgImage && bgImageEl && !overWord && !e.shiftKey));
+        disp.classList.toggle('drag-word-ready', !!e.shiftKey);
+        return;
+      }
       const rect = disp.getBoundingClientRect();
       const fx = (e.clientX - rect.left) / rect.width;
       const fy = (e.clientY - rect.top) / rect.height;
       const dx = fx - drag.startX, dy = fy - drag.startY;
-      if (drag.kind === 'custom') {
+      if (drag.kind === 'background') {
+        settings.bgImagePos = settings.bgImagePos || { x: 0, y: 0 };
+        settings.bgImagePos.x = clamp(drag.origX + dx * 2, -1, 1);
+        settings.bgImagePos.y = clamp(drag.origY + dy * 2, -1, 1);
+      } else if (drag.kind === 'custom') {
         const pos = settings.custom.pos[drag.key] = settings.custom.pos[drag.key] || {};
         pos.x = clamp(drag.origX + dx, 0.02, 0.98);
         pos.y = clamp(drag.origY + dy, 0.02, 0.98);
@@ -520,17 +718,100 @@
     });
     const end = () => {
       if (!drag) return;
+      const finishedKind = drag.kind;
       drag = null; dragHl = null;
+      setDragState('');
       if (dragFrame) { cancelAnimationFrame(dragFrame); dragFrame = null; }
       disp.classList.remove('grabbing');
       refresh(false);
       saveSettings();
-      toast('位置已调整，点「复位布局」可还原');
+      toast(finishedKind === 'background' ? '背景取景已调整' : '位置已调整，点「复位布局」可还原');
     };
     disp.addEventListener('pointerup', end);
     disp.addEventListener('pointercancel', end);
   }
+  function setDragState(label) {
+    const state = $('#drag-state');
+    if (!state) return;
+    state.hidden = !label;
+    state.textContent = label || '';
+  }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+  function hitTestWord(fx, fy) {
+    for (const cell of wordCells) {
+      if (fx >= cell.x && fx <= cell.x + cell.w && fy >= cell.y && fy <= cell.y + cell.h) return cell.index;
+    }
+    return null;
+  }
+
+  function bindWordInspector() {
+    const inspector = $('#word-inspector');
+    if (!inspector) return;
+    const set = (key, value) => updateSelectedWordStyle({ [key]: value });
+    const syncScale = e => set('scale', Number(e.target.value));
+    // input 用于拖动中的实时反馈；change 兜底部分浏览器只在松手时派发的情况。
+    $('#sel-word-scale').addEventListener('input', syncScale);
+    $('#sel-word-scale').addEventListener('change', syncScale);
+    $('#sel-word-scale-number').addEventListener('input', e => {
+      if (e.target.value !== '') set('scale', Math.max(.7, Math.min(1.7, Number(e.target.value) / 100)));
+    });
+    $('#sel-word-weight').addEventListener('change', e => set('weight', Number(e.target.value)));
+    $('#sel-word-font').addEventListener('change', e => set('fontStyle', e.target.value));
+    $('#sel-word-color').addEventListener('input', e => set('color', e.target.value));
+    $('#btn-reset-word-style').addEventListener('click', () => {
+      if (selectedWordIndex == null) return;
+      settings.fontScale = 1; settings.fontWeight = 700; settings.fontStyle = 'yuan'; settings.inkOverride = '';
+      selectWord(selectedWordIndex); saveSettings(); refresh(false);
+    });
+  }
+
+  function selectWord(index) {
+    if (!lastSel || !lastSel.words || !lastSel.words[index]) return;
+    selectedWordIndex = index;
+    const word = lastSel.words[index];
+    const theme = THEMES[settings.theme] || THEMES.cream;
+    $('#word-inspector').hidden = false;
+    syncWordScaleAvailability();
+    $('#selected-word-label').textContent = word.word;
+    $('#sel-word-scale').value = settings.fontScale || 1;
+    $('#sel-word-scale-number').value = Math.round((settings.fontScale || 1) * 100);
+    $('#sel-word-weight').value = settings.fontWeight || 700;
+    $('#sel-word-font').value = settings.fontStyle || 'yuan';
+    $('#sel-word-color').value = settings.inkOverride || theme.ink;
+    refresh(false);
+  }
+
+  // 只有 1–5 个词可以自由强调字号；6 词起由渲染器自动适配。
+  // 组数变化时也要即时同步，不能等用户再点一次单词。
+  function syncWordScaleAvailability() {
+    const inspector = $('#word-inspector');
+    if (!inspector || inspector.hidden || !lastSel || !lastSel.words) return;
+    const canScaleWords = lastSel.words.length < 6;
+    $('#word-scale-control').hidden = !canScaleWords;
+    $('#multi-word-scale-note').hidden = canScaleWords;
+  }
+
+  function updateSelectedWordStyle(patch) {
+    if (selectedWordIndex == null) return;
+    // 多词模式采用固定的自动字号；即使有旧滑条事件在队列中，也不能覆盖它。
+    if (patch.scale != null && lastSel && lastSel.words && lastSel.words.length >= 6) delete patch.scale;
+    if (!Object.keys(patch).length) return;
+    if (patch.scale != null) settings.fontScale = patch.scale;
+    if (patch.weight != null) settings.fontWeight = patch.weight;
+    if (patch.fontStyle != null) settings.fontStyle = patch.fontStyle;
+    if (patch.color != null) settings.inkOverride = patch.color;
+    if (patch.scale != null) {
+      $('#sel-word-scale').value = patch.scale;
+      $('#sel-word-scale-number').value = Math.round(patch.scale * 100);
+      $('#rng-fontscale').value = patch.scale;
+      $('#inp-fontscale').value = Math.round(patch.scale * 100);
+    }
+    if (patch.weight != null) $('#sel-weight').value = patch.weight;
+    if (patch.fontStyle != null) $('#sel-fontstyle').value = patch.fontStyle;
+    // 直接编辑画布时不等待侧栏的 200ms 防抖，拖动滑条每一步都立刻重画。
+    saveSettings(); refresh(false);
+  }
 
   /* Which block (if any) is under the pointer? Returns its kind + current
    * fractional origin so the drag can compute a delta. Mirrors the
@@ -576,6 +857,7 @@
     if (liveActive) paintLive(page || cyclePage);
     updateMeta(sel);
     lastSel = sel;
+    syncWordScaleAvailability();
     updateSrsUI();
     // 复习组这次被「看过了」→ 推进到下一阶段（下次到期按更长间隔）
     if (sel.words && sel.words._reviewKeys && window.Review) {
@@ -592,8 +874,11 @@
     let due = window.Review.dueGroups(settings.library).map(g => g.words);
     if (!due.length) return fresh;
     const freshKeys = new Set(fresh.map(w => window.Review.wordKey(w)));
+    const known = window.Store.getKnownWords(settings.library);
     const dueWords = [];
-    due.forEach(words => words.forEach(w => { if (!freshKeys.has(window.Review.wordKey(w))) dueWords.push(w); }));
+    due.forEach(words => words.forEach(w => {
+      if (!freshKeys.has(window.Review.wordKey(w)) && !known.has(window.Words.wordKey(w))) dueWords.push(w);
+    }));
     if (!dueWords.length) return fresh;
     const mixed = dueWords.slice(0, count);
     mixed._reviewKeys = due.map(ws => window.Review.groupKeyFor(ws));   // 这些组「刚被复习」
@@ -608,7 +893,8 @@
     const stage = $('#preview-stage');
     let s = Math.min(1, (stage.clientWidth - 24) / canvas.width);
     // 也让预览高度适配视口：整页一屏看全，不用上下滚动
-    const availH = window.innerHeight - (fitToScreen ? 150 : 195);
+    const dockH = $('#pet-dock') ? 78 : 0;
+    const availH = window.innerHeight - (fitToScreen ? 150 : 195) - dockH;
     if (availH > 120) s = Math.min(s, Math.max(0.14, availH / canvas.height));
     disp.style.width = Math.round(canvas.width * s) + 'px';
     disp.style.height = Math.round(canvas.height * s) + 'px';
@@ -618,12 +904,13 @@
   function paintSelection(sel, page, canvasSel) {
     const { w, h } = getSize();
     const theme = THEMES[settings.theme] || THEMES.cream;
-    const renderSettings = Object.assign({}, settings, { bgImage: bgImageEl, hl: dragHl });
+    const renderSettings = Object.assign({}, settings, { bgImage: bgImageEl, hl: dragHl, selectedWordIndex });
     currentCanvas = window.Render.render({
       width: w, height: h, layout: settings.layout, page, theme,
       words: sel.words, reminders: window.Reminders.list(), settings: renderSettings, dateStr: sel.dateStr,
       minutesUntil: t => window.Reminders.minutesUntil(t),
     });
+    wordCells = renderSettings.wordCells || [];
     const disp = $(canvasSel);
     const ctx = disp.getContext('2d');
     disp.width = currentCanvas.width; disp.height = currentCanvas.height;
@@ -744,7 +1031,9 @@
    * 按钮就只显示"运行中"。*/
   async function enableCompanion() {
     const btn = $('#btn-companion');
-    btn.disabled = true;
+    const topBtn = $('#btn-companion-top');
+    const dockBtn = $('#btn-pet-dock');
+    [btn, topBtn, dockBtn].filter(Boolean).forEach(b => { b.disabled = true; });
     try {
       const resp = await fetch('companion/start', { method: 'POST' });
       const j = await resp.json();
@@ -755,7 +1044,9 @@
     } catch (e) {
       toast('启动失败：' + e.message + '（请用 node server.js 打开本站）');
     } finally {
-      btn.disabled = false;
+      [btn, topBtn, dockBtn].filter(Boolean).forEach(b => {
+        if (!b.textContent.includes('运行中') && !b.textContent.includes('已开启')) b.disabled = false;
+      });
     }
   }
 
@@ -767,6 +1058,13 @@
       if (running) {
         btn.textContent = '✅ 桌面伴侣运行中';
         btn.disabled = true;
+        const topBtn = $('#btn-companion-top');
+        if (topBtn) { topBtn.textContent = '✅ 桌面宠物已开启'; topBtn.disabled = true; }
+        const dockBtn = $('#btn-pet-dock');
+        if (dockBtn) { dockBtn.textContent = j.pet ? '🙈 隐藏小词灵' : '🐾 召唤小词灵'; dockBtn.disabled = false; }
+        const dockStatus = $('#pet-dock-status');
+        if (dockStatus) dockStatus.textContent = j.pet ? '小词灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小词灵出现';
+        const dockNext = $('#btn-pet-dock-next'); if (dockNext) dockNext.hidden = false;
         syncPetControls(j);
       }
     }).catch(() => {});
@@ -780,8 +1078,10 @@
     petOn = !!(j && j.pet);
     const btn = $('#btn-pet-toggle');
     if (btn) btn.textContent = petOn ? '🙈 隐藏宠物' : '🐾 召唤宠物';
+    const dockBtn = $('#btn-pet-dock');
+    if (dockBtn) dockBtn.textContent = petOn ? '🙈 隐藏小词灵' : '🐾 召唤小词灵';
     const hint = $('#pet-hint');
-    if (hint) hint.textContent = '单击卡片＝前进 · Shift＋单击＝回退 · 按住拖动 · 拖右下角 ⤡ 调大小';
+    if (hint) hint.textContent = '摸摸词灵换一组 · Shift＋单击回退 · 按住拖动 · 拖右下角 ⤡ 调大小';
   }
 
   async function petSwitch(dir) {
@@ -803,7 +1103,11 @@
       const j = await r.json();
       petOn = !!j.pet;
       btn.textContent = petOn ? '🙈 隐藏宠物' : '🐾 召唤宠物';
-      toast(petOn ? '宠物已召唤 ✓（单击=下一组，Shift+单击=回退）' : '宠物已隐藏');
+      const dockBtn = $('#btn-pet-dock');
+      if (dockBtn) dockBtn.textContent = petOn ? '🙈 隐藏小词灵' : '🐾 召唤小词灵';
+      const dockStatus = $('#pet-dock-status');
+      if (dockStatus) dockStatus.textContent = petOn ? '小词灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小词灵出现';
+      toast(petOn ? '小词灵已召唤 ✓（单击换词，Shift+单击回退）' : '小词灵已隐藏');
     } catch (e) { toast('操作失败：' + e.message); }
     btn.disabled = false;
   }

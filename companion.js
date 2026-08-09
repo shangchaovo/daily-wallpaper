@@ -222,8 +222,8 @@ function buildSVG(opts) {
     words.forEach((w, i) => {
       const rowY = blockTop + i * rowH;
       const midY = rowY + rowH / 2;
-      parts.push(text(margin, midY + wordFs * 0.17, String(i + 1).padStart(2, '0'), wordFs * 0.5, t.sub, 500));
-      const ix = margin + W * 0.075;
+      // 词义本身就是信息层级的起点；不再为每一项占用编号空间。
+      const ix = margin;
       const meaning = (w.pos ? w.pos + ' ' : '') + (w.meaning || '');
       if (stacked) {
         parts.push(text(ix, midY - rowH * 0.16 + wordFs * 0.36, w.word, wordFs, t.ink, 700));
@@ -289,7 +289,7 @@ function rasterizeSVG(svg, outPng, W, H, cb) {
  * window is self-explanatory without remembering click gestures. These geometry
  * constants feed BOTH the SVG (where buttons are drawn) and the JXA (where they
  * are hit-tested), so they must stay in sync. */
-const PET_FOOTER_H = 62;                       // 底部提示行 + 按钮栏总高 (pt)
+const PET_FOOTER_H = 70;                       // 底部提示行 + 按钮栏总高 (pt)
 const PET_BTN = { w: 96, h: 32, bottomPad: 8, gap: 16 };  // 按钮宽/高/距底边距/间距 (pt)
 const PET_RESIZE = { pad: 4, size: 32 };       // 右下角拉伸手柄尺寸 (pt) — 大一点好抓
 const MIN_PET_W = 250, MIN_PET_H = 170, MAX_PET = 900;   // 宠物可拉伸的尺寸范围 (pt)
@@ -314,12 +314,14 @@ function petScale(W, H) {
 function buildPetSVG(words, reminders, theme, W, H) {
   const s = 2; // render at 2x so it's crisp on retina
   const w = W * s, h = H * s;
-  const padX = 15, padY = 14;                  // pt
+  const padX = 15, padY = 30;                  // pt（标题落在词灵头部内部，而非透明边缘）
   const footerH = PET_FOOTER_H;
   const parts = [];
   parts.push(`<defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">` +
-    `<stop offset="0" stop-color="${theme.bg}"/><stop offset="1" stop-color="${theme.bg2 || theme.bg}"/></linearGradient></defs>`);
-  parts.push(`<rect x="0" y="0" width="${w}" height="${h}" rx="${22 * s}" fill="url(#pg)"/>`);
+    `<stop offset="0" stop-color="${theme.bg}"/><stop offset="1" stop-color="${theme.bg2 || theme.bg}"/></linearGradient>` +
+    `<filter id="petShadow" x="-15%" y="-12%" width="130%" height="135%"><feDropShadow dx="0" dy="${4 * s}" stdDeviation="${5 * s}" flood-color="#1f2740" flood-opacity="0.18"/></filter></defs>`);
+  // 不再用一整块巨大的「宠物身体」包住内容。词灵由独立猫脸和悬浮词泡泡组成：
+  // 放大时仍是轻巧的角色组件，单词永远是视觉主角。
   const fam = 'Yuanti SC, YouYuan, 幼圆, PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif';
   const txt = (x, y, str, size, fill, weight) =>
     `<text x="${x}" y="${y}" font-family="${fam}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ''}>${esc(str)}</text>`;
@@ -348,24 +350,29 @@ function buildPetSVG(words, reminders, theme, W, H) {
   const acc = theme.accent || '#ff8f4d';
   const dark = theme.ink || '#503722';
   const lightLine = theme.line || 'rgba(128,90,40,0.16)';
-  // 卡通小助手（sprout 苗）：圆脸 + 头顶两片叶 + 眼睛/腮红/嘴
+  // 词灵：小耳朵、圆脸、腮红与微笑。单词卡被放在它的“肚皮”里。
   const sprite = (cx, cy, r) => (
+    `<path d="M ${cx - r * .72} ${cy - r * .35} L ${cx - r * .78} ${cy - r * 1.1} L ${cx - r * .13} ${cy - r * .67} Z" fill="${soft}" stroke="${acc}" stroke-width="${1.5 * s}"/>` +
+    `<path d="M ${cx + r * .72} ${cy - r * .35} L ${cx + r * .78} ${cy - r * 1.1} L ${cx + r * .13} ${cy - r * .67} Z" fill="${soft}" stroke="${acc}" stroke-width="${1.5 * s}"/>` +
     `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${soft}" stroke="${acc}" stroke-width="${1.6 * s}"/>` +
-    `<path d="M ${cx} ${cy - r} Q ${cx - r * 0.55} ${cy - r * 1.7} ${cx - r * 0.95} ${cy - r * 1.25}" stroke="#3dbb85" stroke-width="${2.4 * s}" fill="none" stroke-linecap="round"/>` +
-    `<path d="M ${cx} ${cy - r} Q ${cx + r * 0.55} ${cy - r * 1.8} ${cx + r * 0.95} ${cy - r * 1.2}" stroke="#41c189" stroke-width="${2.4 * s}" fill="none" stroke-linecap="round"/>` +
     `<circle cx="${cx - r * 0.34}" cy="${cy - r * 0.05}" r="${r * 0.13}" fill="${dark}"/>` +
     `<circle cx="${cx + r * 0.34}" cy="${cy - r * 0.05}" r="${r * 0.13}" fill="${dark}"/>` +
     `<circle cx="${cx - r * 0.58}" cy="${cy + r * 0.28}" r="${r * 0.16}" fill="${acc}" opacity="0.45"/>` +
     `<circle cx="${cx + r * 0.58}" cy="${cy + r * 0.28}" r="${r * 0.16}" fill="${acc}" opacity="0.45"/>` +
     `<path d="M ${cx - r * 0.22} ${cy + r * 0.28} Q ${cx} ${cy + r * 0.55} ${cx + r * 0.22} ${cy + r * 0.28}" stroke="${dark}" stroke-width="${1.8 * s}" fill="none" stroke-linecap="round"/>`
   );
-  // 单词贴纸底（白卡 + 主题色描边 + 底部厚实色边，像贴纸）
+  // 悬浮词泡泡：不依附大底板，避免被看成笔记本或夸张的动物身体。
   const tile = (x, y, tw, th, rr) =>
-    `<rect x="${x}" y="${y + Math.max(2, th * 0.05)}" width="${tw}" height="${th}" rx="${rr}" fill="${acc}" opacity="0.18"/>` +
-    `<rect x="${x}" y="${y}" width="${tw}" height="${th}" rx="${rr}" fill="#ffffff" stroke="${lightLine}" stroke-width="${1.5 * s}"/>`;
-  // 顶部：小助手 + WordPaper 标题
-  parts.push(sprite(padX * s + 13 * s, padY * s + 12 * s, 10 * s));
-  parts.push(txt((padX + 30) * s, padY * s + Math.round(15 * s), 'WordPaper', 14 * s, dark, 800));
+    `<rect x="${x}" y="${y + 2 * s}" width="${tw}" height="${th}" rx="${rr}" fill="${acc}" opacity="0.12"/>` +
+    `<rect x="${x}" y="${y}" width="${tw}" height="${th}" rx="${rr}" fill="url(#pg)" opacity="0.96" stroke="${lightLine}" stroke-width="${1.2 * s}"/>`;
+  // 独立的圆脸做角色锚点；会随窗口适度放大，但严格限制上限，不会反过来抢走单词的注意力。
+  const faceScale = Math.min(1.55, petScale(W, H));
+  const faceR = 12 * faceScale;
+  const faceX = W * .5 - 82 * faceScale;
+  const faceY = padY + faceR + 2;
+  const headerH = Math.round(36 * faceScale);
+  parts.push(sprite(faceX * s, faceY * s, faceR * s));
+  parts.push(txt((faceX + faceR * 1.75) * s, (faceY + 5 * faceScale) * s, '小词灵 · 今日词组', 13 * s * faceScale, dark, 800));
   // 右上角关闭按钮（✕），点击可关闭小窗
   const cR = 14 * s;
   const cX = w - padX * s - cR, cY = padY * s + cR;
@@ -375,8 +382,8 @@ function buildPetSVG(words, reminders, theme, W, H) {
   const mode = petMode(W, H);
   const scale = petScale(W, H);              // 文字等比缩放：卡片越大字越大
   const footerTop = (H - footerH);                       // pt
-  const waX = padX, waY = padY + 34;
-  const waW = W - 2 * padX, waH = H - footerH - padY - 34 - padY;
+  const waX = padX, waY = padY + headerH;
+  const waW = W - 2 * padX, waH = H - footerH - padY - headerH - padY;
   const n = Math.max(1, words.length);
   const shown = words.slice(0, n);
   const meaning = wd => (wd.pos ? wd.pos + ' ' : '') + (wd.meaning || '');
@@ -409,7 +416,7 @@ function buildPetSVG(words, reminders, theme, W, H) {
       parts.push(ctxt(cx * s, yy * s, truncate(meaning(wd), subFs * s, (colW - 14) * s), subFs * s, theme.sub));
     });
   } else if (mode === 'square') {
-    // 方形：两列贴纸网格，序号圆徽 + 词 + 释义（字号随卡片缩放）
+    // 方形：两列词格，只保留单词与释义（字号随卡片缩放）
     const cols = 2, rows = Math.max(1, Math.ceil(n / 2));
     const gapX = 8 * scale, gapY = 7 * scale;
     const colW = (waW - gapX) / cols;
@@ -420,27 +427,19 @@ function buildPetSVG(words, reminders, theme, W, H) {
       const cellTop = waY + r * rowH;
       const mid = cellTop + rowH / 2;
       parts.push(tile(x * s, (cellTop + gapY / 2) * s, colW * s, (rowH - gapY) * s, 13 * s * scale));
-      // 序号小圆徽
-      const bR = 8 * s * scale, bX = (x + 8 * scale) * s + bR, bY = (mid - 7 * scale) * s;
-      parts.push(`<circle cx="${bX}" cy="${bY}" r="${bR}" fill="${soft}"/>`);
-      parts.push(ctxt(bX, bY + Math.round(3.2 * s * scale), String(i + 1), 9 * s * scale, acc, 800));
-      const ix = x + 8 * scale + bR * 2 / s + 6 * scale;
+      const ix = x + 10 * scale;
       parts.push(txt(ix * s, (mid - 7 * scale) * s + Math.round(3 * s * scale), wd.word, 14 * s * scale, dark, 800));
       parts.push(txt((x + 9 * scale) * s, (mid + 12 * scale) * s, truncate(meaning(wd), 9.5 * s * scale, (colW - 16 * scale) * s), 9.5 * s * scale, theme.sub));
     });
   } else {
-    // 竖版窄条：逐行贴纸（词 + 音标 + 释义，字号随卡片缩放）
+    // 竖版窄条：逐行词格（词 + 音标 + 释义，字号随卡片缩放）
     const rowH = waH / n;
     const tilePad = 2.5 * scale;                       // 贴纸上下留白
     shown.forEach((wd, i) => {
       const rowTop = waY + i * rowH;
       const mid = rowTop + rowH / 2;
       parts.push(tile(waX * s, (rowTop + tilePad) * s, waW * s, (rowH - tilePad * 2) * s, 12 * s * scale));
-      // 序号小圆徽
-      const bR = 8.5 * s * scale, bX = (waX + 9 * scale) * s + bR, bY = mid * s;
-      parts.push(`<circle cx="${bX}" cy="${bY}" r="${bR}" fill="${soft}"/>`);
-      parts.push(ctxt(bX, bY + Math.round(3.4 * s * scale), String(i + 1), 9.5 * s * scale, acc, 800));
-      const ix = waX + 26 * scale + bR;
+      const ix = waX + 12 * scale;
       parts.push(txt(ix * s, (mid - 5 * scale) * s, wd.word, 16 * s * scale, dark, 800));
       if (wd.phonetic) {
         const ww = Math.round(estW(wd.word, 16 * s * scale));
@@ -464,7 +463,7 @@ function buildPetSVG(words, reminders, theme, W, H) {
     }
   }
   // ---- 底部提示行（标注，降低使用门槛）----
-  parts.push(ctxt(w / 2, (H - footerH + 13) * s, '单击卡片＝前进 · Shift＋单击＝回退', 10.5 * s, theme.sub));
+  parts.push(ctxt(w / 2, (H - footerH + 16) * s, '单击换词 · Shift＋单击回退 · ↘ 拖拽缩放', 10 * s, theme.sub));
   // ---- 底部可视化按钮：◀ 回退 / 前进 ▶（窄窗口自动变窄，避开右下拉伸手柄）----
   const btn = PET_BTN;
   const btnW = Math.min(btn.w, Math.floor((W - 3 * padX - btn.gap - PET_RESIZE.size) / 2));
@@ -475,8 +474,8 @@ function buildPetSVG(words, reminders, theme, W, H) {
     `<rect x="${x0 * s}" y="${(btnTop + 2.5) * s}" width="${btnW * s}" height="${btn.h * s}" rx="${btn.h * s / 2}" fill="${acc}" opacity="0.30"/>` +
     `<rect x="${x0 * s}" y="${btnTop * s}" width="${btnW * s}" height="${btn.h * s}" rx="${btn.h * s / 2}" fill="#ffffff" stroke="${acc}" stroke-width="${1.6 * s}"/>` +
     `<text x="${(x0 + btnW / 2) * s}" y="${(btnTop + btn.h / 2) * s + Math.round(4.5 * s)}" text-anchor="middle" font-family="${fam}" font-size="${13 * s}" font-weight="700" fill="${dark}">${esc(label)}</text>`;
-  parts.push(btnC(btnX0, '◀ 回退'));
-  parts.push(btnC(btnX1, '前进 ▶'));
+  parts.push(btnC(btnX0, '◀ 复习'));
+  parts.push(btnC(btnX1, '换词 ▶'));
   // ---- 右下角拉伸手柄（三条斜线，明显的"可拖拽调大小"提示）----
   const rs = PET_RESIZE;
   const gx = (W - rs.pad - rs.size) * s, gy = (H - rs.pad - rs.size) * s, gs = rs.size * s;

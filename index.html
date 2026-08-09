@@ -8,23 +8,18 @@
 </head>
 <body>
 
-<!-- 漂浮卡通点缀（纯装饰，不抢内容） -->
-<span class="float-deco" style="left:4%;  top:16%; --fs:26px; --dur:7.5s;">⭐</span>
-<span class="float-deco" style="left:8%;  top:64%; --fs:20px; --dur:9s;">✨</span>
-<span class="float-deco" style="right:6%; top:12%; --fs:24px; --dur:8s;">☁️</span>
-<span class="float-deco" style="right:4%; top:58%; --fs:20px; --dur:10s;">🌟</span>
-<span class="float-deco" style="left:46%; top:6%;  --fs:18px; --dur:8.5s;">✦</span>
-<span class="float-deco" style="right:30%; top:80%; --fs:22px; --dur:9.5s;">🎈</span>
-<span class="float-deco" style="left:26%; top:40%; --fs:16px; --dur:11s;">✧</span>
-<span class="float-deco" style="right:18%; top:34%; --fs:18px; --dur:7s;">🍬</span>
-<span class="float-deco" style="left:60%; top:88%; --fs:20px; --dur:8.8s;">🌈</span>
-<span class="float-deco" style="right:44%; top:48%; --fs:15px; --dur:10.5s;">✩</span>
+<!-- 微弱的纸屑星光：只做氛围，不与内容争夺注意力。 -->
+<span class="float-deco" style="left:7%; top:20%; --fs:16px; --dur:11s;">✦</span>
+<span class="float-deco" style="right:9%; top:18%; --fs:13px; --dur:13s;">✧</span>
+<span class="float-deco" style="left:16%; top:76%; --fs:11px; --dur:14s;">·</span>
+<span class="float-deco" style="right:22%; top:74%; --fs:15px; --dur:12s;">✦</span>
+<span class="float-deco" style="left:46%; top:7%; --fs:12px; --dur:15s;">✧</span>
 
 <div class="app">
   <!-- ============ top bar ============ -->
   <header class="topbar">
     <div class="brand">
-      <span class="logo">🌱</span>
+      <span class="logo" aria-label="WordPaper 标识"><span>W</span></span>
       <div>
         <h1>WordPaper</h1>
         <p class="tagline">把每天的单词和小提醒，变成你的手机 / 电脑壁纸</p>
@@ -48,6 +43,10 @@
           <button id="btn-open-import" class="btn small soft" type="button">📥 导入</button>
         </div>
         <div id="library-cards" class="lib-cards"></div>
+        <div class="selected-library-action" aria-live="polite">
+          <span id="selected-library-label">当前词书</span>
+          <button id="btn-browse-selected-library" class="btn soft small" type="button">浏览并初筛 →</button>
+        </div>
         <label class="row">
           <span>选词方式</span>
           <select id="sel-order">
@@ -55,11 +54,11 @@
             <option value="random">每天随机抽</option>
           </select>
         </label>
-        <label class="row slider-row" id="count-row">
+        <label class="row count-row" id="count-row">
           <span>每组单词数</span>
-          <input id="inp-count" type="range" min="1" max="36" step="1" value="6">
-          <b id="count-val">6 词</b>
+          <span class="count-field"><input id="inp-count" type="number" min="1" max="36" step="1" value="6" inputmode="numeric"><em>词</em></span>
         </label>
+        <p id="count-hint" class="input-hint">8 词起自动使用双列均分；多词数量会校正为偶数。</p>
       </section>
 
       <section class="card">
@@ -121,8 +120,29 @@
           <button id="btn-set-wallpaper2" class="btn soft small">🖥️ 设壁纸</button>
         </div>
       </div>
+      <section id="pet-dock" class="pet-dock" aria-label="桌面小词灵">
+        <span class="pet-dock-face" aria-hidden="true">Aa</span>
+        <div class="pet-dock-copy"><b>桌面小词灵</b><span id="pet-dock-status">把今日单词带到桌面上，随时摸摸就能换词</span></div>
+        <div class="pet-dock-actions">
+          <button id="btn-pet-dock" class="btn pet-dock-main" type="button">🐾 召唤小词灵</button>
+          <button id="btn-pet-dock-next" class="btn ghost small" type="button" hidden>换一组 ▶</button>
+        </div>
+      </section>
       <div id="preview-stage" class="stage">
         <canvas id="preview-canvas"></canvas>
+        <div id="drag-legend" class="drag-legend" hidden aria-live="polite">
+          <span>🖼️ 空白处：拖动背景</span><span>⇧ + 拖动：移动单词组</span>
+        </div>
+        <div id="drag-state" class="drag-state" hidden></div>
+        <section id="word-inspector" class="word-inspector" hidden aria-live="polite">
+          <div class="word-inspector-head"><span class="inspector-kicker">正在编辑</span><b id="selected-word-label">—</b><span>会同步整组单词</span></div>
+          <label id="word-scale-control">字号 <input id="sel-word-scale" type="range" min="0.7" max="1.7" step="0.05" value="1"><input id="sel-word-scale-number" type="number" min="70" max="170" step="5" value="100" aria-label="整组字号百分比"><em>%</em></label>
+          <span id="multi-word-scale-note" class="scale-auto-note" hidden>6 词起自动适配字号</span>
+          <label>粗细 <select id="sel-word-weight"><option value="500">细</option><option value="600">中</option><option value="700">粗</option><option value="800">特粗</option></select></label>
+          <label>字体 <select id="sel-word-font"><option value="yuan">圆体</option><option value="hei">黑体</option><option value="song">宋体</option><option value="kai">楷体</option><option value="heiti">粗黑</option></select></label>
+          <label>颜色 <input id="sel-word-color" type="color" value="#4a3b2e"></label>
+          <button id="btn-reset-word-style" class="chip" type="button">恢复默认</button>
+        </section>
       </div>
     </section>
 
@@ -160,6 +180,7 @@
             </label>
             <div id="bgphoto-preview" class="bgphoto-preview" hidden>
               <img id="bgphoto-thumb" alt="背景预览">
+              <small>拖动预览空白处调整取景</small>
               <button id="btn-bgphoto-clear" class="btn small ghost" type="button">移除</button>
             </div>
           </div>
@@ -175,9 +196,10 @@
         <h2><span class="h-emoji">🔤</span>字体与排版</h2>
         <label class="row slider-row">
           <span>字号大小</span>
-          <input id="rng-fontscale" type="range" min="0.7" max="1.6" step="0.05" value="1">
-          <b id="fontscale-val">100%</b>
+          <input id="rng-fontscale" type="range" min="0.7" max="1.7" step="0.05" value="1">
+          <span class="percent-field"><input id="inp-fontscale" type="number" min="70" max="170" step="5" value="100" inputmode="numeric" aria-label="字号百分比"><em>%</em></span>
         </label>
+        <div class="row ink-row"><span>文字颜色</span><div id="ink-picker" class="ink-picker"></div></div>
         <label class="row">
           <span>字体粗细</span>
           <select id="sel-weight">
@@ -197,7 +219,6 @@
             <option value="heiti">粗黑 · 醒目</option>
           </select>
         </label>
-        <div class="row"><span>文字颜色</span><div id="ink-picker" class="ink-picker"></div></div>
         <label class="row slider-row">
           <span>字间距</span>
           <input id="rng-spacing" type="range" min="0" max="20" step="1" value="0">
@@ -307,18 +328,36 @@
   </div>
 </div>
 
+<!-- ============ library first-pass screening ============ -->
+<div id="library-modal" class="modal-overlay library-modal" hidden>
+  <div class="modal-card library-card" role="dialog" aria-modal="true" aria-labelledby="library-modal-title">
+    <div class="modal-head">
+      <div><h2 id="library-modal-title">词书浏览</h2><p id="library-modal-source" class="hint"></p></div>
+      <button id="btn-close-library" class="modal-close" type="button" title="关闭">✕</button>
+    </div>
+    <div class="library-screening-bar">
+      <input id="library-search" type="search" placeholder="搜索单词、读音或释义">
+      <span id="library-progress" class="library-progress"></span>
+      <button id="btn-mark-visible-known" class="chip" type="button">筛选结果都认识</button>
+      <button id="btn-clear-known" class="chip" type="button">清除筛选</button>
+    </div>
+    <p class="hint">勾选“已掌握”后，该词不会再被抽进每日单词组。词书展示的是全部词条。</p>
+    <div id="library-word-list" class="library-word-list" aria-live="polite"></div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <!-- ?v= busts browser cache — bump after any js/ change -->
-<script src="js/store.js?v=20260809a"></script>
-<script src="js/words.js?v=20260809a"></script>
-<script src="js/importer.js?v=20260809a"></script>
-<script src="js/ocr.js?v=20260809a"></script>
-<script src="js/reminders.js?v=20260809a"></script>
-<script src="js/review.js?v=20260809a"></script>
-<script src="js/render.js?v=20260809a"></script>
-<script src="js/engine.js?v=20260809a"></script>
-<script src="js/app.js?v=20260809a"></script>
+<script src="js/store.js?v=20260809f"></script>
+<script src="js/words.js?v=20260809f"></script>
+<script src="js/importer.js?v=20260809f"></script>
+<script src="js/ocr.js?v=20260809f"></script>
+<script src="js/reminders.js?v=20260809f"></script>
+<script src="js/review.js?v=20260809f"></script>
+<script src="js/render.js?v=20260809f"></script>
+<script src="js/engine.js?v=20260809f"></script>
+<script src="js/app.js?v=20260809f"></script>
 </body>
 </html>
