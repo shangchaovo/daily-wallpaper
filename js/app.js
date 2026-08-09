@@ -24,15 +24,15 @@
   };
 
   const LIBRARIES = [
-    { id: 'chuzhong', icon: '🎒', name: '初中', desc: '中考核心词汇', file: 'words_chuzhong.json' },
-    { id: 'gaozhong', icon: '✏️', name: '高中', desc: '高考核心词汇', file: 'words_gaozhong.json' },
-    { id: 'cet4', icon: '📗', name: '四级', desc: '大学英语四级 CET4', file: 'words_cet4.json' },
-    { id: 'cet6', icon: '📘', name: '六级', desc: '大学英语六级 CET6', file: 'words_cet6.json' },
-    { id: 'kaoyan', icon: '📕', name: '考研', desc: '考研英语核心', file: 'words_kaoyan.json' },
-    { id: 'ielts', icon: '🎓', name: '雅思', desc: '雅思 IELTS 核心词', file: 'words_ielts.json' },
-    { id: 'toefl', icon: '🌍', name: '托福', desc: '托福 TOEFL 核心', file: 'words_toefl.json' },
-    { id: 'gre', icon: '🗽', name: 'GRE', desc: '出国读研核心词', file: 'words_gre.json' },
-    { id: 'custom', icon: '✨', name: '我的词库', desc: '自己导入的单词', file: null },
+    { id: 'chuzhong', icon: '🎒', name: '初中', desc: '中考核心词', file: 'words_chuzhong.json' },
+    { id: 'gaozhong', icon: '✏️', name: '高中', desc: '高考核心词', file: 'words_gaozhong.json' },
+    { id: 'cet4', icon: '📗', name: '四级', desc: 'CET4 核心词', file: 'words_cet4.json' },
+    { id: 'cet6', icon: '📘', name: '六级', desc: 'CET6 核心词', file: 'words_cet6.json' },
+    { id: 'kaoyan', icon: '📕', name: '考研', desc: '考研核心词', file: 'words_kaoyan.json' },
+    { id: 'ielts', icon: '🎓', name: '雅思', desc: 'IELTS 核心词', file: 'words_ielts.json' },
+    { id: 'toefl', icon: '🌍', name: '托福', desc: 'TOEFL 核心词', file: 'words_toefl.json' },
+    { id: 'gre', icon: '🗽', name: 'GRE', desc: 'GRE 核心词', file: 'words_gre.json' },
+    { id: 'custom', icon: '✨', name: '我的词库', desc: '自己导入的词', file: null },
   ];
 
   const BG_PATTERNS = [
@@ -775,27 +775,37 @@
       if (running) {
         btn.textContent = '✅ 桌面伴侣运行中';
         btn.disabled = true;
-        syncPetControls(j.pet);
+        syncPetControls(j);
       }
     }).catch(() => {});
   }
 
   let petOn = false;
-  function syncPetControls(petVisible) {
+  function syncPetControls(j) {
     const box = $('#pet-controls');
     if (!box) return;
     box.style.display = 'block';
-    petOn = !!petVisible;
+    petOn = !!(j && j.pet);
     const btn = $('#btn-pet-toggle');
     if (btn) btn.textContent = petOn ? '🙈 隐藏宠物' : '🐾 召唤宠物';
+    // 从伴侣的 petSize 反推当前形状（与 companion.js 的 petMode 一致的比例阈值）
+    const ps = j && j.config && j.config.petSize;
+    if (ps && ps.w && ps.h) {
+      const r = ps.w / ps.h;
+      markPetShape(r >= 1.5 ? 'wide' : r <= 0.75 ? 'tall' : 'square');
+    } else markPetShape('square');
     const hint = $('#pet-hint');
-    if (hint) hint.textContent = '宠物窗口底部有 ◀回退 / 前进▶ 按钮；单击卡片＝前进，Shift+单击＝回退，按住可拖动；拖右下角 ⤡ 可自由调大小（形状变了排列自动跟随）。';
+    if (hint) hint.textContent = '单击卡片＝前进 · Shift＋单击＝回退 · 按住拖动 · 拖右下角 ⤡ 调大小';
   }
 
   const PET_SHAPES = { tall: { w: 320, h: 428 }, square: { w: 400, h: 400 }, wide: { w: 600, h: 220 } };
+  function markPetShape(shape) {
+    document.querySelectorAll('[data-pet-shape]').forEach(b => b.classList.toggle('on', b.dataset.petShape === shape));
+  }
   async function setPetShape(shape) {
     const s = PET_SHAPES[shape];
     if (!s) return;
+    markPetShape(shape);
     try {
       const r = await fetch('pet-size.php?w=' + s.w + '&h=' + s.h, { method: 'POST' });
       const j = await r.json();

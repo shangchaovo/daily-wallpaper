@@ -8,6 +8,14 @@
 </head>
 <body>
 
+<!-- 漂浮卡通点缀（纯装饰，不抢内容） -->
+<span class="float-deco" style="left:4%;  top:16%; --fs:26px; --dur:7.5s;">⭐</span>
+<span class="float-deco" style="left:8%;  top:64%; --fs:20px; --dur:9s;">✨</span>
+<span class="float-deco" style="right:6%; top:12%; --fs:24px; --dur:8s;">☁️</span>
+<span class="float-deco" style="right:4%; top:58%; --fs:20px; --dur:10s;">🌟</span>
+<span class="float-deco" style="left:46%; top:6%;  --fs:18px; --dur:8.5s;">✦</span>
+<span class="float-deco" style="right:30%; top:80%; --fs:22px; --dur:9.5s;">🎈</span>
+
 <div class="app">
   <!-- ============ top bar ============ -->
   <header class="topbar">
@@ -31,25 +39,30 @@
 
       <section class="card desktop-card">
         <h2><span class="h-emoji">💻</span>搬到电脑桌面上</h2>
-        <p class="hint">想在 Mac 桌面<b>真正换壁纸</b>、还要一个常驻不遮挡的小窗？点下面按钮就行，<b>不用下载、不用解压、不用敲命令</b>。</p>
+        <p class="hint">想在 Mac 桌面<b>真正换壁纸</b>、还要一个常驻不遮挡的小宠物？点一下下面按钮就行，<b>不用下载、不用解压、不用敲命令</b>。</p>
         <button id="btn-companion" class="btn soft">⚡ 一键启用桌面伴侣</button>
-        <div class="pack-row">
+        <div class="pack-row dl-row">
           <span class="mini-label">没在本机跑本站？</span>
           <button id="btn-companion-dl" class="chip">⬇️ 下载独立版</button>
         </div>
         <div id="pet-controls" style="display:none">
-          <div class="pack-row">
-            <button id="btn-pet-prev" class="chip">◀ 回退</button>
-            <button id="btn-pet-next" class="chip">前进 ▶</button>
-            <button id="btn-pet-toggle" class="chip">🐾 召唤宠物</button>
+          <div class="pet-group">
+            <div class="pet-group-label">🐾 宠物</div>
+            <div class="pet-group-btns">
+              <button id="btn-pet-toggle" class="chip">召唤宠物</button>
+              <button id="btn-pet-prev" class="chip">◀ 回退</button>
+              <button id="btn-pet-next" class="chip">前进 ▶</button>
+            </div>
           </div>
-          <div class="pack-row">
-            <span class="mini-label">形状：</span>
-            <button class="chip" data-pet-shape="tall">▯ 竖版</button>
-            <button class="chip" data-pet-shape="square">▢ 方形</button>
-            <button class="chip" data-pet-shape="wide">▭ 横版</button>
+          <div class="pet-group">
+            <div class="pet-group-label">🧩 形状</div>
+            <div class="seg shape-seg">
+              <button class="seg-btn" data-pet-shape="tall"><i class="shape-ic ic-tall"></i>竖版</button>
+              <button class="seg-btn" data-pet-shape="square"><i class="shape-ic ic-square"></i>方形</button>
+              <button class="seg-btn" data-pet-shape="wide"><i class="shape-ic ic-wide"></i>横版</button>
+            </div>
           </div>
-          <p class="mini-label" id="pet-hint"></p>
+          <p class="mini-label pet-hint" id="pet-hint"></p>
         </div>
         <button id="btn-live" class="btn ghost">🔲 或者先试网页实时壁纸</button>
       </section>
@@ -294,14 +307,14 @@
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <!-- ?v= busts browser cache — bump after any js/ change -->
-<script src="js/store.js?v=20260808c"></script>
-<script src="js/words.js?v=20260808c"></script>
-<script src="js/importer.js?v=20260808c"></script>
-<script src="js/ocr.js?v=20260808c"></script>
-<script src="js/reminders.js?v=20260808c"></script>
-<script src="js/review.js?v=20260808c"></script>
-<script src="js/render.js?v=20260808c"></script>
-<script src="js/engine.js?v=20260808c"></script>
-<script src="js/app.js?v=20260808c"></script>
+<script src="js/store.js?v=20260808d"></script>
+<script src="js/words.js?v=20260808d"></script>
+<script src="js/importer.js?v=20260808d"></script>
+<script src="js/ocr.js?v=20260808d"></script>
+<script src="js/reminders.js?v=20260808d"></script>
+<script src="js/review.js?v=20260808d"></script>
+<script src="js/render.js?v=20260808d"></script>
+<script src="js/engine.js?v=20260808d"></script>
+<script src="js/app.js?v=20260808d"></script>
 </body>
 </html>

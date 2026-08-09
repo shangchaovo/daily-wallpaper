@@ -343,7 +343,29 @@ function buildPetSVG(words, reminders, theme, W, H) {
   parts.push(`<circle cx="${w * 0.28}" cy="${h * 0.07}" r="${2.6 * s}" fill="${theme.patternInk || theme.sub}" opacity="0.4"/>`);
   parts.push(`<circle cx="${w * 0.94}" cy="${h * 0.55}" r="${2.2 * s}" fill="${theme.patternInk || theme.sub}" opacity="0.35"/>`);
   parts.push(`<circle cx="${w * 0.20}" cy="${h * 0.55}" r="${2.0 * s}" fill="${theme.patternInk || theme.sub}" opacity="0.3"/>`);
-  parts.push(txt(padX * s, padY * s + Math.round(11 * s * 0.85), '🌱 WordPaper', 11 * s, theme.sub, 700));
+  // ---- 卡通调色 + 可复用件（先定义再画）----
+  const soft = theme.accentSoft || '#ffe0c2';
+  const acc = theme.accent || '#ff8f4d';
+  const dark = theme.ink || '#503722';
+  const lightLine = theme.line || 'rgba(128,90,40,0.16)';
+  // 卡通小助手（sprout 苗）：圆脸 + 头顶两片叶 + 眼睛/腮红/嘴
+  const sprite = (cx, cy, r) => (
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${soft}" stroke="${acc}" stroke-width="${1.6 * s}"/>` +
+    `<path d="M ${cx} ${cy - r} Q ${cx - r * 0.55} ${cy - r * 1.7} ${cx - r * 0.95} ${cy - r * 1.25}" stroke="#3dbb85" stroke-width="${2.4 * s}" fill="none" stroke-linecap="round"/>` +
+    `<path d="M ${cx} ${cy - r} Q ${cx + r * 0.55} ${cy - r * 1.8} ${cx + r * 0.95} ${cy - r * 1.2}" stroke="#41c189" stroke-width="${2.4 * s}" fill="none" stroke-linecap="round"/>` +
+    `<circle cx="${cx - r * 0.34}" cy="${cy - r * 0.05}" r="${r * 0.13}" fill="${dark}"/>` +
+    `<circle cx="${cx + r * 0.34}" cy="${cy - r * 0.05}" r="${r * 0.13}" fill="${dark}"/>` +
+    `<circle cx="${cx - r * 0.58}" cy="${cy + r * 0.28}" r="${r * 0.16}" fill="${acc}" opacity="0.45"/>` +
+    `<circle cx="${cx + r * 0.58}" cy="${cy + r * 0.28}" r="${r * 0.16}" fill="${acc}" opacity="0.45"/>` +
+    `<path d="M ${cx - r * 0.22} ${cy + r * 0.28} Q ${cx} ${cy + r * 0.55} ${cx + r * 0.22} ${cy + r * 0.28}" stroke="${dark}" stroke-width="${1.8 * s}" fill="none" stroke-linecap="round"/>`
+  );
+  // 单词贴纸底（白卡 + 主题色描边 + 底部厚实色边，像贴纸）
+  const tile = (x, y, tw, th, rr) =>
+    `<rect x="${x}" y="${y + Math.max(2, th * 0.05)}" width="${tw}" height="${th}" rx="${rr}" fill="${acc}" opacity="0.18"/>` +
+    `<rect x="${x}" y="${y}" width="${tw}" height="${th}" rx="${rr}" fill="#ffffff" stroke="${lightLine}" stroke-width="${1.5 * s}"/>`;
+  // 顶部：小助手 + WordPaper 标题
+  parts.push(sprite(padX * s + 13 * s, padY * s + 12 * s, 10 * s));
+  parts.push(txt((padX + 30) * s, padY * s + Math.round(15 * s), 'WordPaper', 14 * s, dark, 800));
   // 右上角关闭按钮（✕），点击可关闭小窗
   const cR = 14 * s;
   const cX = w - padX * s - cR, cY = padY * s + cR;
@@ -353,8 +375,8 @@ function buildPetSVG(words, reminders, theme, W, H) {
   const mode = petMode(W, H);
   const scale = petScale(W, H);              // 文字等比缩放：卡片越大字越大
   const footerTop = (H - footerH);                       // pt
-  const waX = padX, waY = padY + 24;
-  const waW = W - 2 * padX, waH = H - footerH - padY - 24 - padY;
+  const waX = padX, waY = padY + 34;
+  const waW = W - 2 * padX, waH = H - footerH - padY - 34 - padY;
   const n = Math.max(1, words.length);
   const shown = words.slice(0, n);
   const meaning = wd => (wd.pos ? wd.pos + ' ' : '') + (wd.meaning || '');
@@ -368,70 +390,78 @@ function buildPetSVG(words, reminders, theme, W, H) {
     const rowH = waH / rows;
     // 行高不够时略缩字号，避免挤爆
     const cellScale = Math.min(scale, Math.max(0.55, rowH / 56));
+    const gapX = 7 * scale, gapY = 6 * scale;
     shown.forEach((wd, i) => {
       const c = i % cols, r = Math.floor(i / cols);
-      const cx = waX + c * colW + colW / 2;
-      const mid = waY + r * rowH + rowH / 2;
+      const cellX = waX + c * colW;
+      const cellTop = waY + r * rowH;
+      const cx = cellX + colW / 2;
+      const mid = cellTop + rowH / 2;
       const wordFs = 14 * cellScale;
       const subFs = 9.5 * cellScale;
+      parts.push(tile((cellX + gapX / 2) * s, (cellTop + gapY / 2) * s, (colW - gapX) * s, (rowH - gapY) * s, 12 * s * cellScale));
       // 词 + 音标 + 释义垂直居中于该格
       const blockH = (wd.phonetic ? 3 : 2) * (subFs + 4) + wordFs * 0.2;
       let yy = mid - blockH / 2 + wordFs * 0.75;
-      parts.push(ctxt(cx * s, yy * s, wd.word, wordFs * s, theme.ink, 700));
+      parts.push(ctxt(cx * s, yy * s, wd.word, wordFs * s, dark, 800));
       yy += wordFs * 0.95;
       if (wd.phonetic) { parts.push(ctxt(cx * s, yy * s, wd.phonetic, 9 * s * cellScale, theme.sub)); yy += subFs + 3; }
-      parts.push(ctxt(cx * s, yy * s, truncate(meaning(wd), subFs * s, (colW - 8) * s), subFs * s, theme.sub));
-      // 列分隔线（最后一列不画；多行时整列通高）
-      if (c < cols - 1 && r === 0) {
-        parts.push(`<line x1="${(waX + (c + 1) * colW) * s}" y1="${waY * s}" x2="${(waX + (c + 1) * colW) * s}" y2="${(waY + waH) * s}" stroke="${theme.line || 'rgba(128,128,128,0.14)'}" stroke-width="${s}"/>`);
-      }
-      // 行分隔线
-      if (r < rows - 1 && c === 0) {
-        parts.push(`<line x1="${waX * s}" y1="${(waY + (r + 1) * rowH) * s}" x2="${(waX + waW) * s}" y2="${(waY + (r + 1) * rowH) * s}" stroke="${theme.line || 'rgba(128,128,128,0.14)'}" stroke-width="${s}"/>`);
-      }
+      parts.push(ctxt(cx * s, yy * s, truncate(meaning(wd), subFs * s, (colW - 14) * s), subFs * s, theme.sub));
     });
   } else if (mode === 'square') {
-    // 方形：两列网格，序号 + 词 + 释义（字号随卡片缩放）
+    // 方形：两列贴纸网格，序号圆徽 + 词 + 释义（字号随卡片缩放）
     const cols = 2, rows = Math.max(1, Math.ceil(n / 2));
-    const colW = (waW - padX) / cols;
+    const gapX = 8 * scale, gapY = 7 * scale;
+    const colW = (waW - gapX) / cols;
     const rowH = waH / rows;
     shown.forEach((wd, i) => {
       const c = i % cols, r = Math.floor(i / cols);
-      const x = waX + c * (colW + padX);
-      const mid = waY + r * rowH + rowH / 2;
-      parts.push(txt(x * s, mid * s + Math.round(4 * s * scale), String(i + 1).padStart(2, '0'), 9 * s * scale, theme.sub));
-      const ix = x + 22 * scale;
-      parts.push(txt(ix * s, (mid - 6 * scale) * s, wd.word, 14 * s * scale, theme.ink, 700));
-      parts.push(txt(ix * s, (mid + 11 * scale) * s, truncate(meaning(wd), 9.5 * s * scale, (colW - 30 * scale) * s), 9.5 * s * scale, theme.sub));
+      const x = waX + c * (colW + gapX);
+      const cellTop = waY + r * rowH;
+      const mid = cellTop + rowH / 2;
+      parts.push(tile(x * s, (cellTop + gapY / 2) * s, colW * s, (rowH - gapY) * s, 13 * s * scale));
+      // 序号小圆徽
+      const bR = 8 * s * scale, bX = (x + 8 * scale) * s + bR, bY = (mid - 7 * scale) * s;
+      parts.push(`<circle cx="${bX}" cy="${bY}" r="${bR}" fill="${soft}"/>`);
+      parts.push(ctxt(bX, bY + Math.round(3.2 * s * scale), String(i + 1), 9 * s * scale, acc, 800));
+      const ix = x + 8 * scale + bR * 2 / s + 6 * scale;
+      parts.push(txt(ix * s, (mid - 7 * scale) * s + Math.round(3 * s * scale), wd.word, 14 * s * scale, dark, 800));
+      parts.push(txt((x + 9 * scale) * s, (mid + 12 * scale) * s, truncate(meaning(wd), 9.5 * s * scale, (colW - 16 * scale) * s), 9.5 * s * scale, theme.sub));
     });
   } else {
-    // 竖版窄条：逐行堆叠（词 + 音标 + 释义，字号随卡片缩放）
+    // 竖版窄条：逐行贴纸（词 + 音标 + 释义，字号随卡片缩放）
     const rowH = waH / n;
+    const tilePad = 2.5 * scale;                       // 贴纸上下留白
     shown.forEach((wd, i) => {
       const rowTop = waY + i * rowH;
       const mid = rowTop + rowH / 2;
-      parts.push(txt(padX * s, mid * s + Math.round(4 * s * scale), String(i + 1).padStart(2, '0'), 10 * s * scale, theme.sub));
-      const ix = padX + 28 * scale;
-      parts.push(txt(ix * s, (mid - 5 * scale) * s, wd.word, 16 * s * scale, theme.ink, 700));
+      parts.push(tile(waX * s, (rowTop + tilePad) * s, waW * s, (rowH - tilePad * 2) * s, 12 * s * scale));
+      // 序号小圆徽
+      const bR = 8.5 * s * scale, bX = (waX + 9 * scale) * s + bR, bY = mid * s;
+      parts.push(`<circle cx="${bX}" cy="${bY}" r="${bR}" fill="${soft}"/>`);
+      parts.push(ctxt(bX, bY + Math.round(3.4 * s * scale), String(i + 1), 9.5 * s * scale, acc, 800));
+      const ix = waX + 26 * scale + bR;
+      parts.push(txt(ix * s, (mid - 5 * scale) * s, wd.word, 16 * s * scale, dark, 800));
       if (wd.phonetic) {
         const ww = Math.round(estW(wd.word, 16 * s * scale));
         parts.push(txt((ix + ww + 7 * scale) * s, (mid - 5 * scale) * s, wd.phonetic, 10.5 * s * scale, theme.sub));
       }
-      parts.push(txt(ix * s, (mid + 11 * scale) * s, truncate(meaning(wd), 11 * s * scale, maxW - 28 * s * scale), 11 * s * scale, theme.sub));
-      if (i < n - 1) parts.push(`<line x1="${padX * s}" y1="${(rowTop + rowH) * s}" x2="${(w - padX * s)}" y2="${(rowTop + rowH) * s}" stroke="${theme.line || 'rgba(128,128,128,0.14)'}" stroke-width="${s}"/>`);
+      parts.push(txt(ix * s, (mid + 11 * scale) * s, truncate(meaning(wd), 11 * s * scale, maxW - 30 * s * scale), 11 * s * scale, theme.sub));
     });
   }
-  // 提醒（横版太矮放不下，只竖版/方形画；字号随卡片缩放）
+  // 提醒（横版太矮放不下，只竖版/方形画；且单词区下方确有空间才画，避免压到按钮栏）
   if (reminders && reminders.length && mode !== 'wide') {
     let ry = waY + (mode === 'square' ? Math.ceil(n / 2) * (waH / Math.max(1, Math.ceil(n / 2))) : n * (waH / n)) + 4 * scale;
-    parts.push(txt(padX * s, ry * s, '今日提醒', 12 * s * scale, theme.accent, 600));
-    ry += 18 * scale;
-    reminders.slice(0, 5).forEach(r => {
-      if (ry > footerTop - 14 * scale) return;   // 不压到按钮栏
-      parts.push(`<rect x="${padX * s}" y="${(ry - 8 * scale) * s}" width="${11 * s * scale}" height="${11 * s * scale}" fill="none" stroke="${theme.sub}" stroke-width="${s}"/>`);
-      parts.push(txt(padX * s + 18 * s * scale, ry * s, truncate(r.text + (r.time ? ' · ' + r.time : ''), 11 * s * scale, maxW - 18 * s * scale), 11 * s * scale, theme.ink));
-      ry += 16 * scale;
-    });
+    if (ry < footerTop - 16 * scale) {           // 标签本身放得下才画
+      parts.push(txt(padX * s, ry * s, '今日提醒', 12 * s * scale, theme.accent, 700));
+      ry += 18 * scale;
+      reminders.slice(0, 5).forEach(r => {
+        if (ry > footerTop - 14 * scale) return;   // 不压到按钮栏
+        parts.push(`<circle cx="${(padX + 5 * scale) * s}" cy="${(ry - 3.5 * scale) * s}" r="${4.5 * s * scale}" fill="none" stroke="${acc}" stroke-width="${1.4 * s}"/>`);
+        parts.push(txt(padX * s + 16 * s * scale, ry * s, truncate(r.text + (r.time ? ' · ' + r.time : ''), 11 * s * scale, maxW - 16 * s * scale), 11 * s * scale, theme.ink));
+        ry += 16 * scale;
+      });
+    }
   }
   // ---- 底部提示行（标注，降低使用门槛）----
   parts.push(ctxt(w / 2, (H - footerH + 13) * s, '单击卡片＝前进 · Shift＋单击＝回退', 10.5 * s, theme.sub));
@@ -442,8 +472,9 @@ function buildPetSVG(words, reminders, theme, W, H) {
   const btnX0 = Math.round((W - (2 * btnW + btn.gap)) / 2);
   const btnX1 = btnX0 + btnW + btn.gap;
   const btnC = (x0, label) =>
-    `<rect x="${x0 * s}" y="${btnTop * s}" width="${btnW * s}" height="${btn.h * s}" rx="${16 * s}" fill="${theme.accentSoft}" stroke="${theme.line}" stroke-width="${s}"/>` +
-    `<text x="${(x0 + btnW / 2) * s}" y="${(btnTop + btn.h / 2) * s + Math.round(4.5 * s)}" text-anchor="middle" font-family="${fam}" font-size="${13 * s}" font-weight="600" fill="${theme.ink}">${esc(label)}</text>`;
+    `<rect x="${x0 * s}" y="${(btnTop + 2.5) * s}" width="${btnW * s}" height="${btn.h * s}" rx="${btn.h * s / 2}" fill="${acc}" opacity="0.30"/>` +
+    `<rect x="${x0 * s}" y="${btnTop * s}" width="${btnW * s}" height="${btn.h * s}" rx="${btn.h * s / 2}" fill="#ffffff" stroke="${acc}" stroke-width="${1.6 * s}"/>` +
+    `<text x="${(x0 + btnW / 2) * s}" y="${(btnTop + btn.h / 2) * s + Math.round(4.5 * s)}" text-anchor="middle" font-family="${fam}" font-size="${13 * s}" font-weight="700" fill="${dark}">${esc(label)}</text>`;
   parts.push(btnC(btnX0, '◀ 回退'));
   parts.push(btnC(btnX1, '前进 ▶'));
   // ---- 右下角拉伸手柄（三条斜线，明显的"可拖拽调大小"提示）----
