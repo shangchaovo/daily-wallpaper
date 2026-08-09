@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end checks for 每日壁纸 v2 (daily-wallpaper).
+"""End-to-end checks for WordPaper (daily-wallpaper).
 
 Self-contained: launches its own server.js on a free port, runs Playwright
 assertions, then kills the server. Covers v1 paths plus v2: library cards,
@@ -64,7 +64,7 @@ def main():
             page.goto(base, wait_until="networkidle")
             page.wait_for_timeout(700)
 
-            check("页面标题", "每日壁纸" in page.title())
+            check("页面标题", "WordPaper" in page.title())
             check("换一组按钮", page.locator("#btn-refresh").count() == 1)
 
             # library cards (v3) — 8 exam libraries + 我的词库 (custom, last)
@@ -117,11 +117,12 @@ def main():
             page.locator('#layout-switch .seg-btn[data-layout="poster"]').click()
             page.wait_for_timeout(400)
             check("切大字海报", page.locator('#layout-switch .seg-btn[data-layout="poster"]').evaluate("e=>e.classList.contains('on')"))
-
-            # anchor switch
-            page.locator('#anchor-words .seg-btn[data-anchor="top"]').click()
+            # back to group for the rest
+            page.locator('#layout-switch .seg-btn[data-layout="group"]').click()
             page.wait_for_timeout(300)
-            check("单词锚点切靠上", page.locator('#anchor-words .seg-btn[data-anchor="top"]').evaluate("e=>e.classList.contains('on')"))
+
+            # 位置布局(锚点预设)卡片已移除，拖拽即可
+            check("锚点预设卡片已移除", page.locator('#anchor-words').count() == 0)
 
             # desktop size
             page.select_option("#sel-size", "desktop-1920x1080")
@@ -129,15 +130,23 @@ def main():
             dims2 = page.evaluate("() => { const c=document.querySelector('#preview-canvas'); return {w:c.width,h:c.height}; }")
             check("切桌面 1920×1080", dims2["w"] == 1920 and dims2["h"] == 1080)
 
-            # paste import -> custom library card
+            # paste import -> custom library card (import UI now lives in a button-triggered modal)
+            check("导入按钮存在", page.locator("#btn-open-import").count() == 1)
+            page.click("#btn-open-import")
+            page.wait_for_timeout(200)
+            check("导入弹窗打开", page.locator("#import-modal").evaluate("e=>!e.hidden"))
             page.fill("#txt-paste", "serendipity, /ˌserənˈdɪpəti/, n., 意外发现珍奇事物的本领\nephemeral, /ɪˈfemərəl/, adj., 短暂的")
             page.click("#btn-paste-import")
             page.wait_for_timeout(400)
             check("粘贴导入切到我的词库", page.locator("#library-cards .lib-card").last.evaluate("e=>e.classList.contains('on')"))
             check("我的词库卡片有计数", "2词" in page.inner_text("#library-cards"))
 
-            # screenshot import affordance present
+            # screenshot import affordance present (inside modal)
             check("截图导入入口", page.locator("#file-screenshot").count() == 1)
+            # close modal
+            page.click("#btn-close-import")
+            page.wait_for_timeout(150)
+            check("导入弹窗可关闭", page.locator("#import-modal").evaluate("e=>e.hidden"))
 
             # add reminder
             page.fill("#inp-reminder", "下午 3 点开组会")
@@ -167,7 +176,9 @@ def main():
                 page.click("#btn-download")
             check("PNG 下载", dl.value.suggested_filename.endswith(".png"))
 
-            # page-cycling checkbox reveals interval row
+            # page-cycling checkbox reveals interval row (自动与轮换 card is a collapsed <details> — open it first)
+            page.locator("details.card summary", has_text="自动与轮换").click()
+            page.wait_for_timeout(150)
             page.check("#chk-cycle")
             page.wait_for_timeout(200)
             check("周期切换间隔行显示", page.eval_on_selector("#cycle-sec-row", "e=>e.style.display") != "none")

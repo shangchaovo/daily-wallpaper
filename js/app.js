@@ -15,10 +15,10 @@
   };
 
   const THEMES = {
-    cream:  { name: '奶油', bg: '#fdf6ec', bg2: '#f7e8d4', ink: '#4a3b2e', sub: '#a08a73', accent: '#e8834a', accentSoft: '#fbe0c8', line: 'rgba(74,59,46,0.12)', patternInk: '#d9b48f', blob: true },
-    mint:   { name: '薄荷', bg: '#eafaf1', bg2: '#d3f2e0', ink: '#1f4536', sub: '#6f9a87', accent: '#2fae7d', accentSoft: '#c0ecd8', line: 'rgba(31,69,54,0.12)', patternInk: '#9ed9bd', blob: true },
-    sky:    { name: '天空', bg: '#e8f4fd', bg2: '#d3e9fb', ink: '#1e3a52', sub: '#6f8ba3', accent: '#3b8fd9', accentSoft: '#c2e0f7', line: 'rgba(30,58,82,0.12)', patternInk: '#a4cdec', blob: true },
-    sakura: { name: '樱花', bg: '#fdeef2', bg2: '#fadde6', ink: '#57222f', sub: '#a97584', accent: '#e2678a', accentSoft: '#f7c9d8', line: 'rgba(87,34,47,0.12)', patternInk: '#efadC0', blob: true },
+    cream:  { name: '奶油', bg: '#fff6ea', bg2: '#ffe9d0', ink: '#4a3b2e', sub: '#a68e75', accent: '#ff9d5c', accentSoft: '#ffe0c2', line: 'rgba(74,59,46,0.10)', patternInk: '#eec9a3', blob: true },
+    mint:   { name: '薄荷', bg: '#effcf4', bg2: '#dcf6e6', ink: '#1f4536', sub: '#74a08c', accent: '#41c189', accentSoft: '#cdf0de', line: 'rgba(31,69,54,0.10)', patternInk: '#abe3c6', blob: true },
+    sky:    { name: '天空', bg: '#eef7fe', bg2: '#dcedfc', ink: '#1e3a52', sub: '#7490a8', accent: '#4f9fe0', accentSoft: '#cfe7fa', line: 'rgba(30,58,82,0.10)', patternInk: '#b0d6f0', blob: true },
+    sakura: { name: '樱花', bg: '#fff1f5', bg2: '#fde3ea', ink: '#57222f', sub: '#ae7d8b', accent: '#f1789b', accentSoft: '#fad3de', line: 'rgba(87,34,47,0.10)', patternInk: '#f3b6c7', blob: true },
     night:  { name: '夜空', bg: '#151a2e', bg2: '#1f2745', ink: '#eef1f8', sub: '#8b95b3', accent: '#7aa2f7', accentSoft: '#2a3358', line: 'rgba(238,241,248,0.14)', patternInk: '#3a4670', blob: true },
     forest: { name: '森林', bg: '#12211c', bg2: '#1c332a', ink: '#e8f0ea', sub: '#8fae9f', accent: '#5ec99a', accentSoft: '#234534', line: 'rgba(232,240,234,0.12)', patternInk: '#2e5040', blob: true },
   };
@@ -90,9 +90,7 @@
     updateTypoLabels();
     renderInkPicker();
     applyBgPhotoUI();
-    // anchors
-    $$('#anchor-words .seg-btn').forEach(b => b.classList.toggle('on', b.dataset.anchor === settings.anchorWords));
-    $$('#anchor-reminders .seg-btn').forEach(b => b.classList.toggle('on', b.dataset.anchor === settings.anchorReminders));
+    // （位置布局预设已移除，拖拽即可）
     $('#custom-size-row').hidden = settings.size !== 'custom';
     if (settings.size === 'custom') { $('#inp-cw').value = settings.customW || 1080; $('#inp-ch').value = settings.customH || 1920; }
     $$('#layout-switch .seg-btn').forEach(b => b.classList.toggle('on', b.dataset.layout === settings.layout));
@@ -143,15 +141,7 @@
     $('#rng-spacing').addEventListener('input', e => { settings.letterSpacing = Number(e.target.value); updateTypoLabels(); commit(true); });
     $('#rng-lineheight').addEventListener('input', e => { settings.lineHeight = Number(e.target.value); updateTypoLabels(); commit(true); });
 
-    // anchors
-    $$('#anchor-words .seg-btn').forEach(b => b.addEventListener('click', () => { settings.anchorWords = b.dataset.anchor; $$('#anchor-words .seg-btn').forEach(x => x.classList.toggle('on', x === b)); commit(); }));
-    $$('#anchor-reminders .seg-btn').forEach(b => b.addEventListener('click', () => { settings.anchorReminders = b.dataset.anchor; $$('#anchor-reminders .seg-btn').forEach(x => x.classList.toggle('on', x === b)); commit(); }));
-    $('#btn-reset-layout').addEventListener('click', () => {
-      settings.offWords = { x: 0, y: 0 }; settings.offReminders = { x: 0, y: 0 };
-      settings.anchorWords = 'center'; settings.anchorReminders = 'bottom';
-      settings.custom.pos = {};
-      applySettingsToUI(); commit(); toast('布局已复位');
-    });
+    // （位置布局预设已移除，拖拽即可）
 
     $$('#layout-switch .seg-btn').forEach(b => b.addEventListener('click', () => {
       settings.layout = b.dataset.layout;
@@ -164,6 +154,18 @@
     $('#btn-live').addEventListener('click', enterLive);
     $('#btn-exit-live').addEventListener('click', exitLive);
     $('#btn-set-wallpaper').addEventListener('click', setDesktopWallpaper);
+    // preview meta-bar duplicates (快速出壁纸，滚到中部也能直接操作)
+    const r2 = $('#btn-refresh2'); if (r2) r2.addEventListener('click', async () => { await refresh(true); toast('换了一组新单词 ✨'); });
+    const d2 = $('#btn-download2'); if (d2) d2.addEventListener('click', downloadPNG);
+    const w2 = $('#btn-set-wallpaper2'); if (w2) w2.addEventListener('click', setDesktopWallpaper);
+    // import modal (button-triggered popup)
+    const modal = $('#import-modal');
+    const openImport = $('#btn-open-import');
+    if (openImport && modal) openImport.addEventListener('click', () => { modal.hidden = false; });
+    const closeImport = $('#btn-close-import');
+    if (closeImport && modal) closeImport.addEventListener('click', () => { modal.hidden = true; });
+    if (modal) modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal && !modal.hidden) modal.hidden = true; });
     $('#btn-companion').addEventListener('click', enableCompanion);
     const petBtn = $('#btn-pet-toggle');
     if (petBtn) petBtn.addEventListener('click', togglePet);
@@ -201,9 +203,10 @@
       card.type = 'button';
       card.className = 'lib-card' + (lib.id === settings.library ? ' on' : '');
       const count = lib.id === 'custom' ? window.Store.getCustomWords().length : (libCounts[lib.id] || '…');
+      const countTxt = (typeof count === 'number') ? count.toLocaleString() : count;
       card.innerHTML = `<span class="lib-icon">${lib.icon}</span>
         <span class="lib-body"><b>${lib.name}</b><i>${lib.desc}</i></span>
-        <span class="lib-count">${count}词</span>`;
+        <span class="lib-count">${countTxt}词</span>`;
       card.addEventListener('click', () => {
         settings.library = lib.id;
         renderLibraryCards();

@@ -14,10 +14,10 @@
     // typography
     fontScale: 1.0,            // 0.7 – 1.6 multiplier on word sizes
     fontWeight: 700,           // word weight 400–800
-    fontStyle: 'hei',          // 'hei'|'song'|'kai'|'yuan'|'heiti' (system font stacks)
+    fontStyle: 'yuan',         // 'hei'|'song'|'kai'|'yuan'|'heiti' (system font stacks)
     inkOverride: '',           // '' = use theme.ink; else a css color for ALL text
-    letterSpacing: 0,          // px letter spacing on big word (poster)
-    lineHeight: 1.0,           // multiplier on row/line gaps
+    letterSpacing: 0,          // px letter spacing on the word (group + poster)
+    lineHeight: 1.0,           // multiplier on row/line gaps (group + poster)
     // background
     bgImage: null,             // dataURL string of a user-uploaded photo (or null)
     bgScrim: 0.42,             // 0..1 light overlay over bgImage for legibility

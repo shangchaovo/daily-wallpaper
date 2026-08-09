@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""V3 render verification for 每日壁纸 — captures real PNGs that exercise the
+"""V3 render verification for WordPaper — captures real PNGs that exercise the
 new features and asserts they actually took effect (not just that the UI
 controls exist):
 
   - fontStyle (song) + inkOverride (text color) on a GROUP wallpaper
   - custom background PHOTO with scrim
   - custom title/footer text dragged to a non-default position
-  - anchors moving the words block (top vs bottom differ)
+  - dragging the words block moves it (drag is the only repositioning control)
   - POSTER layout with kai font
 
 Saves PNGs to scripts/out_v3/ for eyeballing and asserts pixel-level differences
@@ -149,25 +149,33 @@ def main():
             page.click("#btn-bgphoto-clear")
             page.wait_for_timeout(400)
 
-            # ---- 4. anchors actually move the words block ----
-            # clear custom text so the topmost ink IS the words block
-            page.evaluate("() => { const s=window.Store.getSettings(); s.custom.enabled=false; window.Store.saveSettings(s); window.App.refresh(false); }")
-            page.wait_for_timeout(400)
-            page.locator('#anchor-words .seg-btn[data-anchor="top"]').click()
-            page.wait_for_timeout(400)
+            # ---- 4. repositioning the words block actually moves it ----
+            # (位置布局预设卡片已移除 —— 摆位走 offWords 偏移，由 blockTopFor 消费。
+            #  app.js 的 settings 是 init 时载入的内存副本，refresh() 不重读 Store，
+            #  所以写完 Store 要 reload 让 loadSettings() 生效，再对比渲染位置。)
+            def seed_pos(offy):
+                page.evaluate(
+                    "(y) => { const s=window.Store.getSettings(); s.custom.enabled=false;"
+                    " s.showReminders=false; s.wordsPerGroup=3; s.offWords={x:0,y:y};"
+                    " window.Store.saveSettings(s); }", offy)
+                page.reload(wait_until="networkidle")
+                page.wait_for_timeout(600)
+            seed_pos(0)
             top_row = first_dark_row(page)
-            canvas_png(page, os.path.join(OUT, "4a_anchor_top.png"))
-            page.locator('#anchor-words .seg-btn[data-anchor="bottom"]').click()
-            page.wait_for_timeout(400)
+            canvas_png(page, os.path.join(OUT, "4a_pos_neutral.png"))
+            seed_pos(0.45)
             bot_row = first_dark_row(page)
-            canvas_png(page, os.path.join(OUT, "4b_anchor_bottom.png"))
-            print(f"    [debug] first-dark-row top={top_row:.3f} bottom={bot_row:.3f}")
-            check(f"锚点靠上/靠下移动单词块 ({top_row:.2f} vs {bot_row:.2f})",
+            canvas_png(page, os.path.join(OUT, "4b_pos_lowered.png"))
+            print(f"    [debug] first-dark-row neutral={top_row:.3f} lowered={bot_row:.3f}")
+            check(f"单词块随偏移下移 ({top_row:.2f} -> {bot_row:.2f})",
                   top_row >= 0 and bot_row > top_row + 0.05)
-            page.locator('#anchor-words .seg-btn[data-anchor="center"]').click()
-            page.wait_for_timeout(300)
+            # reset position for the following checks
+            seed_pos(0)
 
             # ---- 5. custom title dragged off default position ----
+            # (自定义文字 card is a collapsed <details> — open it to reach the inputs)
+            page.locator("details.card summary", has_text="自定义文字").click()
+            page.wait_for_timeout(150)
             page.click("#chk-custom")
             page.fill("#inp-custom-title", "坚持 100 天")
             page.wait_for_timeout(500)

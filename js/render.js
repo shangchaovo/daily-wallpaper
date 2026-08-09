@@ -84,7 +84,7 @@
     ctx.fillRect(0, 0, W, H);
 
     var pattern = (settings && settings.bgPattern) || 'soft';
-    if (pattern === 'none') return;
+    if (pattern === 'none') { drawCartoon(ctx, W, H, theme); return; }
     ctx.save();
     if (pattern === 'soft' || pattern === 'blobs') drawBlobs(ctx, W, H, theme, pattern === 'blobs' ? 3 : 1);
     if (pattern === 'dots') drawDots(ctx, W, H, theme);
@@ -92,6 +92,7 @@
     if (pattern === 'diag') drawDiag(ctx, W, H, theme);
     if (pattern === 'waves') drawWaves(ctx, W, H, theme);
     ctx.restore();
+    drawCartoon(ctx, W, H, theme);
   }
   function drawBlobs(ctx, W, H, theme, count) {
     var spots = [[0.85, 0.12, 0.6], [0.1, 0.85, 0.5], [0.5, 0.5, 0.7]];
@@ -151,6 +152,51 @@
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+  }
+
+  /* ---------- cartoon helpers ---------- */
+  function rr(ctx, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function star(ctx, cx, cy, spikes, outer, inner) {
+    var rot = -Math.PI / 2, step = Math.PI / spikes;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - outer);
+    for (var i = 0; i < spikes; i++) {
+      ctx.lineTo(cx + Math.cos(rot) * outer, cy + Math.sin(rot) * outer); rot += step;
+      ctx.lineTo(cx + Math.cos(rot) * inner, cy + Math.sin(rot) * inner); rot += step;
+    }
+    ctx.closePath();
+  }
+  /* 卡通点缀：角落/边缘的小星星 + 圆点，克制不抢单词。仅作用于主题背景（无照片时）。 */
+  function drawCartoon(ctx, W, H, theme) {
+    if (!theme || theme.blob === false) return;
+    var A = theme.accentSoft || theme.accent || '#ffd9b8';
+    var B = theme.patternInk || theme.sub || '#d9b48f';
+    var u = Math.min(W, H);                       // scale unit
+    var sr = Math.max(6, u * 0.011);              // star outer radius
+    var dr = Math.max(3, u * 0.005);              // dot radius
+    ctx.save();
+    // stars (filled, soft accent)
+    var stars = [[0.12, 0.10, 1.0], [0.88, 0.16, 0.8], [0.16, 0.86, 0.85], [0.86, 0.80, 1.05], [0.50, 0.06, 0.7]];
+    ctx.fillStyle = A; ctx.globalAlpha = 0.55;
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i]; star(ctx, W * s[0], H * s[1], 4, sr * s[2], sr * s[2] * 0.42); ctx.fill();
+    }
+    // dots (pattern ink, sparser, along edges)
+    var dots = [[0.30, 0.13], [0.68, 0.09], [0.10, 0.50], [0.92, 0.46], [0.30, 0.90], [0.64, 0.88], [0.46, 0.93], [0.90, 0.66]];
+    ctx.fillStyle = B; ctx.globalAlpha = 0.35;
+    for (var j = 0; j < dots.length; j++) {
+      ctx.beginPath(); ctx.arc(W * dots[j][0], H * dots[j][1], dr * (0.8 + (j % 3) * 0.35), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
   }
 
   /* ---------- reminders block ---------- */
@@ -264,11 +310,11 @@
     var margin = Math.round(W * 0.06);
     var scale = settings.fontScale || 1;
     var weight = settings.fontWeight || 700;
+    var spacing = settings.letterSpacing || 0;
+    var lineHMul = settings.lineHeight || 1;
     var F = fontStack(settings);
     drawBackground(ctx, W, H, theme, settings);
     drawCustomBlocks(ctx, W, H, theme, settings, margin);
-
-    // free vertical band is now the whole height (no date header, no footer pin)
     var topBand = Math.round(margin * 1.1);
     var bottomBand = H - Math.round(margin * 1.1);
 
@@ -288,7 +334,7 @@
     // a tall canvas don't become absurdly sparse.
     var avail = Math.max(1, wordsBottom - wordsTop);
     var wordFs = Math.max(Math.round(W * 0.018), Math.round(W * 0.052 * scale));
-    var rowH = Math.round(wordFs * 3.0);
+    var rowH = Math.round(wordFs * 3.0 * lineHMul);   // line-height slider breathes the rows
     var maxFillRowH = Math.floor(avail / n);
     rowH = Math.min(rowH, maxFillRowH);
     // if the band is tight, shrink the font so rows still breathe
@@ -296,6 +342,23 @@
     var blockH = rowH * n;
     var blockTop = blockTopFor(settings.anchorWords || 'center', settings.offWords.y, wordsTop, wordsBottom, blockH, H);
     var xNudge = Math.round((settings.offWords.x || 0) * W);
+
+    // 卡通贴纸底卡：每个单词一条极淡的圆角底色，像贴纸卡，不遮字、不盖分隔线。
+    if (settings.wordCards !== false && !settings.bgImage) {
+      ctx.save();
+      ctx.fillStyle = theme.accentSoft || theme.accent || '#ffd9b8';
+      ctx.globalAlpha = 0.16;
+      var padX = Math.round(W * 0.012);
+      var cardX = margin + xNudge - padX;
+      var cardW = W - 2 * margin + padX * 2;
+      var cardH = rowH - Math.round(rowH * 0.10);
+      var cardR = Math.min(Math.round(rowH * 0.30), Math.round(W * 0.02));
+      for (var ci = 0; ci < n; ci++) {
+        rr(ctx, cardX, blockTop + ci * rowH + Math.round(rowH * 0.05), cardW, cardH, cardR);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
     words.forEach(function (w, i) {
       var cy = blockTop + i * rowH;
@@ -311,8 +374,8 @@
       if (stacked) {
         ctx.fillStyle = ink(theme, settings);
         ctx.font = weight + ' ' + wordFs + 'px ' + F;
-        ctx.fillText(w.word, ix, midY - rowH * 0.16, W - ix - margin);
-        var ww = ctx.measureText(w.word).width;
+        drawSpaced(ctx, w.word, ix, midY - rowH * 0.16, spacing);
+        var ww = measureSpaced(ctx, w.word, spacing);
         if (settings.showPhonetic && w.phonetic) {
           ctx.fillStyle = subInk(theme, settings);
           ctx.font = '400 ' + Math.round(wordFs * 0.48) + 'px ' + F;
@@ -324,8 +387,8 @@
       } else {
         ctx.fillStyle = ink(theme, settings);
         ctx.font = weight + ' ' + wordFs + 'px ' + F;
-        ctx.fillText(w.word, ix, midY, W * 0.42);
-        var tx = ix + ctx.measureText(w.word).width + Math.round(W * 0.014);
+        drawSpaced(ctx, w.word, ix, midY, spacing);
+        var tx = ix + measureSpaced(ctx, w.word, spacing) + Math.round(W * 0.014);
         if (settings.showPhonetic && w.phonetic) {
           ctx.fillStyle = subInk(theme, settings);
           ctx.font = '400 ' + Math.round(wordFs * 0.48) + 'px ' + F;

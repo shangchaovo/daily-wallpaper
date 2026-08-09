@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* companion.js — 每日壁纸 · 桌面伴侣 (zero dependencies, macOS).
+/* companion.js — WordPaper · 桌面伴侣 (zero dependencies, macOS).
  *
  * Double-click or `node companion.js` and you get, all on localhost:
  *   1. The wallpaper website itself (so OCR + "set wallpaper" buttons work).
@@ -182,7 +182,7 @@ function buildSVG(opts) {
     <stop offset="0" stop-color="${t.accentSoft}" stop-opacity="0.6"/><stop offset="1" stop-color="${t.accentSoft}" stop-opacity="0"/></radialGradient></defs>`);
   parts.push(`<rect width="${W}" height="${H}" fill="url(#g)"/>`);
   if (settings.bgPattern !== 'none') parts.push(`<rect width="${W}" height="${H}" fill="url(#blob)"/>`);
-  const fam = 'PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif';
+  const fam = 'Yuanti SC, YouYuan, 幼圆, PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif';
   const text = (x, y, s, size, fill, weight, anchor) =>
     `<text x="${x}" y="${y}" font-family="${fam}" font-size="${size}" fill="${fill}" font-weight="${weight || 400}"${anchor ? ` text-anchor="${anchor}"` : ''}>${esc(s)}</text>`;
 
@@ -319,15 +319,31 @@ function buildPetSVG(words, reminders, theme, W, H) {
   const parts = [];
   parts.push(`<defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">` +
     `<stop offset="0" stop-color="${theme.bg}"/><stop offset="1" stop-color="${theme.bg2 || theme.bg}"/></linearGradient></defs>`);
-  parts.push(`<rect x="0" y="0" width="${w}" height="${h}" rx="${16 * s}" fill="url(#pg)"/>`);
-  const fam = 'PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif';
+  parts.push(`<rect x="0" y="0" width="${w}" height="${h}" rx="${22 * s}" fill="url(#pg)"/>`);
+  const fam = 'Yuanti SC, YouYuan, 幼圆, PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif';
   const txt = (x, y, str, size, fill, weight) =>
     `<text x="${x}" y="${y}" font-family="${fam}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ''}>${esc(str)}</text>`;
   const ctxt = (cx, cy, str, size, fill, weight) =>
     `<text x="${cx}" y="${cy}" text-anchor="middle" font-family="${fam}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ''}>${esc(str)}</text>`;
   const maxW = w - 2 * padX * s;
   const estW = (str, fs) => { let u = 0; for (const ch of String(str)) u += /[　-鿿豈-﫿]/.test(ch) ? 1 : (ch === ' ' ? 0.3 : 0.55); return u * fs; };
-  parts.push(txt(padX * s, padY * s + Math.round(11 * s * 0.85), '🌱 每日壁纸', 11 * s, theme.sub));
+  // 卡通点缀：角落小星星 + 圆点（低透明，不抢单词）
+  const star4 = (cx, cy, r, fill, op) => {
+    let d = `M ${cx} ${cy - r}`;
+    for (let i = 1; i <= 8; i++) {
+      const ang = -Math.PI / 2 + (i * Math.PI) / 4;
+      const rr = (i % 2 === 0) ? r : r * 0.42;
+      d += ` L ${cx + Math.cos(ang) * rr} ${cy + Math.sin(ang) * rr}`;
+    }
+    return `<path d="${d} Z" fill="${fill}" opacity="${op}"/>`;
+  };
+  parts.push(star4(w * 0.10, h * 0.10, 7 * s, theme.accentSoft || theme.accent, 0.7));
+  parts.push(star4(w * 0.90, h * 0.20, 5.5 * s, theme.accentSoft || theme.accent, 0.6));
+  parts.push(star4(w * 0.12, h * 0.90, 6 * s, theme.accentSoft || theme.accent, 0.55));
+  parts.push(`<circle cx="${w * 0.28}" cy="${h * 0.07}" r="${2.6 * s}" fill="${theme.patternInk || theme.sub}" opacity="0.4"/>`);
+  parts.push(`<circle cx="${w * 0.94}" cy="${h * 0.55}" r="${2.2 * s}" fill="${theme.patternInk || theme.sub}" opacity="0.35"/>`);
+  parts.push(`<circle cx="${w * 0.20}" cy="${h * 0.55}" r="${2.0 * s}" fill="${theme.patternInk || theme.sub}" opacity="0.3"/>`);
+  parts.push(txt(padX * s, padY * s + Math.round(11 * s * 0.85), '🌱 WordPaper', 11 * s, theme.sub, 700));
   // 右上角关闭按钮（✕），点击可关闭小窗
   const cR = 14 * s;
   const cX = w - padX * s - cR, cY = padY * s + cR;
@@ -426,7 +442,7 @@ function buildPetSVG(words, reminders, theme, W, H) {
   const btnX0 = Math.round((W - (2 * btnW + btn.gap)) / 2);
   const btnX1 = btnX0 + btnW + btn.gap;
   const btnC = (x0, label) =>
-    `<rect x="${x0 * s}" y="${btnTop * s}" width="${btnW * s}" height="${btn.h * s}" rx="${12 * s}" fill="${theme.accentSoft}" stroke="${theme.line}" stroke-width="${s}"/>` +
+    `<rect x="${x0 * s}" y="${btnTop * s}" width="${btnW * s}" height="${btn.h * s}" rx="${16 * s}" fill="${theme.accentSoft}" stroke="${theme.line}" stroke-width="${s}"/>` +
     `<text x="${(x0 + btnW / 2) * s}" y="${(btnTop + btn.h / 2) * s + Math.round(4.5 * s)}" text-anchor="middle" font-family="${fam}" font-size="${13 * s}" font-weight="600" fill="${theme.ink}">${esc(label)}</text>`;
   parts.push(btnC(btnX0, '◀ 回退'));
   parts.push(btnC(btnX1, '前进 ▶'));
@@ -1078,7 +1094,7 @@ server.on('error', err => {
 
 server.listen(CFG.port, '127.0.0.1', () => {
   console.log('');
-  console.log('  🌱 每日壁纸 · 桌面伴侣已启动');
+  console.log('  🌱 WordPaper · 桌面伴侣已启动');
   console.log('  ────────────────────────────────');
   console.log(`  网站 + OCR：   http://localhost:${CFG.port}`);
   console.log(`  桌面壁纸自动换：${CFG.autoSetWallpaper ? '开（每 ' + CFG.intervalMinutes + ' 分钟）' : '关'}`);

@@ -175,7 +175,7 @@ let activePort = DEFAULT_PORT;
 server.on('listening', () => {
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : activePort;
-  console.log(`每日壁纸 Daily Wallpaper server running at http://localhost:${port}`);
+  console.log(`WordPaper server running at http://localhost:${port}`);
 });
 
 server.on('error', err => {

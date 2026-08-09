@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>每日壁纸 · 把单词和提醒做成你的壁纸</title>
+<title>WordPaper · 把单词做成你的壁纸</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -14,7 +14,7 @@
     <div class="brand">
       <span class="logo">🌱</span>
       <div>
-        <h1>每日壁纸</h1>
+        <h1>WordPaper</h1>
         <p class="tagline">把每天的单词和小提醒，变成你的手机 / 电脑壁纸</p>
       </div>
     </div>
@@ -29,8 +29,36 @@
     <!-- ============ control panel ============ -->
     <aside class="panel">
 
+      <section class="card desktop-card">
+        <h2><span class="h-emoji">💻</span>搬到电脑桌面上</h2>
+        <p class="hint">想在 Mac 桌面<b>真正换壁纸</b>、还要一个常驻不遮挡的小窗？点下面按钮就行，<b>不用下载、不用解压、不用敲命令</b>。</p>
+        <button id="btn-companion" class="btn soft">⚡ 一键启用桌面伴侣</button>
+        <div class="pack-row">
+          <span class="mini-label">没在本机跑本站？</span>
+          <button id="btn-companion-dl" class="chip">⬇️ 下载独立版</button>
+        </div>
+        <div id="pet-controls" style="display:none">
+          <div class="pack-row">
+            <button id="btn-pet-prev" class="chip">◀ 回退</button>
+            <button id="btn-pet-next" class="chip">前进 ▶</button>
+            <button id="btn-pet-toggle" class="chip">🐾 召唤宠物</button>
+          </div>
+          <div class="pack-row">
+            <span class="mini-label">形状：</span>
+            <button class="chip" data-pet-shape="tall">▯ 竖版</button>
+            <button class="chip" data-pet-shape="square">▢ 方形</button>
+            <button class="chip" data-pet-shape="wide">▭ 横版</button>
+          </div>
+          <p class="mini-label" id="pet-hint"></p>
+        </div>
+        <button id="btn-live" class="btn ghost">🔲 或者先试网页实时壁纸</button>
+      </section>
+
       <section class="card">
-        <h2><span class="h-emoji">📚</span>选一个词库</h2>
+        <div class="card-head">
+          <h2><span class="h-emoji">📚</span>选一个词库</h2>
+          <button id="btn-open-import" class="btn small soft" type="button">📥 导入</button>
+        </div>
         <div id="library-cards" class="lib-cards"></div>
         <label class="row">
           <span>选词方式</span>
@@ -43,42 +71,6 @@
           <span>每组单词数</span>
           <input id="inp-count" type="number" min="1" max="12" value="6">
         </label>
-      </section>
-
-      <section class="card" id="import-card">
-        <h2><span class="h-emoji">📥</span>把单词倒进「我的词库」</h2>
-        <p class="hint">最省事：直接<b>截图 / 拍照</b>你的单词表，我帮你认出来。也可以用文件、粘贴，或先下个模板。</p>
-        <div class="import-grid">
-          <label class="import-tile shot">
-            <input id="file-screenshot" type="file" accept="image/*">
-            <span class="it-icon">📸</span><b>截图 / 拍照导入</b><i>自动 OCR 识别</i>
-          </label>
-          <label class="import-tile">
-            <input id="file-import" type="file" accept=".csv,.txt,.xlsx,.xls,image/*">
-            <span class="it-icon">📄</span><b>CSV / Excel</b><i>单词表文件</i>
-          </label>
-        </div>
-        <div class="pack-row">
-          <span class="mini-label">先下个模板填：</span>
-          <button class="chip" data-pack="template">⬇️ 空白模板</button>
-          <button class="chip" data-pack="ielts">⬇️ 雅思示例</button>
-        </div>
-        <textarea id="txt-paste" rows="3" placeholder="或直接粘贴：每行一个单词&#10;abandon, /əˈbændən/, v., 放弃"></textarea>
-        <button id="btn-paste-import" class="btn small soft">导入粘贴内容</button>
-        <details class="sub">
-          <summary>手动添加单个单词</summary>
-          <div class="nw-grid">
-            <input id="nw-word" placeholder="单词 *">
-            <input id="nw-phonetic" placeholder="音标">
-            <input id="nw-pos" placeholder="词性 (n./v./adj.)">
-            <input id="nw-meaning" placeholder="释义">
-            <input id="nw-example" placeholder="例句(可选)">
-          </div>
-          <div class="row-btns">
-            <button id="btn-add-word" class="btn small soft">添加</button>
-            <button id="btn-clear-custom" class="btn small danger">清空我的词库</button>
-          </div>
-        </details>
       </section>
 
       <section class="card">
@@ -155,10 +147,10 @@
         <label class="row">
           <span>字体风格</span>
           <select id="sel-fontstyle">
-            <option value="hei" selected>黑体 · 清爽</option>
+            <option value="yuan" selected>圆体 · 圆润</option>
+            <option value="hei">黑体 · 清爽</option>
             <option value="song">宋体 · 书卷</option>
             <option value="kai">楷体 · 手写</option>
-            <option value="yuan">圆体 · 圆润</option>
             <option value="heiti">粗黑 · 醒目</option>
           </select>
         </label>
@@ -170,33 +162,14 @@
         </label>
         <label class="row slider-row">
           <span>行距</span>
-          <input id="rng-lineheight" type="range" min="0.8" max="1.4" step="0.05" value="1">
+          <input id="rng-lineheight" type="range" min="0.8" max="1.8" step="0.05" value="1">
           <b id="lineheight-val">100%</b>
         </label>
       </section>
 
-      <section class="card">
-        <h2><span class="h-emoji">🧲</span>位置布局</h2>
-        <p class="hint">可以点预设，也可以直接在右侧预览上<b>按住拖动</b>单词块、提醒块和自定义文字，随意摆到任意位置。</p>
-        <div class="row"><span>单词位置</span>
-          <div id="anchor-words" class="seg">
-            <button class="seg-btn" data-anchor="top">靠上</button>
-            <button class="seg-btn on" data-anchor="center">居中</button>
-            <button class="seg-btn" data-anchor="bottom">靠下</button>
-          </div>
-        </div>
-        <div class="row"><span>提醒位置</span>
-          <div id="anchor-reminders" class="seg">
-            <button class="seg-btn" data-anchor="top">靠上</button>
-            <button class="seg-btn" data-anchor="center">居中</button>
-            <button class="seg-btn on" data-anchor="bottom">靠下</button>
-          </div>
-        </div>
-        <button id="btn-reset-layout" class="btn small ghost">复位布局</button>
-      </section>
-
-      <section class="card">
-        <h2><span class="h-emoji">🔁</span>自动与轮换</h2>
+      <details class="card">
+        <summary><span class="h-emoji">🔁</span>自动与轮换</summary>
+        <div class="card-body">
         <div class="checks">
           <label><input id="chk-daily" type="checkbox" checked> 每天自动换一组</label>
           <label><input id="chk-rotate" type="checkbox"> 定时换单词(分钟)</label>
@@ -211,42 +184,20 @@
           <label><input id="chk-antitouch" type="checkbox" checked> 实时壁纸防误触(长按唤出)</label>
         </div>
         <label class="row" id="anti-ms-row"><span>长按时长(毫秒)</span><input id="inp-anti-ms" type="number" min="300" max="5000" step="100" value="1200"></label>
-      </section>
+        </div>
+      </details>
 
-      <section class="card">
-        <h2><span class="h-emoji">✍️</span>自定义文字</h2>
+      <details class="card">
+        <summary><span class="h-emoji">✍️</span>自定义文字</summary>
+        <div class="card-body">
         <p class="hint">开启后文字会出现在壁纸上，<b>直接在预览里拖动</b>就能摆到任意位置。</p>
         <div class="checks"><label><input id="chk-custom" type="checkbox"> 启用自定义文字</label></div>
         <div id="custom-fields" style="display:none">
           <input id="inp-custom-title" placeholder="顶部标题，如：坚持 100 天">
           <input id="inp-custom-footer" placeholder="底部落款，如：@我的名字">
         </div>
-      </section>
-
-      <section class="card desktop-card">
-        <h2><span class="h-emoji">💻</span>搬到电脑桌面上</h2>
-        <p class="hint">想在 Mac 桌面<b>真正换壁纸</b>、还要一个常驻不遮挡的小窗？点下面按钮就行，<b>不用下载、不用解压、不用敲命令</b>。</p>
-        <button id="btn-companion" class="btn soft">⚡ 一键启用桌面伴侣</button>
-        <div class="pack-row">
-          <span class="mini-label">没在本机跑本站？</span>
-          <button id="btn-companion-dl" class="chip">⬇️ 下载独立版</button>
         </div>
-        <div id="pet-controls" style="display:none">
-          <div class="pack-row">
-            <button id="btn-pet-prev" class="chip">◀ 回退</button>
-            <button id="btn-pet-next" class="chip">前进 ▶</button>
-            <button id="btn-pet-toggle" class="chip">🐾 召唤宠物</button>
-          </div>
-          <div class="pack-row">
-            <span class="mini-label">形状：</span>
-            <button class="chip" data-pet-shape="tall">▯ 竖版</button>
-            <button class="chip" data-pet-shape="square">▢ 方形</button>
-            <button class="chip" data-pet-shape="wide">▭ 横版</button>
-          </div>
-          <p class="mini-label" id="pet-hint"></p>
-        </div>
-        <button id="btn-live" class="btn ghost">🔲 或者先试网页实时壁纸</button>
-      </section>
+      </details>
 
     </aside>
 
@@ -257,7 +208,11 @@
       </div>
       <div class="meta-bar">
         <span id="meta"></span>
-        <span class="muted">壁纸每天自动更新 · 在预览上拖动可以微调位置</span>
+        <div class="meta-actions">
+          <button id="btn-refresh2" class="btn primary small">✨ 换一组</button>
+          <button id="btn-download2" class="btn soft small">⬇️ 下载</button>
+          <button id="btn-set-wallpaper2" class="btn soft small">🖥️ 设壁纸</button>
+        </div>
       </div>
     </section>
   </main>
@@ -271,17 +226,67 @@
   <div id="unlock-ring" class="unlock-ring" hidden></div>
 </div>
 
+<!-- ============ import modal (button-triggered) ============ -->
+<div id="import-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="import-title">
+    <div class="modal-head">
+      <h2 id="import-title"><span class="h-emoji">📥</span>导入单词到我的词库</h2>
+      <button id="btn-close-import" class="modal-close" type="button" title="关闭">✕</button>
+    </div>
+    <p class="hint">截图、CSV / Excel / 粘贴都行，导入后归到「✨ 我的词库」。</p>
+
+    <div class="import-grid">
+      <label class="import-tile">
+        <input id="file-screenshot" type="file" accept="image/*">
+        <span class="it-icon">📷</span><b>截图识别</b><i>拍照/截图单词表</i>
+      </label>
+      <label class="import-tile">
+        <input id="file-import" type="file" accept=".csv,.txt,.tsv,.xlsx,.xls,image/*">
+        <span class="it-icon">📄</span><b>文件导入</b><i>CSV / Excel / TXT</i>
+      </label>
+    </div>
+
+    <div class="mini-label">下载模板，填好再导入：</div>
+    <div class="chips pack-chips">
+      <button class="chip" data-pack="simple">📄 简洁模板</button>
+      <button class="chip" data-pack="full">📋 完整模板</button>
+      <button class="chip" data-pack="excel">📊 Excel 模板</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="mini-label">或直接粘贴（每行一个，逗号/空格分隔）：</div>
+    <textarea id="txt-paste" rows="3" placeholder="apple, n., 苹果&#10;abandon 放弃 v."></textarea>
+    <button id="btn-paste-import" class="btn soft small" type="button">导入粘贴内容</button>
+
+    <div class="divider"></div>
+
+    <div class="mini-label">手动添加一个：</div>
+    <div class="nw-grid">
+      <input id="nw-word" placeholder="单词 *">
+      <input id="nw-phonetic" placeholder="音标">
+      <input id="nw-pos" placeholder="词性 n./v.">
+      <input id="nw-meaning" placeholder="释义">
+      <input id="nw-example" placeholder="例句(可选)" class="nw-wide">
+    </div>
+    <div class="modal-actions">
+      <button id="btn-add-word" class="btn primary small" type="button">＋ 添加单词</button>
+      <button id="btn-clear-custom" class="btn ghost small" type="button">清空我的词库</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <!-- ?v= busts browser cache — bump after any js/ change -->
-<script src="js/store.js?v=20260808a"></script>
-<script src="js/words.js?v=20260808a"></script>
-<script src="js/importer.js?v=20260808a"></script>
-<script src="js/ocr.js?v=20260808a"></script>
-<script src="js/reminders.js?v=20260808a"></script>
-<script src="js/render.js?v=20260808a"></script>
-<script src="js/engine.js?v=20260808a"></script>
-<script src="js/app.js?v=20260808a"></script>
+<script src="js/store.js?v=20260808b"></script>
+<script src="js/words.js?v=20260808b"></script>
+<script src="js/importer.js?v=20260808b"></script>
+<script src="js/ocr.js?v=20260808b"></script>
+<script src="js/reminders.js?v=20260808b"></script>
+<script src="js/render.js?v=20260808b"></script>
+<script src="js/engine.js?v=20260808b"></script>
+<script src="js/app.js?v=20260808b"></script>
 </body>
 </html>
