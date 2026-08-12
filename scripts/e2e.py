@@ -11,13 +11,15 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
+import shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
 try:
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
 except ImportError:
     print("需要 playwright:  pip install playwright && playwright install chromium")
     sys.exit(1)
@@ -40,7 +42,9 @@ def wait_up(port, timeout=10):
 
 def main():
     port = free_port()
-    env = dict(os.environ, PORT=str(port))
+    data_dir = tempfile.mkdtemp(prefix="wordpaper-e2e-")
+    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", WORDPAPER_MODE="local",
+               WORDPAPER_DATA_DIR=data_dir, NODE_ENV="test")
     server = subprocess.Popen(["node", "server.js"], cwd=ROOT, env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if not wait_up(port):
@@ -56,16 +60,33 @@ def main():
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page(viewport={"width": 1460, "height": 980})
+            try:
+                browser = p.chromium.launch()
+            except PlaywrightError as exc:
+                # Local development may have Playwright installed without its
+                # bundled browser. Keep the suite runnable with system Chrome,
+                # while preserving real launch failures.
+                if "Executable doesn't exist" not in str(exc):
+                    raise
+                browser = p.chromium.launch(channel="chrome")
+            context = browser.new_context(viewport={"width": 1460, "height": 980})
+            account = context.request.post(base + "/api/auth/register", headers={"Origin": base}, data={
+                "username": "e2e_user_" + str(port), "password": "wordpaper-e2e-password",
+            })
+            if account.status != 201:
+                raise RuntimeError("test account registration failed: " + account.text())
+            page = context.new_page()
             page.on("pageerror", lambda e: errors.append("pageerror: " + str(e)))
-            page.on("console", lambda m: errors.append("console.error: " + m.text) if m.type == "error" else None)
+            page.on("console", lambda m: errors.append(
+                "console.error: " + m.text + (" @ " + m.location.get("url", "") if m.location else "")
+            ) if m.type == "error" else None)
 
-            page.goto(base, wait_until="networkidle")
+            page.goto(base, wait_until="domcontentloaded")
+            page.wait_for_selector("#preview-canvas")
             page.wait_for_timeout(700)
 
             check("页面标题", "WordPaper" in page.title())
-            check("换一组按钮", page.locator("#btn-refresh").count() == 1)
+            check("换一组按钮", page.locator("#btn-refresh2").count() == 1)
 
             # library cards (v3) — 8 exam libraries + 我的词库 (custom, last)
             check("词库卡片渲染(9张)", page.locator("#library-cards .lib-card").count() == 9)
@@ -83,29 +104,41 @@ def main():
             page.wait_for_timeout(300)
             check("背景纹理切换", page.locator("#pattern-picker .pattern-chip").nth(2).evaluate("e=>e.classList.contains('on')"))
 
-            # typography: font scale slider
-            page.locator("#rng-fontscale").fill("1.3")
+            # Typography lives beside the selected canvas word, not in a
+            # duplicate sidebar. Five words may scale freely; six or more use
+            # automatic fitting. Select a real word before using the controls.
+            page.locator("#inp-count").fill("5")
+            page.locator("#inp-count").dispatch_event("change")
             page.wait_for_timeout(400)
-            check("字号缩放生效(label)", "130%" in page.inner_text("#fontscale-val"))
+            box = page.locator("#preview-canvas").bounding_box()
+            for fy in (0.28, 0.34, 0.40, 0.46, 0.52, 0.58, 0.64, 0.70):
+                page.mouse.click(box["x"] + box["width"] * .5,
+                                 box["y"] + box["height"] * fy)
+                if not page.locator("#word-inspector").evaluate("e=>e.hidden"):
+                    break
+            check("点击画布单词打开就地排版", not page.locator("#word-inspector").evaluate("e=>e.hidden"))
 
-            # weight select
-            page.select_option("#sel-weight", "800")
-            page.wait_for_timeout(300)
-            check("字重切换", page.eval_on_selector("#sel-weight", "e=>e.value") == "800")
+            page.locator("#sel-word-scale").fill("1.3")
+            page.wait_for_timeout(400)
+            check("字号缩放实时生效", page.eval_on_selector("#sel-word-scale-number", "e=>e.value") == "130"
+                  and page.evaluate("() => Store.getSettings().fontScale") == 1.3)
 
-            # v3: font-style select
-            page.select_option("#sel-fontstyle", "song")
+            page.select_option("#sel-word-weight", "800")
             page.wait_for_timeout(300)
-            check("字体风格切换(宋体)", page.eval_on_selector("#sel-fontstyle", "e=>e.value") == "song")
-            page.select_option("#sel-fontstyle", "hei")  # restore
+            check("字重切换", page.eval_on_selector("#sel-word-weight", "e=>e.value") == "800")
 
-            # v3: ink (text color) picker — pick a swatch, "跟随主题" resets
-            page.locator("#ink-picker .ink-chip.sw").nth(1).click()
+            page.select_option("#sel-word-font", "song")
             page.wait_for_timeout(300)
-            check("文字颜色选择生效", page.locator("#ink-picker .ink-chip.sw").nth(1).evaluate("e=>e.classList.contains('on')"))
-            page.locator("#ink-picker .ink-chip.auto").click()
+            check("字体风格切换(宋体)", page.eval_on_selector("#sel-word-font", "e=>e.value") == "song")
+            page.select_option("#sel-word-font", "hei")  # restore
+
+            page.locator("#sel-word-color").fill("#8a3f2d")
+            page.locator("#sel-word-color").dispatch_event("input")
+            page.wait_for_timeout(300)
+            check("文字颜色选择生效", page.evaluate("() => Store.getSettings().inkOverride") == "#8a3f2d")
+            page.click("#btn-reset-word-style")
             page.wait_for_timeout(200)
-            check("文字颜色跟随主题复位", page.locator("#ink-picker .ink-chip.auto").evaluate("e=>e.classList.contains('on')"))
+            check("整组样式恢复默认", page.evaluate("() => Store.getSettings().inkOverride") == "")
 
             # v3: date & clock checkboxes removed from the appearance card
             check("日期/时间开关已移除", page.locator("#chk-date").count() == 0 and page.locator("#chk-clock").count() == 0)
@@ -155,41 +188,87 @@ def main():
             check("提醒出现在列表", "开组会" in page.inner_text("#reminder-list"))
 
             # manual refresh keeps canvas
-            page.click("#btn-refresh")
+            page.click("#btn-refresh2")
             page.wait_for_timeout(400)
             check("换一组后仍有画布", page.evaluate("() => document.querySelector('#preview-canvas').width > 0"))
 
             # visual drag: press on the words block and pull down -> offWords.y changes
             box = page.locator("#preview-canvas").bounding_box()
-            before = page.evaluate("() => (JSON.parse(localStorage.getItem('wp:settings')||'{}').offWords||{}).y")
+            before = page.evaluate("() => (Store.getSettings().offWords||{}).y")
             cx, cy = box["x"] + box["width"] * 0.5, box["y"] + box["height"] * 0.35
+            page.keyboard.down("Shift")
             page.mouse.move(cx, cy); page.mouse.down()
             for i in range(6):
                 page.mouse.move(cx, cy + 20 * (i + 1), steps=3); page.wait_for_timeout(20)
-            page.mouse.up()
+            page.mouse.up(); page.keyboard.up("Shift")
             page.wait_for_timeout(250)
-            after = page.evaluate("() => (JSON.parse(localStorage.getItem('wp:settings')||'{}').offWords||{}).y")
+            after = page.evaluate("() => (Store.getSettings().offWords||{}).y")
             check("预览拖动单词块", before != after)
 
             # PNG download
             with page.expect_download() as dl:
-                page.click("#btn-download")
+                page.click("#btn-download2")
             check("PNG 下载", dl.value.suggested_filename.endswith(".png"))
 
-            # SRS (艾宾浩斯) — 记忆复习 card. The paste-import step above switched the
-            # library to 我的词库 (custom), where 记忆轮换 is intentionally disabled — so
-            # first switch back to a built-in library (四级) before exercising 记好了.
-            check("记忆复习卡片存在", page.locator("#btn-learned").count() == 1)
+            # SRS (艾宾浩斯) — 记忆复习 card. Switch to a stable built-in fixture (四级)
+            # before exercising the notebook; custom libraries use the same SRS path.
+            check("记忆复习卡片存在", page.locator("#btn-open-memory").count() == 1)
             page.locator("#library-cards .lib-card", has_text="四级").first.click()
             page.wait_for_timeout(500)
-            lib = page.evaluate("() => JSON.parse(localStorage.getItem('wp:settings')||'{}').library")
+            lib = page.evaluate("() => Store.getSettings().library")
             check("切到内置词库(四级)", lib == "cet4")
             before = page.evaluate("l => window.Review.stats(l).total", lib)
-            page.click("#btn-learned")  # 这组记好了，换一组
+            page.evaluate("l => window.Review.rememberWord(l, {word:'e2e-memory-word', meaning:'回归测试释义', pos:'n.'})", lib)
+            page.locator("#chk-srs").dispatch_event("change")
             page.wait_for_timeout(500)
             after = page.evaluate("l => window.Review.stats(l).total", lib)
-            check("记好了登记一组复习", after == before + 1)
+            check("记住单词登记复习", after == before + 1)
             check("复习倒计时出现", page.eval_on_selector("#srs-countdown", "e=>!e.hidden"))
+            page.click("#btn-open-memory")
+            check("记忆本打开", page.locator("#memory-modal:not([hidden])").count() == 1)
+            check("记忆本遮盖中文", page.locator("#memory-notebook-list .memory-meaning.locked").count() >= 1)
+            page.click("#btn-close-memory")
+
+            # 到期词必须显式选择“还没记住 / 记住了”。首次同步事件不能冒充复习通过。
+            memory_word = {"word": "e2e-memory-word", "meaning": "回归测试释义", "pos": "n."}
+            def force_review_state(stage=0):
+                page.evaluate("""p => {
+                  const all = Store.getReview(), key = Review.wordKey(p.word);
+                  all[p.lib].words[key].stage = p.stage;
+                  all[p.lib].words[key].due = Date.now() - 1000;
+                  Store.saveReview(all);
+                }""", {"lib": lib, "word": memory_word, "stage": stage})
+
+            force_review_state(0)
+            page.click("#btn-open-memory")
+            check("到期词显示双向作答", page.locator(".memory-answer.forgot").count() >= 1 and page.locator(".memory-answer.remembered").count() >= 1)
+            page.locator(".memory-entry", has_text="e2e-memory-word").locator(".memory-answer.forgot").click()
+            forgot_state = page.evaluate("p => Review.getWord(p.lib, p.word)", {"lib": lib, "word": memory_word})
+            check("没记住后重置第一周期", forgot_state["stage"] == 0 and forgot_state["failCount"] == 1 and forgot_state["due"] > page.evaluate("Date.now()"))
+            check("没记住后展示中文", page.locator(".memory-entry", has_text="e2e-memory-word").locator(".memory-meaning.locked").count() == 0)
+            page.wait_for_timeout(2200)
+            check("作答中文不会自动消失", page.locator(".memory-entry", has_text="e2e-memory-word").locator(".memory-meaning.locked").count() == 0)
+            page.click("#btn-close-memory")
+
+            # 重复的桌面小词灵首轮事件只能记一条 duplicate-learn，不能推进到期阶段。
+            force_review_state(0)
+            page.evaluate("p => Review.rememberWord(p.lib, p.word)", {"lib": lib, "word": memory_word})
+            duplicate_state = page.evaluate("p => Review.getWord(p.lib, p.word)", {"lib": lib, "word": memory_word})
+            check("重复首轮事件不推进周期", duplicate_state["stage"] == 0 and duplicate_state["due"] <= page.evaluate("Date.now()"))
+
+            page.click("#btn-open-memory")
+            page.locator(".memory-entry", has_text="e2e-memory-word").locator(".memory-answer.remembered").click()
+            passed_state = page.evaluate("p => Review.getWord(p.lib, p.word)", {"lib": lib, "word": memory_word})
+            check("记住了推进下一周期", passed_state["stage"] == 1 and passed_state["due"] > page.evaluate("Date.now()"))
+            page.click("#btn-close-memory")
+
+            force_review_state(len(page.evaluate("Review.INTERVALS_MIN")) - 1)
+            page.click("#btn-open-memory")
+            page.locator(".memory-entry", has_text="e2e-memory-word").locator(".memory-answer.remembered").click()
+            mastered_state = page.evaluate("p => Review.getWord(p.lib, p.word)", {"lib": lib, "word": memory_word})
+            check("全部周期后才真正巩固", mastered_state["stage"] == len(page.evaluate("Review.INTERVALS_MIN")) and mastered_state["due"] is None)
+            page.click("#btn-close-memory")
+
             page.uncheck("#chk-srs")
             page.wait_for_timeout(300)
             check("关闭艾宾浩斯后倒计时隐藏", page.eval_on_selector("#srs-countdown", "e=>e.hidden"))
@@ -203,36 +282,77 @@ def main():
             page.wait_for_timeout(200)
             check("周期切换间隔行显示", page.eval_on_selector("#cycle-sec-row", "e=>e.style.display") != "none")
 
-            # desktop companion buttons present
-            check("设为桌面壁纸按钮", page.locator("#btn-set-wallpaper").count() == 1)
-            check("下载桌面伴侣按钮", page.locator("#btn-companion").count() == 1)
+            # The desktop actions have one visible home in the preview header
+            # and pet dock; the old duplicate desktop module remains hidden.
+            check("设为桌面壁纸按钮", page.locator("#btn-set-wallpaper2").is_visible())
+            check("小词灵主入口", page.locator("#btn-pet-dock").is_visible()
+                  and page.locator("#btn-pet-memory").is_visible())
+            pet_box = page.locator("#pet-dock").bounding_box()
+            stage_box = page.locator("#preview-stage").bounding_box()
+            pet_button_box = page.locator("#btn-pet-dock").bounding_box()
+            check("小词灵已整合在预览上方且可点击",
+                  pet_box is not None and stage_box is not None and pet_button_box is not None
+                  and pet_box["width"] > 500 and pet_box["y"] < stage_box["y"]
+                  and page.evaluate("""() => {
+                    const b = document.querySelector('#btn-pet-dock').getBoundingClientRect();
+                    const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+                    return hit === document.querySelector('#btn-pet-dock') || document.querySelector('#btn-pet-dock').contains(hit);
+                  }"""))
+
+            # A second account cannot control the first account's local pet,
+            # but the integrated launcher must remain visible with a safe fallback.
+            other_context = browser.new_context(viewport={"width": 1460, "height": 980})
+            other_account = other_context.request.post(base + "/api/auth/register", headers={"Origin": base}, data={
+                "username": "e2e_pet_fallback_" + str(port), "password": "wordpaper-e2e-password",
+            })
+            check("小词灵降级测试账号创建", other_account.status == 201)
+            other_page = other_context.new_page()
+            other_page.goto(base, wait_until="domcontentloaded")
+            other_page.wait_for_selector("#preview-canvas")
+            other_page.wait_for_timeout(700)
+            check("其他账号仍看得到小词灵入口",
+                  other_page.locator("#pet-dock").is_visible()
+                  and other_page.locator("#btn-pet-dock").is_visible()
+                  and other_page.locator("#btn-pet-dock").get_attribute("data-action") == "switch-account"
+                  and "绑定另一个账号" in other_page.inner_text("#pet-dock-status"))
+            fallback_control_requests = []
+            def record_fallback_request(request):
+                if any(path in request.url for path in ("/companion/start", "/pet.php", "/pet-sync.php")):
+                    fallback_control_requests.append(request.url)
+            other_page.on("request", record_fallback_request)
+            other_page.click("#btn-pet-dock")
+            other_page.wait_for_url("**/login.html", timeout=5000)
+            owner_status = context.request.get(base + "/status.json").json()
+            check("账号冲突只切换登录且不接管小词灵",
+                  len(fallback_control_requests) == 0
+                  and owner_status.get("available") is True)
+            other_context.close()
 
             # companion one-click zip route serves a real zip with launcher + data
-            import urllib.request, zipfile, io
-            zdata = urllib.request.urlopen(f"http://127.0.0.1:{port}/companion.zip", timeout=15).read()
+            import zipfile, io
+            zip_response = context.request.get(base + "/companion.zip")
+            zdata = zip_response.body()
             zf = zipfile.ZipFile(io.BytesIO(zdata))
             names = zf.namelist()
-            check("伴侣一键包(zip含启动器+词库)",
+            check("伴侣一键包(zip含启动器+当前词库)",
                   any(n.endswith("启动伴侣.command") for n in names)
                   and any(n.endswith("companion.js") for n in names)
-                  and sum(1 for n in names if n.startswith("每日壁纸伴侣/data/words_")) == 8)
+                  and any(n.endswith("server.js") for n in names)
+                  and any(n.endswith("login.html") for n in names)
+                  and any(n.endswith("lib/storage.js") for n in names)
+                  and any(n.endswith("js/app.js") for n in names)
+                  and any(n.endswith("css/styles.css") for n in names)
+                  and sum(1 for n in names if n.startswith("每日壁纸伴侣/data/words_")) >= 8
+                  and any(n.endswith("words_jlpt_n5.json") for n in names)
+                  and any(n.endswith("words_jlpt_n4.json") for n in names))
             launcher = next(i for i in zf.infolist() if i.filename.endswith(".command"))
             check("启动器可执行(+x)", (launcher.external_attr >> 16) & 0o111 != 0)
 
             # one-click enable endpoint: POST /companion/start (dry mode for tests)
-            import urllib.request, urllib.error, json
-            try:
-                dryr = urllib.request.urlopen(urllib.request.Request(
-                    f"http://127.0.0.1:{port}/companion/start?dry=1", method="POST"), timeout=10)
-                dryj = json.loads(dryr.read())
-                check("一键启用端点(dry)", dryj.get("ok") is True and dryj.get("dry") is True)
-            except Exception as e:
-                check("一键启用端点(dry)", False)
-            try:
-                urllib.request.urlopen(f"http://127.0.0.1:{port}/companion/start", timeout=10)
-                check("一键启用非POST返回405", False)
-            except urllib.error.HTTPError as e:
-                check("一键启用非POST返回405", e.code == 405)
+            dryr = context.request.post(base + "/companion/start?dry=1", headers={"Origin": base})
+            dryj = dryr.json()
+            check("一键启用端点(dry)", dryj.get("ok") is True and dryj.get("dry") is True)
+            check("一键启用非POST返回405", context.request.get(base + "/companion/start").status == 405)
 
             # companion's own server carries the same endpoints (page is served from 8771 too)
             with open(os.path.join(ROOT, "companion.js"), encoding="utf-8") as f:
@@ -241,21 +361,70 @@ def main():
                   "'/companion/start'" in companion_src and "'/companion.zip'" in companion_src
                   and "freshWallpaperFile" in companion_src)
 
-            # live mode
-            page.click("#btn-live")
-            page.wait_for_timeout(400)
-            check("实时壁纸覆盖层", page.eval_on_selector("#live-overlay", "e=>!e.hidden"))
-            page.mouse.click(730, 480)
-            page.wait_for_timeout(200)
-            check("短按不触发(防误触)", page.eval_on_selector("#live-peek", "e=>e.hidden"))
-            page.click("#btn-exit-live")
-            page.wait_for_timeout(300)
-            check("退出实时壁纸", page.eval_on_selector("#live-overlay", "e=>e.hidden"))
+            # All three interface themes remain selectable. Liquid gets
+            # per-surface optical filters in Chromium and persists on reload.
+            page.locator('.ui-theme-option[data-ui-theme="anime"]').click()
+            check("动漫主题可切换", page.eval_on_selector("html", "e=>e.dataset.uiTheme") == "anime")
+            page.locator('.ui-theme-option[data-ui-theme="editorial"]').click()
+            check("校样主题可切换", page.eval_on_selector("html", "e=>e.dataset.uiTheme") == "editorial")
+            page.locator('.ui-theme-option[data-ui-theme="liquid"]').click()
+            page.wait_for_timeout(500)
+            check("Liquid Glass 主题可切换", page.eval_on_selector("html", "e=>e.dataset.uiTheme") == "liquid")
+            check("Liquid 壁纸配色已加入并自动联动",
+                  page.locator("#theme-swatches .swatch").count() == 8
+                  and page.locator('#theme-swatches .swatch[title="珍珠"]').evaluate("e=>e.classList.contains('on')")
+                  and page.locator('#pattern-picker .pattern-chip').last.evaluate("e=>e.classList.contains('on')"))
+            check("Liquid 光学折射已挂载", page.locator(".liquid-refraction-ready").count() >= 3
+                  and page.locator("#wp-liquid-optics filter").count() >= 3)
+            stage_optics = page.eval_on_selector(".stage", """e => ({
+              optic: e.dataset.liquidOptic,
+              ready: e.classList.contains('liquid-refraction-ready'),
+              filter: getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter
+            })""")
+            check("中央展示板使用深层玻璃折射", stage_optics["optic"] == "deep"
+                  and stage_optics["ready"] is True
+                  and "url(" in stage_optics["filter"]
+                  and "blur(36px)" in stage_optics["filter"])
+
+            # Pointer light, gentle parallax and liquid press feedback are
+            # functional states, rather than a static glass-coloured skin.
+            page.eval_on_selector(".stage", """e => {
+              const r = e.getBoundingClientRect();
+              e.dispatchEvent(new PointerEvent('pointerover', {bubbles:true, pointerType:'mouse'}));
+              e.dispatchEvent(new PointerEvent('pointermove', {
+                bubbles:true, pointerType:'mouse', clientX:r.left+r.width*.78, clientY:r.top+r.height*.22
+              }));
+            }""")
+            page.wait_for_timeout(180)
+            stage_motion = page.eval_on_selector(".stage", """e => ({
+              lit: e.classList.contains('liquid-illuminated'),
+              x: e.style.getPropertyValue('--glass-x'),
+              tilt: e.style.getPropertyValue('--glass-tilt-y')
+            })""")
+            check("Liquid 跟随光与轻微视差可用", stage_motion["lit"] is True
+                  and stage_motion["x"] != ""
+                  and stage_motion["tilt"] not in ("", "0deg", "0.000deg"))
+
+            refresh_button = page.locator("#btn-refresh2")
+            refresh_button.dispatch_event("pointerdown", {"pointerType": "mouse", "button": 0})
+            check("Liquid 控件按压产生弹性状态",
+                  refresh_button.evaluate("e=>e.classList.contains('liquid-control-pressed')")
+                  and page.locator(".meta-actions").evaluate("e=>e.classList.contains('liquid-pressed')"))
+            page.locator("body").dispatch_event("pointerup", {"pointerType": "mouse", "button": 0})
+            check("Liquid 控件松开恢复",
+                  not refresh_button.evaluate("e=>e.classList.contains('liquid-control-pressed')"))
+            # SheetJS is an optional CDN script; do not let a slow external CDN
+            # make a local persistence assertion wait forever.
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_selector("#preview-canvas")
+            check("界面主题刷新后保持", page.eval_on_selector("html", "e=>e.dataset.uiTheme") == "liquid"
+                  and page.locator('.ui-theme-option[data-ui-theme="liquid"]').get_attribute("aria-pressed") == "true")
 
             check("无 pageerror / console.error", len(errors) == 0)
             browser.close()
     finally:
         server.kill()
+        shutil.rmtree(data_dir, ignore_errors=True)
 
     print("\n==== 结果 ====")
     failed = [n for n, ok in results if not ok]

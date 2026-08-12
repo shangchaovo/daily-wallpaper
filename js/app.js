@@ -1,17 +1,17 @@
 /* app.js — UI wiring: settings panel, preview, download, live mode, desktop
- * companion. Friendly/cartoon UI. IIFE -> `App`. */
+ * companion. Editorial workbench UI. IIFE -> `App`. */
 (function () {
   'use strict';
 
   const SIZES = {
-    'phone-1080x2400': { w: 1080, h: 2400, label: '📱 手机 · 1080×2400' },
-    'phone-1170x2532': { w: 1170, h: 2532, label: '📱 iPhone · 1170×2532' },
-    'phone-1080x1920': { w: 1080, h: 1920, label: '📱 手机 · 1080×1920' },
-    'desktop-1920x1080': { w: 1920, h: 1080, label: '🖥️ 电脑 · 1920×1080' },
-    'desktop-2560x1440': { w: 2560, h: 1440, label: '🖥️ 电脑 · 2560×1440 (2K)' },
-    'desktop-3840x2160': { w: 3840, h: 2160, label: '🖥️ 电脑 · 3840×2160 (4K)' },
-    'pad-2048x2732': { w: 2048, h: 2732, label: '📲 平板 · 2048×2732' },
-    'custom': { w: 1080, h: 1920, label: '✏️ 自定义尺寸' },
+    'phone-1080x2400': { w: 1080, h: 2400, label: '手机 · 1080×2400' },
+    'phone-1170x2532': { w: 1170, h: 2532, label: 'iPhone · 1170×2532' },
+    'phone-1080x1920': { w: 1080, h: 1920, label: '手机 · 1080×1920' },
+    'desktop-1920x1080': { w: 1920, h: 1080, label: '电脑 · 1920×1080' },
+    'desktop-2560x1440': { w: 2560, h: 1440, label: '电脑 · 2560×1440 (2K)' },
+    'desktop-3840x2160': { w: 3840, h: 2160, label: '电脑 · 3840×2160 (4K)' },
+    'pad-2048x2732': { w: 2048, h: 2732, label: '平板 · 2048×2732' },
+    'custom': { w: 1080, h: 1920, label: '自定义尺寸' },
   };
 
   const THEMES = {
@@ -19,6 +19,8 @@
     mint:   { name: '薄荷', bg: '#effcf4', bg2: '#dcf6e6', ink: '#1f4536', sub: '#74a08c', accent: '#41c189', accentSoft: '#cdf0de', line: 'rgba(31,69,54,0.10)', patternInk: '#abe3c6', blob: true },
     sky:    { name: '天空', bg: '#eef7fe', bg2: '#dcedfc', ink: '#1e3a52', sub: '#7490a8', accent: '#4f9fe0', accentSoft: '#cfe7fa', line: 'rgba(30,58,82,0.10)', patternInk: '#b0d6f0', blob: true },
     sakura: { name: '樱花', bg: '#fff1f5', bg2: '#fde3ea', ink: '#57222f', sub: '#ae7d8b', accent: '#f1789b', accentSoft: '#fad3de', line: 'rgba(87,34,47,0.10)', patternInk: '#f3b6c7', blob: true },
+    liquid: { name: '玻璃', bg: '#f8fbff', bg2: '#dce7f0', ink: '#223242', sub: '#6a7f92', accent: '#7299b8', accentSoft: '#dbe8f2', line: 'rgba(53,79,101,0.12)', patternInk: '#bfd2e0', blob: false, liquid: true },
+    pearl:  { name: '珍珠', bg: '#ffffff', bg2: '#f1f1f4', ink: '#2b2b30', sub: '#9a9aa2', accent: '#8e8e93', accentSoft: '#ececf0', line: 'rgba(43,43,48,0.10)', patternInk: '#d6d6db', blob: false, liquid: true },
     night:  { name: '夜空', bg: '#151a2e', bg2: '#1f2745', ink: '#eef1f8', sub: '#8b95b3', accent: '#7aa2f7', accentSoft: '#2a3358', line: 'rgba(238,241,248,0.14)', patternInk: '#3a4670', blob: true },
     forest: { name: '森林', bg: '#12211c', bg2: '#1c332a', ink: '#e8f0ea', sub: '#8fae9f', accent: '#5ec99a', accentSoft: '#234534', line: 'rgba(232,240,234,0.12)', patternInk: '#2e5040', blob: true },
   };
@@ -26,26 +28,28 @@
   const LIBRARIES = [
     { id: 'jlpt_n5', icon: 'あ', name: '日语 JLPT N5', desc: '入门核心词（718）', file: 'words_jlpt_n5.json', source: 'JLPT N5 分级 · 开放词表整理' },
     { id: 'jlpt_n4', icon: '日', name: '日语 JLPT N4', desc: '初级进阶词（668）', file: 'words_jlpt_n4.json', source: 'JLPT N4 分级 · 开放词表整理' },
-    { id: 'cet4', icon: '📗', name: '四级', desc: 'CET4 核心词', file: 'words_cet4.json' },
-    { id: 'cet6', icon: '📘', name: '六级', desc: 'CET6 核心词', file: 'words_cet6.json' },
-    { id: 'kaoyan', icon: '📕', name: '考研', desc: '考研核心词', file: 'words_kaoyan.json' },
-    { id: 'ielts', icon: '🎓', name: '雅思', desc: 'IELTS 核心词', file: 'words_ielts.json' },
-    { id: 'toefl', icon: '🌍', name: '托福', desc: 'TOEFL 核心词', file: 'words_toefl.json' },
-    { id: 'gre', icon: '🗽', name: 'GRE', desc: 'GRE 核心词', file: 'words_gre.json' },
-    { id: 'custom', icon: '✨', name: '我的词库', desc: '自己导入的词', file: null },
+    { id: 'cet4', icon: '四', name: '四级', desc: 'CET4 核心词', file: 'words_cet4.json' },
+    { id: 'cet6', icon: '六', name: '六级', desc: 'CET6 核心词', file: 'words_cet6.json' },
+    { id: 'kaoyan', icon: '研', name: '考研', desc: '考研核心词', file: 'words_kaoyan.json' },
+    { id: 'ielts', icon: '雅', name: '雅思', desc: 'IELTS 核心词', file: 'words_ielts.json' },
+    { id: 'toefl', icon: '托', name: '托福', desc: 'TOEFL 核心词', file: 'words_toefl.json' },
+    { id: 'gre', icon: 'G', name: 'GRE', desc: 'GRE 核心词', file: 'words_gre.json' },
+    { id: 'custom', icon: '自', name: '我的词库', desc: '自己导入的词', file: null },
   ];
 
   const BG_PATTERNS = [
-    { id: 'soft', name: '柔光', icon: '🌤️' },
-    { id: 'blobs', name: '光斑', icon: '🫧' },
-    { id: 'dots', name: '圆点', icon: '🟤' },
-    { id: 'grid', name: '方格', icon: '🔲' },
+    { id: 'soft', name: '柔光', icon: '☼' },
+    { id: 'blobs', name: '光斑', icon: '○' },
+    { id: 'dots', name: '圆点', icon: '●' },
+    { id: 'grid', name: '方格', icon: '□' },
     { id: 'diag', name: '斜纹', icon: '◹' },
-    { id: 'waves', name: '波浪', icon: '〰️' },
-    { id: 'none', name: '纯色', icon: '⬜' },
+    { id: 'waves', name: '波浪', icon: '∿' },
+    { id: 'none', name: '纯色', icon: '■' },
   ];
 
   let settings = null;
+  const UI_THEMES = new Set(['anime', 'editorial', 'liquid']);
+  let companionAction = 'start'; // 'start' | 'control' | 'download' | 'switch-account'
   let currentCanvas = null;
   let liveTimer = null;
   let clockTimer = null;
@@ -59,12 +63,21 @@
   let wordCells = [];   // renderer 返回的精确单词格，用于“点词即编辑”
   let activeLibraryBrowser = null;
   let activeLibraryWords = [];
+  let moduleEditing = false;
+  let draggedModule = null;
+  let liquidTransitionTimer = null;
+  const MODULE_DEFAULTS = {
+    left: ['module-library', 'module-reminders', 'module-srs', 'module-automation'],
+    right: ['module-appearance', 'module-custom'],
+  };
 
   const $ = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
 
   function loadSettings() {
     settings = window.Store.getSettings();
+    settings.uiTheme = UI_THEMES.has(settings.uiTheme) ? settings.uiTheme : 'editorial';
+    document.documentElement.dataset.uiTheme = settings.uiTheme;
     // Existing users keep a valid library after 初中/高中词书升级为 JLPT 词书。
     if (settings.library === 'chuzhong') settings.library = 'jlpt_n5';
     if (settings.library === 'gaozhong') settings.library = 'jlpt_n4';
@@ -73,6 +86,7 @@
 
   /* ---------- settings -> UI ---------- */
   function applySettingsToUI() {
+    applyUITheme(settings.uiTheme, false);
     $('#sel-size').value = settings.size;
     $('#sel-order').value = settings.order;
     $('#inp-count').value = settings.wordsPerGroup;
@@ -111,6 +125,336 @@
     syncDependentUI();
   }
 
+  function applyUITheme(theme, persist) {
+    const next = UI_THEMES.has(theme) ? theme : 'editorial';
+    const root = document.documentElement;
+    settings.uiTheme = next;
+    root.dataset.uiTheme = next;
+    clearTimeout(liquidTransitionTimer);
+    root.classList.remove('liquid-materializing');
+    if (persist && next === 'liquid' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // Apple-style materialisation: the edge light resolves into place instead
+      // of treating the theme as a flat colour fade.
+      void root.offsetWidth;
+      root.classList.add('liquid-materializing');
+      liquidTransitionTimer = setTimeout(() => root.classList.remove('liquid-materializing'), 680);
+    }
+    $$('.ui-theme-option').forEach(button => {
+      const active = button.dataset.uiTheme === next;
+      button.classList.toggle('on', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if (persist) {
+      // Liquid is a whole-page visual mode. Enter it with the matching clean
+      // wallpaper palette so the proof does not remain a dark/starry island.
+      if (next === 'liquid') {
+        settings.theme = 'pearl';
+        settings.bgPattern = 'none';
+        renderThemeSwatches();
+        renderPatternPicker();
+      }
+      window.Store.setUITheme(next);
+      saveSettings();
+      refresh(false);
+      // 界面主题同时驱动桌面小词灵；伴侣未运行时保持静默降级。
+      syncCompanionLearningContext();
+    }
+    document.dispatchEvent(new CustomEvent('wordpaper:ui-theme-change', { detail: { theme: next } }));
+  }
+
+  /* Liquid Glass progressive enhancement. The rounded-rect SDF keeps the
+   * content stable and refracts only the optical rim. Three sub-pixel RGB
+   * samples add restrained dispersion in Chromium; Safari and Firefox retain
+   * the same white material, highlight and depth without SVG displacement. */
+  function bindLiquidGlassMotion() {
+    const opticalSelector = '.top-actions.layout-actions, .meta-actions, .pet-dock, .stage, .modal-card';
+    const interactiveSelector = 'button, .btn, .chip, .pattern-chip, .seg-btn, .ui-theme-option';
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const reducedTransparency = window.matchMedia('(prefers-reduced-transparency: reduce)');
+    const supportsBackdrop = CSS.supports('backdrop-filter', 'blur(1px)') || CSS.supports('-webkit-backdrop-filter', 'blur(1px)');
+    const supportsSvgBackdrop = supportsBackdrop
+      && CSS.supports('backdrop-filter', 'url("#wp-liquid-probe") blur(1px)')
+      && /(?:Chrome|Chromium|Edg)\//.test(navigator.userAgent)
+      && !reducedTransparency.matches;
+    const ns = 'http://www.w3.org/2000/svg';
+    const opticalState = new WeakMap();
+    const motionState = new Map();
+    const displacementCache = new Map();
+    let opticalSeq = 0;
+    let motionFrame = 0;
+
+    const svgNode = (name, attrs) => {
+      const node = document.createElementNS(ns, name);
+      Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, String(value)));
+      return node;
+    };
+
+    let opticalDefs = null;
+    if (supportsSvgBackdrop) {
+      const svg = svgNode('svg', { width: 0, height: 0, 'aria-hidden': 'true' });
+      svg.id = 'wp-liquid-optics';
+      svg.style.cssText = 'position:fixed;inset:0;width:0;height:0;pointer-events:none;overflow:hidden';
+      opticalDefs = svgNode('defs');
+      svg.appendChild(opticalDefs);
+      document.body.appendChild(svg);
+    }
+
+    function smoothStep(a, b, value) {
+      const t = Math.max(0, Math.min(1, (value - a) / (b - a)));
+      return t * t * (3 - 2 * t);
+    }
+
+    function roundedRectSDF(x, y, halfWidth, halfHeight, radius) {
+      const qx = Math.abs(x) - halfWidth + radius;
+      const qy = Math.abs(y) - halfHeight + radius;
+      return Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - radius;
+    }
+
+    function displacementMap(width, height, cssRadius) {
+      const ratio = Math.min(.55, 240 / Math.max(width, height));
+      const w = Math.max(40, Math.round(width * ratio));
+      const h = Math.max(40, Math.round(height * ratio));
+      const radius = Math.max(2, Math.min(cssRadius * ratio, w / 2 - 1, h / 2 - 1));
+      const key = `${w}x${h}@${Math.round(radius)}`;
+      if (displacementCache.has(key)) return displacementCache.get(key);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const context = canvas.getContext('2d', { willReadFrequently: false });
+      const image = context.createImageData(w, h);
+      const halfWidth = w / 2 - 1;
+      const halfHeight = h / 2 - 1;
+      const edgeWidth = Math.min(38, Math.max(10, Math.min(w, h) * .24));
+      const sdf = (x, y) => roundedRectSDF(x, y, halfWidth, halfHeight, radius);
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          const px = x + .5 - w / 2;
+          const py = y + .5 - h / 2;
+          const distance = sdf(px, py);
+          let strength = 0, normalX = 0, normalY = 0;
+          if (distance < 0 && distance > -edgeWidth) {
+            strength = smoothStep(-edgeWidth, -1.4, distance);
+            if (distance > -1.8) strength *= Math.max(0, -distance / 1.8);
+            const gradientX = sdf(px + .75, py) - sdf(px - .75, py);
+            const gradientY = sdf(px, py + .75) - sdf(px, py - .75);
+            const length = Math.max(.001, Math.hypot(gradientX, gradientY));
+            normalX = gradientX / length;
+            normalY = gradientY / length;
+          }
+          image.data[i] = Math.round(128 + normalX * strength * 74);
+          image.data[i + 1] = Math.round(128 + normalY * strength * 74);
+          image.data[i + 2] = 128;
+          image.data[i + 3] = 255;
+        }
+      }
+      context.putImageData(image, 0, 0);
+      const result = canvas.toDataURL('image/png');
+      if (displacementCache.size >= 24) displacementCache.delete(displacementCache.keys().next().value);
+      displacementCache.set(key, result);
+      return result;
+    }
+
+    function rebuildOptic(surface, entry) {
+      const rect = surface.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      const radius = Math.max(0, Math.round(parseFloat(getComputedStyle(surface).borderRadius) || 0));
+      if (width < 16 || height < 16 || (entry.width === width && entry.height === height && entry.radius === radius)) return;
+      entry.width = width; entry.height = height; entry.radius = radius;
+      entry.filter.setAttribute('width', width);
+      entry.filter.setAttribute('height', height);
+      entry.image.setAttribute('width', width);
+      entry.image.setAttribute('height', height);
+      entry.image.setAttribute('href', displacementMap(width, height, radius));
+      const optic = surface.dataset.liquidOptic;
+      const scale = optic === 'deep' ? 22 : optic === 'thick' ? 17 : height < 90 ? 15 : 13;
+      entry.displaces.forEach((node, index) => node.setAttribute('scale', scale + (index === 0 ? 1.15 : index === 2 ? -1.15 : 0)));
+      surface.style.setProperty('--liquid-refraction', `url(#${entry.id})`);
+      surface.classList.add('liquid-refraction-ready');
+    }
+
+    const resizeObserver = supportsSvgBackdrop ? new ResizeObserver(entries => {
+      if (document.documentElement.dataset.uiTheme !== 'liquid') return;
+      entries.forEach(({ target }) => {
+        const entry = opticalState.get(target);
+        if (!entry) return;
+        clearTimeout(entry.timer);
+        entry.timer = setTimeout(() => rebuildOptic(target, entry), 80);
+      });
+    }) : null;
+
+    function ensureOptic(surface) {
+      if (!(surface instanceof HTMLElement)) return;
+      surface.dataset.liquidOptic = surface.matches('.stage, .modal-card')
+        ? 'deep'
+        : surface.matches('.pet-dock') ? 'thick' : 'regular';
+      const existing = opticalState.get(surface);
+      if (existing) { rebuildOptic(surface, existing); return; }
+      if (!supportsSvgBackdrop) return;
+
+      const id = `wp-liquid-refraction-${++opticalSeq}`;
+      const filter = svgNode('filter', {
+        id, x: 0, y: 0, width: 1, height: 1,
+        filterUnits: 'userSpaceOnUse', primitiveUnits: 'userSpaceOnUse',
+        'color-interpolation-filters': 'sRGB',
+      });
+      const image = svgNode('feImage', { x: 0, y: 0, width: 1, height: 1, result: 'map', preserveAspectRatio: 'none' });
+      const channels = [
+        ['red-shift', '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0'],
+        ['green-shift', '0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0'],
+        ['blue-shift', '0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0'],
+      ];
+      const displaces = [];
+      const isolated = [];
+      filter.appendChild(image);
+      channels.forEach(([result, values], index) => {
+        const displace = svgNode('feDisplacementMap', {
+          in: 'SourceGraphic', in2: 'map', scale: 10,
+          xChannelSelector: 'R', yChannelSelector: 'G', result,
+        });
+        const channel = svgNode('feColorMatrix', { in: result, type: 'matrix', values, result: `channel-${index}` });
+        displaces.push(displace);
+        isolated.push(channel);
+        filter.append(displace, channel);
+      });
+      const redGreen = svgNode('feBlend', { in: 'channel-0', in2: 'channel-1', mode: 'screen', result: 'red-green' });
+      const rgb = svgNode('feBlend', { in: 'red-green', in2: 'channel-2', mode: 'screen' });
+      filter.append(redGreen, rgb);
+      opticalDefs.appendChild(filter);
+      const entry = { id, filter, image, displaces, width: 0, height: 0, radius: -1, timer: 0 };
+      opticalState.set(surface, entry);
+      resizeObserver.observe(surface);
+      rebuildOptic(surface, entry);
+    }
+
+    function activateOptics() {
+      if (document.documentElement.dataset.uiTheme !== 'liquid') return;
+      document.querySelectorAll(opticalSelector).forEach(ensureOptic);
+    }
+
+    function getMotion(surface) {
+      let state = motionState.get(surface);
+      if (state) return state;
+      const rect = surface.getBoundingClientRect();
+      state = {
+        x: rect.width / 2, y: rect.height / 2,
+        targetX: rect.width / 2, targetY: rect.height / 2,
+        tiltX: 0, tiltY: 0, targetTiltX: 0, targetTiltY: 0,
+        tiltStrength: surface.matches('.stage') ? .16 : surface.matches('.modal-card') ? .28 : .72,
+        active: false,
+      };
+      motionState.set(surface, state);
+      return state;
+    }
+
+    function animateMotion() {
+      motionFrame = 0;
+      const motionAllowed = document.documentElement.dataset.uiTheme === 'liquid' && !reducedMotion.matches;
+      let needsFrame = false;
+      motionState.forEach((state, surface) => {
+        if (!surface.isConnected) { motionState.delete(surface); return; }
+        const ease = state.active ? .24 : .14;
+        state.x += (state.targetX - state.x) * ease;
+        state.y += (state.targetY - state.y) * ease;
+        state.tiltX += (state.targetTiltX - state.tiltX) * ease;
+        state.tiltY += (state.targetTiltY - state.tiltY) * ease;
+        surface.style.setProperty('--glass-x', `${state.x.toFixed(1)}px`);
+        surface.style.setProperty('--glass-y', `${state.y.toFixed(1)}px`);
+        surface.style.setProperty('--glass-tilt-x', motionAllowed ? `${state.tiltX.toFixed(3)}deg` : '0deg');
+        surface.style.setProperty('--glass-tilt-y', motionAllowed ? `${state.tiltY.toFixed(3)}deg` : '0deg');
+        const delta = Math.abs(state.targetX - state.x) + Math.abs(state.targetY - state.y)
+          + Math.abs(state.targetTiltX - state.tiltX) * 8 + Math.abs(state.targetTiltY - state.tiltY) * 8;
+        if (delta > .08) needsFrame = true;
+      });
+      if (needsFrame) motionFrame = requestAnimationFrame(animateMotion);
+    }
+
+    function scheduleMotion() {
+      if (!motionFrame) motionFrame = requestAnimationFrame(animateMotion);
+    }
+
+    function resetSurface(surface) {
+      const state = motionState.get(surface);
+      if (!state) return;
+      const rect = surface.getBoundingClientRect();
+      state.active = false;
+      state.targetX = rect.width / 2;
+      state.targetY = rect.height / 2;
+      state.targetTiltX = 0;
+      state.targetTiltY = 0;
+      surface.classList.remove('liquid-illuminated', 'liquid-pressed');
+      scheduleMotion();
+    }
+
+    activateOptics();
+    document.addEventListener('wordpaper:ui-theme-change', event => {
+      if (event.detail && event.detail.theme === 'liquid') activateOptics();
+      else motionState.forEach((_, surface) => resetSurface(surface));
+    });
+    document.addEventListener('pointerover', event => {
+      if (document.documentElement.dataset.uiTheme !== 'liquid' || reducedMotion.matches || !(event.target instanceof Element)) return;
+      const surface = event.target.closest(opticalSelector);
+      if (!surface) return;
+      ensureOptic(surface);
+      getMotion(surface).active = true;
+      surface.classList.add('liquid-illuminated');
+    }, { passive: true });
+    document.addEventListener('pointerout', event => {
+      if (!(event.target instanceof Element)) return;
+      const surface = event.target.closest(opticalSelector);
+      if (!surface || (event.relatedTarget instanceof Node && surface.contains(event.relatedTarget))) return;
+      resetSurface(surface);
+    }, { passive: true });
+    document.addEventListener('pointermove', event => {
+      if (document.documentElement.dataset.uiTheme !== 'liquid' || reducedMotion.matches || event.pointerType === 'touch' || !(event.target instanceof Element)) return;
+      const ambientX = ((event.clientX / Math.max(1, window.innerWidth)) - .5) * 18;
+      const ambientY = ((event.clientY / Math.max(1, window.innerHeight)) - .5) * 14;
+      document.documentElement.style.setProperty('--liquid-ambient-x', `${ambientX.toFixed(2)}px`);
+      document.documentElement.style.setProperty('--liquid-ambient-y', `${ambientY.toFixed(2)}px`);
+      const surface = event.target.closest(opticalSelector);
+      if (!surface) return;
+      const rect = surface.getBoundingClientRect();
+      const state = getMotion(surface);
+      const localX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+      const localY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+      const nx = rect.width ? localX / rect.width - .5 : 0;
+      const ny = rect.height ? localY / rect.height - .5 : 0;
+      state.active = true;
+      state.targetX = localX;
+      state.targetY = localY;
+      state.targetTiltX = -ny * state.tiltStrength;
+      state.targetTiltY = nx * state.tiltStrength * 1.15;
+      surface.classList.add('liquid-illuminated');
+      const control = event.target.closest(interactiveSelector);
+      if (control && surface.contains(control)) {
+        const controlRect = control.getBoundingClientRect();
+        control.style.setProperty('--liquid-control-x', `${Math.max(0, Math.min(controlRect.width, event.clientX - controlRect.left)).toFixed(1)}px`);
+        control.style.setProperty('--liquid-control-y', `${Math.max(0, Math.min(controlRect.height, event.clientY - controlRect.top)).toFixed(1)}px`);
+      }
+      scheduleMotion();
+    }, { passive: true });
+    document.addEventListener('pointerdown', event => {
+      if (document.documentElement.dataset.uiTheme !== 'liquid' || reducedMotion.matches || !(event.target instanceof Element)) return;
+      const control = event.target.closest(interactiveSelector);
+      if (!control) return;
+      control.classList.add('liquid-control-pressed');
+      const surface = control.closest(opticalSelector);
+      if (surface) surface.classList.add('liquid-pressed', 'liquid-illuminated');
+    }, { passive: true });
+    const releasePressed = () => {
+      document.querySelectorAll('.liquid-pressed').forEach(surface => surface.classList.remove('liquid-pressed'));
+      document.querySelectorAll('.liquid-control-pressed').forEach(control => control.classList.remove('liquid-control-pressed'));
+    };
+    document.addEventListener('pointerup', releasePressed, { passive: true });
+    document.addEventListener('pointercancel', releasePressed, { passive: true });
+    window.addEventListener('blur', releasePressed);
+    reducedMotion.addEventListener('change', () => {
+      motionState.forEach((_, surface) => resetSurface(surface));
+    });
+  }
+
   function updateTypoLabels() {
     const fs = $('#inp-fontscale'); if (fs) fs.value = Math.round(settings.fontScale * 100);
     $('#spacing-val').textContent = settings.letterSpacing + 'px';
@@ -127,6 +471,10 @@
   }
 
   function bindControls() {
+    $$('.ui-theme-option').forEach(button => button.addEventListener('click', () => {
+      applyUITheme(button.dataset.uiTheme, true);
+      toast(`界面已切换为${button.textContent.trim()}主题`);
+    }));
     $('#sel-size').addEventListener('change', e => { settings.size = e.target.value; $('#custom-size-row').hidden = settings.size !== 'custom'; commit(); });
     $('#inp-cw').addEventListener('change', e => { settings.customW = clampInt(e.target.value, 100, 8000, 1080); commit(); });
     $('#inp-ch').addEventListener('change', e => { settings.customH = clampInt(e.target.value, 100, 8000, 1920); commit(); });
@@ -135,7 +483,7 @@
       if (e.target.value === '') return;
       settings.wordsPerGroup = normalizeWordCount(e.target.value);
       e.target.value = settings.wordsPerGroup;
-      updateTypoLabels(); commit(true);
+      updateTypoLabels(); commit(true); syncCompanionLearningContext();
     });
     $('#inp-count').addEventListener('change', e => {
       if (e.target.value !== '') return;
@@ -154,9 +502,17 @@
     $('#chk-custom').addEventListener('change', e => { settings.custom.enabled = e.target.checked; syncDependentUI(); commit(); });
     // 记忆复习 (SRS)
     const chkSrs = $('#chk-srs');
-    if (chkSrs) chkSrs.addEventListener('change', e => { settings.srsEnabled = e.target.checked; updateSrsUI(); commit(); });
-    const btnLearned = $('#btn-learned');
-    if (btnLearned) btnLearned.addEventListener('click', onLearned);
+    if (chkSrs) chkSrs.addEventListener('change', e => {
+      settings.srsEnabled = e.target.checked;
+      updateSrsUI(); commit();
+      if (e.target.checked) syncPetMemoryEvents();
+    });
+    const memoryBtn = $('#btn-open-memory');
+    if (memoryBtn) memoryBtn.addEventListener('click', openMemoryNotebook);
+    const petMemoryBtn = $('#btn-pet-memory');
+    if (petMemoryBtn) petMemoryBtn.addEventListener('click', openMemoryNotebook);
+    const noticeBtn = $('#btn-enable-srs-notice');
+    if (noticeBtn) noticeBtn.addEventListener('click', enableSrsNotifications);
     $('#inp-custom-title').addEventListener('input', e => { settings.custom.title = e.target.value; commit(true); });
     $('#inp-custom-footer').addEventListener('input', e => { settings.custom.footer = e.target.value; commit(true); });
 
@@ -186,13 +542,13 @@
       syncDependentUI(); commit();
     }));
 
-    $('#btn-refresh').addEventListener('click', async () => { await refresh(true); toast('换了一组新单词 ✨'); });
-    $('#btn-download').addEventListener('click', downloadPNG);
+    const refreshTop = $('#btn-refresh'); if (refreshTop) refreshTop.addEventListener('click', async () => { await refresh(true); toast('已换一组新单词'); });
+    const downloadTop = $('#btn-download'); if (downloadTop) downloadTop.addEventListener('click', downloadPNG);
     $('#btn-live').addEventListener('click', enterLive);
     $('#btn-exit-live').addEventListener('click', exitLive);
-    $('#btn-set-wallpaper').addEventListener('click', setDesktopWallpaper);
+    const wallpaperTop = $('#btn-set-wallpaper'); if (wallpaperTop) wallpaperTop.addEventListener('click', setDesktopWallpaper);
     // preview meta-bar duplicates (快速出壁纸，滚到中部也能直接操作)
-    const r2 = $('#btn-refresh2'); if (r2) r2.addEventListener('click', async () => { await refresh(true); toast('换了一组新单词 ✨'); });
+    const r2 = $('#btn-refresh2'); if (r2) r2.addEventListener('click', async () => { await refresh(true); toast('已换一组新单词'); });
     const d2 = $('#btn-download2'); if (d2) d2.addEventListener('click', downloadPNG);
     const w2 = $('#btn-set-wallpaper2'); if (w2) w2.addEventListener('click', setDesktopWallpaper);
     // import modal (button-triggered popup)
@@ -206,6 +562,10 @@
     const closeLibrary = $('#btn-close-library');
     if (closeLibrary && libraryModal) closeLibrary.addEventListener('click', closeLibraryBrowser);
     if (libraryModal) libraryModal.addEventListener('click', e => { if (e.target === libraryModal) closeLibraryBrowser(); });
+    const memoryModal = $('#memory-modal');
+    const closeMemory = $('#btn-close-memory');
+    if (closeMemory) closeMemory.addEventListener('click', closeMemoryNotebook);
+    if (memoryModal) memoryModal.addEventListener('click', e => { if (e.target === memoryModal) closeMemoryNotebook(); });
     const librarySearch = $('#library-search');
     if (librarySearch) librarySearch.addEventListener('input', renderLibraryWordList);
     const markVisibleKnown = $('#btn-mark-visible-known');
@@ -221,22 +581,18 @@
       if (e.key !== 'Escape') return;
       if (modal && !modal.hidden) modal.hidden = true;
       if (libraryModal && !libraryModal.hidden) closeLibraryBrowser();
+      if (memoryModal && !memoryModal.hidden) closeMemoryNotebook();
     });
-    $('#btn-companion').addEventListener('click', enableCompanion);
+    $('#btn-companion').addEventListener('click', handleCompanionAction);
     const companionTop = $('#btn-companion-top');
     if (companionTop) companionTop.addEventListener('click', enableCompanion);
     const petBtn = $('#btn-pet-toggle');
     if (petBtn) petBtn.addEventListener('click', togglePet);
-    const petPrev = $('#btn-pet-prev');
-    if (petPrev) petPrev.addEventListener('click', () => petSwitch(-1));
-    const petNext = $('#btn-pet-next');
-    if (petNext) petNext.addEventListener('click', () => petSwitch(1));
     const dl = $('#btn-companion-dl');
     if (dl) dl.addEventListener('click', e => { e.preventDefault(); downloadCompanion(); });
     const petDock = $('#btn-pet-dock');
-    if (petDock) petDock.addEventListener('click', () => petOn ? togglePet() : enableCompanion());
-    const petDockNext = $('#btn-pet-dock-next');
-    if (petDockNext) petDockNext.addEventListener('click', () => petSwitch(1));
+    // 入口始终留在 8770 工作台；根据本机状态分发为启动、召唤/隐藏或下载。
+    if (petDock) petDock.addEventListener('click', handleCompanionAction);
 
     syncCompanionButton();
 
@@ -245,6 +601,102 @@
     bindBgPhoto();
     bindWordInspector();
     bindDrag();
+  }
+
+  /* ---------- ordered module layout ---------- */
+  function moduleColumns() { return { left: $('.panel-left .panel-col'), right: $('.panel-right .panel-col') }; }
+  function normalizeModuleLayout(saved) {
+    const valid = new Set(MODULE_DEFAULTS.left.concat(MODULE_DEFAULTS.right));
+    const result = { left: [], right: [] }, used = new Set();
+    ['left', 'right'].forEach(side => {
+      (saved && Array.isArray(saved[side]) ? saved[side] : []).forEach(id => {
+        if (valid.has(id) && !used.has(id)) { result[side].push(id); used.add(id); }
+      });
+    });
+    ['left', 'right'].forEach(side => MODULE_DEFAULTS[side].forEach(id => {
+      if (!used.has(id)) { result[side].push(id); used.add(id); }
+    }));
+    return result;
+  }
+  function applyModuleLayout(saved) {
+    const columns = moduleColumns(), layout = normalizeModuleLayout(saved);
+    ['left', 'right'].forEach(side => layout[side].forEach(id => {
+      const card = document.getElementById(id); if (card && columns[side]) columns[side].appendChild(card);
+    }));
+  }
+  function saveModuleLayout() {
+    const columns = moduleColumns(), layout = { left: [], right: [] };
+    ['left', 'right'].forEach(side => {
+      if (!columns[side]) return;
+      layout[side] = Array.from(columns[side].querySelectorAll(':scope > .module-card')).map(card => card.id);
+    });
+    window.Store.write('moduleLayout', layout);
+  }
+  function toggleModuleEditing(force) {
+    moduleEditing = force == null ? !moduleEditing : !!force;
+    document.body.classList.toggle('layout-editing', moduleEditing);
+    const edit = $('#btn-layout-edit'), reset = $('#btn-layout-reset');
+    if (edit) edit.textContent = moduleEditing ? '✓ 完成摆放' : '↕️ 整理模块';
+    if (reset) reset.hidden = !moduleEditing;
+    if (!moduleEditing) saveModuleLayout();
+  }
+  function setModuleDropTarget(container, clientY) {
+    if (!draggedModule || !container) return;
+    const cards = Array.from(container.querySelectorAll(':scope > .module-card')).filter(card => card !== draggedModule);
+    const before = cards.find(card => clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2);
+    if (before) container.insertBefore(draggedModule, before); else container.appendChild(draggedModule);
+  }
+  function moduleColumnAt(clientX, clientY) {
+    return document.elementsFromPoint(clientX, clientY)
+      .map(node => node.closest && node.closest('.panel-col'))
+      .find(Boolean) || null;
+  }
+  function finishModuleDrag() {
+    if (!draggedModule) return;
+    draggedModule.classList.remove('layout-dragging');
+    draggedModule = null;
+    $$('.panel-col').forEach(col => col.classList.remove('layout-drop-target'));
+    saveModuleLayout();
+  }
+  function initModuleLayout() {
+    applyModuleLayout(window.Store.read('moduleLayout', null));
+    const movable = new Set(MODULE_DEFAULTS.left.concat(MODULE_DEFAULTS.right));
+    $$('.module-card').filter(card => movable.has(card.id)).forEach(card => {
+      const grip = document.createElement('button');
+      grip.type = 'button'; grip.className = 'module-grip'; grip.title = '按住拖动整理此模块'; grip.setAttribute('aria-label', '按住拖动整理模块'); grip.textContent = '⠿';
+      const beginDrag = (event, isTouch) => {
+        if (!moduleEditing || (!isTouch && event.button !== 0)) return;
+        event.preventDefault(); event.stopPropagation();
+        draggedModule = card; card.classList.add('layout-dragging');
+        const move = moveEvent => {
+          const point = isTouch ? moveEvent.touches[0] : moveEvent;
+          if (!point) return;
+          const column = moduleColumnAt(point.clientX, point.clientY);
+          if (!column) return;
+          $$('.panel-col').forEach(col => col.classList.toggle('layout-drop-target', col === column));
+          setModuleDropTarget(column, point.clientY);
+        };
+        const end = () => {
+          document.removeEventListener(isTouch ? 'touchmove' : 'mousemove', move);
+          finishModuleDrag();
+        };
+        document.addEventListener(isTouch ? 'touchmove' : 'mousemove', move, { passive: false });
+        document.addEventListener(isTouch ? 'touchend' : 'mouseup', end, { once: true });
+        if (isTouch) document.addEventListener('touchcancel', end, { once: true });
+      };
+      // 使用 document 级 mousemove，避免浏览器在离开小把手后丢失拖动事件；触控也可用。
+      grip.addEventListener('mousedown', event => beginDrag(event, false));
+      grip.addEventListener('touchstart', event => beginDrag(event, true), { passive: false });
+      // closed <details> 会隐藏 summary 以外的子元素，把把手放入 summary 才能始终可抓。
+      const summary = card.tagName === 'DETAILS' ? card.querySelector('summary') : null;
+      if (summary) {
+        grip.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); });
+        summary.appendChild(grip);
+      } else card.appendChild(grip);
+    });
+    const edit = $('#btn-layout-edit'), reset = $('#btn-layout-reset');
+    if (edit) edit.addEventListener('click', () => toggleModuleEditing());
+    if (reset) reset.addEventListener('click', () => { applyModuleLayout(MODULE_DEFAULTS); saveModuleLayout(); toast('已恢复默认模块布局'); });
   }
 
   function clampInt(v, min, max, dflt) { const n = parseInt(v, 10); return isNaN(n) ? dflt : Math.max(min, Math.min(max, n)); }
@@ -283,6 +735,7 @@
         renderLibraryCards();
         syncDependentUI();
         commit();
+        syncCompanionLearningContext();
         toast('已选中「' + lib.name + '」；可点击“浏览并初筛”查看全部词条');
       });
       box.appendChild(card);
@@ -368,6 +821,7 @@
         refresh(false);
         renderLibraryCards();
         renderLibraryWordList();
+        syncCompanionLearningContext();
       });
       label.append(checkbox, document.createTextNode('已掌握'));
       item.append(main, label);
@@ -384,6 +838,7 @@
     refresh(false);
     renderLibraryCards();
     renderLibraryWordList();
+    syncCompanionLearningContext();
     toast(`已筛除 ${visible.length} 个已掌握词`);
   }
 
@@ -393,6 +848,7 @@
     refresh(false);
     renderLibraryCards();
     renderLibraryWordList();
+    syncCompanionLearningContext();
     toast('已恢复该词书的全部词条');
   }
 
@@ -407,7 +863,17 @@
       b.title = t.name;
       b.style.background = `linear-gradient(135deg, ${t.bg} 0%, ${t.accentSoft} 60%, ${t.accent} 100%)`;
       b.innerHTML = `<span>${t.name}</span>`;
-      b.addEventListener('click', () => { settings.theme = key; renderThemeSwatches(); commit(); });
+      b.addEventListener('click', () => {
+        settings.theme = key;
+        // The Liquid wallpaper opens as a clean material. Patterns remain
+        // available and can still be deliberately selected afterwards.
+        if (key === 'liquid') {
+          settings.bgPattern = 'none';
+          renderPatternPicker();
+        }
+        renderThemeSwatches();
+        commit();
+      });
       box.appendChild(b);
     });
   }
@@ -458,7 +924,7 @@
     inp.addEventListener('input', e => { settings.inkOverride = e.target.value; commit(true); });
     inp.addEventListener('change', () => renderInkPicker());
     wrap.appendChild(inp);
-    const plus = document.createElement('span'); plus.textContent = '🎨';
+    const plus = document.createElement('span'); plus.textContent = '色';
     wrap.appendChild(plus);
     box.appendChild(wrap);
   }
@@ -553,7 +1019,7 @@
       window.Store.saveCustomWords([]);
       renderLibraryCards();
       toast('已清空');
-      commit();
+      commit(); syncCompanionLearningContext();
     });
 
     // ready-made pack downloads (sample CSV templates)
@@ -586,6 +1052,7 @@
     settings.library = 'custom';
     renderLibraryCards();
     syncDependentUI();
+    syncCompanionLearningContext();
   }
 
   /* sample CSV packs for users to download, fill in, and re-import */
@@ -658,10 +1125,12 @@
       const fy = (e.clientY - rect0.top) / rect0.height;
       const wordIndex = hitTestWord(fx, fy);
       if (wordIndex != null && !e.shiftKey) {
+        // 壁纸预览只负责选中并调整整组样式；“记住”只在桌面小词灵词卡发生。
         selectWord(wordIndex);
         e.preventDefault();
         return;
       }
+      // Shift 是明确的“移动单词组”手势，即使从词卡上按下也继续进入拖动逻辑。
       // 使用照片时，拖动预览空白处调整 cover 裁切位置；按住 Shift 仍可拖动文字/提醒块。
       if (settings.bgImage && bgImageEl && !e.shiftKey) {
         drag = { kind: 'background', startX: fx, startY: fy,
@@ -859,31 +1328,11 @@
     lastSel = sel;
     syncWordScaleAvailability();
     updateSrsUI();
-    // 复习组这次被「看过了」→ 推进到下一阶段（下次到期按更长间隔）
-    if (sel.words && sel.words._reviewKeys && window.Review) {
-      sel.words._reviewKeys.forEach(k => window.Review.advanceStage(settings.library, k));
-    }
   }
 
-  /* 把「到期的复习组」混进当前壁纸单词：到期组排前面，新词补足数量。 */
+  /* 正式检测只在记忆本进行；普通壁纸始终展示新词，避免提前泄露到期词的中文答案。 */
   function mixReviews(sel) {
-    if (!settings.srsEnabled || !window.Review) return sel.words;
-    const fresh = sel.words || [];
-    if (settings.library === 'custom') return fresh;   // 我的词库不排复习
-    const count = settings.layout === 'poster' ? 1 : settings.wordsPerGroup;
-    let due = window.Review.dueGroups(settings.library).map(g => g.words);
-    if (!due.length) return fresh;
-    const freshKeys = new Set(fresh.map(w => window.Review.wordKey(w)));
-    const known = window.Store.getKnownWords(settings.library);
-    const dueWords = [];
-    due.forEach(words => words.forEach(w => {
-      if (!freshKeys.has(window.Review.wordKey(w)) && !known.has(window.Words.wordKey(w))) dueWords.push(w);
-    }));
-    if (!dueWords.length) return fresh;
-    const mixed = dueWords.slice(0, count);
-    mixed._reviewKeys = due.map(ws => window.Review.groupKeyFor(ws));   // 这些组「刚被复习」
-    for (const w of fresh) { if (mixed.length >= count) break; mixed.push(w); }
-    return mixed;
+    return sel.words || [];
   }
 
   /* Scale the preview to fill the stage width normally; while dragging, shrink
@@ -893,7 +1342,8 @@
     const stage = $('#preview-stage');
     let s = Math.min(1, (stage.clientWidth - 24) / canvas.width);
     // 也让预览高度适配视口：整页一屏看全，不用上下滚动
-    const dockH = $('#pet-dock') ? 78 : 0;
+    const dock = $('#pet-dock');
+    const dockH = dock && !dock.hidden ? dock.getBoundingClientRect().height + 10 : 0;
     const availH = window.innerHeight - (fitToScreen ? 150 : 195) - dockH;
     if (availH > 120) s = Math.min(s, Math.max(0.14, availH / canvas.height));
     disp.style.width = Math.round(canvas.width * s) + 'px';
@@ -926,9 +1376,10 @@
   }
 
   /* ---------- 记忆复习 (SRS) ---------- */
-  let lastSel = null;          // 最近渲染的选择（「记好了」要拿当前这组词）
+  let lastSel = null;          // 最近渲染的选择（点词记住 / 整组确认都要拿当前词）
   let srsTimer = null;         // 倒计时 / 到期闹钟 ticker
-  let srsWasDue = false;       // 上次是否处于「到期」状态（用于到期瞬间提醒一次）
+  const srsDueKeysByLibrary = Object.create(null); // 每个词库分别记录已提醒的到期词
+  let petMemorySyncing = false;
 
   function fmtCountdown(ms) {
     if (ms <= 0) return '到点了';
@@ -943,22 +1394,33 @@
 
   function updateSrsUI() {
     const card = $('.srs-card'); if (!card || !window.Review) return;
-    const enabled = !!settings.srsEnabled && settings.library !== 'custom';
-    $('#btn-learned').disabled = !enabled;
+    const enabled = !!settings.srsEnabled;
+    const openBtn = $('#btn-open-memory'); if (openBtn) openBtn.disabled = false;
+    const petOpenBtn = $('#btn-pet-memory'); if (petOpenBtn) petOpenBtn.disabled = false;
     const st = window.Review.stats(settings.library);
     $('#srs-status').innerHTML = enabled
-      ? `已记 <b>${st.total}</b> 组 · 待复习 <b>${st.pending}</b> 组 · 记牢 <b>${st.done}</b> 组`
-      : (settings.library === 'custom' ? '我的词库不参与记忆轮换' : '已关闭记忆轮换');
+      ? `首轮 <b>${st.total}</b> 词 · 复习中 <b>${st.pending}</b> 词 · 已巩固 <b>${st.done}</b> 词${st.failures ? ` · 遗忘 <b>${st.failures}</b> 次` : ''}`
+      : '已关闭记忆轮换';
+    renderSrsRecords(enabled);
     const cd = $('#srs-countdown');
-    if (!enabled) { cd.hidden = true; return; }
-    const due = window.Review.dueGroups(settings.library);
+    const petBadge = $('#pet-memory-badge');
+    if (!enabled) { cd.hidden = true; if (petBadge) petBadge.hidden = true; return 0; }
+    const due = window.Review.dueWords(settings.library);
+    if (petBadge) {
+      petBadge.textContent = String(due.length);
+      petBadge.hidden = !due.length;
+      petBadge.setAttribute('aria-label', `${due.length} 个词到期`);
+    }
+    const previousDue = srsDueKeysByLibrary[settings.library] || new Set();
+    const currentDue = new Set(due.map(item => window.Review.wordKey(item.word)));
+    const newlyDue = due.filter(item => !previousDue.has(window.Review.wordKey(item.word))).length;
+    srsDueKeysByLibrary[settings.library] = currentDue;
     const soonest = window.Review.soonestDue(settings.library);
     if (due.length) {
       cd.hidden = false; cd.classList.add('due');
-      $('#srs-cd-time').textContent = `${due.length} 组到点，正在复习`;
-      if (!srsWasDue) { srsWasDue = true; toast(`⏰ 复习时间到！${due.length} 组单词回来复习啦`); }
+      $('#srs-cd-time').textContent = `${due.length} 个词到点，打开记忆本复习`;
+      if (newlyDue) notifySrsDue(newlyDue);
     } else {
-      srsWasDue = false;
       if (soonest) {
         cd.hidden = false; cd.classList.remove('due');
         $('#srs-cd-time').textContent = fmtCountdown(soonest - Date.now());
@@ -966,32 +1428,161 @@
         cd.hidden = true;
       }
     }
+    return newlyDue;
   }
 
-  async function onLearned() {
-    if (!window.Review || !settings.srsEnabled) return;
-    if (settings.library === 'custom') { toast('我的词库不参与记忆轮换'); return; }
-    const words = (lastSel && lastSel.words) || [];
-    if (!words.length) { toast('当前没有单词可记'); return; }
-    const { cursor } = window.Review.learn(settings.library, words);
-    // 轮换：推进游标后重洗一组新词；同时尽力把桌面宠物也切到下一组
-    await refresh(true);
-    try { fetch('next.php', { method: 'POST' }).catch(() => {}); } catch (e) {}
+  function renderSrsRecords(enabled) {
+    const box = $('#srs-records'); if (!box || !window.Review) return;
+    box.innerHTML = '';
+    if (!enabled) return;
+    const records = window.Review.recentWords(settings.library, 4);
+    if (!records.length) { box.innerHTML = '<div class="srs-record empty">在桌面小词灵点词卡完成首轮后，单词会进入这里的复习周期。</div>'; return; }
+    records.forEach(item => {
+      const row = document.createElement('div'); row.className = 'srs-record';
+      const word = document.createElement('b'); word.textContent = item.word.word;
+      const stage = document.createElement('em'); stage.textContent = item.stage >= window.Review.INTERVALS_MIN.length ? '已巩固' : `第 ${item.stage + 1} 轮${item.failCount ? ` · 遗忘 ${item.failCount}` : ''}`;
+      const due = document.createElement('span'); due.textContent = item.due ? fmtCountdown(item.due - Date.now()) : '完成';
+      row.append(word, stage, due); box.appendChild(row);
+    });
+  }
+
+  function openMemoryNotebook() {
+    if (!window.Review) return;
+    if (!settings.srsEnabled) {
+      settings.srsEnabled = true;
+      const toggle = $('#chk-srs'); if (toggle) toggle.checked = true;
+      saveSettings(); updateSrsUI(); syncPetMemoryEvents();
+      toast('已开启艾宾浩斯记忆复习');
+    }
+    const modal = $('#memory-modal'); if (!modal) return;
+    renderMemoryNotebook(); modal.hidden = false;
+  }
+  function closeMemoryNotebook() { const modal = $('#memory-modal'); if (modal) modal.hidden = true; }
+
+  function openRequestedMemoryNotebook() {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('openMemory') !== '1') return;
+    url.searchParams.delete('openMemory');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    openMemoryNotebook();
+  }
+  function renderMemoryNotebook() {
+    const list = $('#memory-notebook-list'), summary = $('#memory-summary');
+    if (!list || !summary || !window.Review) return;
+    const active = window.Review.activeWords(settings.library);
+    const mastered = window.Review.masteredWords(settings.library);
+    const all = active.concat(mastered);
+    const now = Date.now();
+    const due = active.filter(item => item.due && item.due <= now);
     const st = window.Review.stats(settings.library);
-    toast(`✅ 已记下这组（共 ${st.total} 组）· 20 分钟后回来复习`);
+    summary.innerHTML = `<span class="memory-pill">本轮到期 <b>${due.length}</b> 词</span><span class="memory-pill">复习中 <b>${st.pending}</b> 词</span><span class="memory-pill">已巩固 <b>${st.done}</b> 词</span><span class="memory-pill memory-pill-forgot">遗忘记录 <b>${st.failures}</b> 次</span>`;
+    list.innerHTML = '';
+    if (!all.length) { list.innerHTML = '<div class="memory-empty">还没有记忆记录。先在桌面小词灵点击词卡完成首轮学习，再回到这里复习。</div>'; return; }
+    all.sort((a, b) => (a.stage >= window.Review.INTERVALS_MIN.length) - (b.stage >= window.Review.INTERVALS_MIN.length) || (a.due || Infinity) - (b.due || Infinity)).forEach(item => {
+      const isMastered = item.stage >= window.Review.INTERVALS_MIN.length;
+      const isDue = !!(item.due && item.due <= now);
+      const card = document.createElement('article');
+      card.className = 'memory-entry' + (isDue ? ' due' : '') + (isMastered ? ' mastered' : '');
+      const stage = isMastered ? `已完成全部周期 · 共复习 ${item.reviewCount || 0} 次` : `第 ${item.stage + 1} 轮${isDue ? ' · 先回想，再选择结果' : ' · ' + fmtCountdown(item.due - now)}`;
+      const meaningClass = isMastered ? 'memory-meaning' : 'memory-meaning locked';
+      const meaningText = isMastered ? escapeHTML((item.word.pos ? item.word.pos + ' ' : '') + (item.word.meaning || '')) : '中文释义已遮盖';
+      card.innerHTML = `<b>${escapeHTML(item.word.word)}</b><span class="memory-meta">${stage}</span><span class="${meaningClass}" aria-label="${isMastered ? '已巩固释义' : '作答后显示中文释义'}">${meaningText}</span>`;
+      if (isDue) {
+        const actions = document.createElement('div'); actions.className = 'memory-actions';
+        actions.innerHTML = '<button type="button" class="memory-answer forgot">还没记住</button><button type="button" class="memory-answer remembered">记住了</button>';
+        actions.querySelector('.forgot').addEventListener('click', () => answerNotebookWord(item, card, false));
+        actions.querySelector('.remembered').addEventListener('click', () => answerNotebookWord(item, card, true));
+        card.appendChild(actions);
+      }
+      list.appendChild(card);
+    });
+  }
+  function answerNotebookWord(item, card, remembered) {
+    card.querySelectorAll('.memory-answer').forEach(button => { button.disabled = true; });
+    const result = window.Review.reviewWord(settings.library, item.word, remembered);
+    if (!result || result.action === 'missing' || result.action === 'early') { toast('这张词卡还没到复习时间'); renderMemoryNotebook(); return; }
+    const meaning = card.querySelector('.memory-meaning');
+    if (meaning) { meaning.classList.remove('locked'); meaning.textContent = (item.word.pos ? item.word.pos + ' ' : '') + (item.word.meaning || ''); }
+    card.classList.remove('due'); card.classList.add('answered', remembered ? 'remembered' : 'forgotten');
+    const actions = card.querySelector('.memory-actions'); if (actions) actions.remove();
+    const meta = card.querySelector('.memory-meta');
+    if (meta) meta.textContent = result.action === 'mastered' ? '全部周期完成 · 已真正记住' : (remembered ? '本轮通过 · 已安排下一周期' : '已记录没记住 · 20 分钟后重新检测');
+    const resultTag = document.createElement('span'); resultTag.className = 'memory-result'; resultTag.textContent = remembered ? '✓ 记住了' : '↺ 还没记住'; card.appendChild(resultTag);
+    toast(remembered ? `${item.word.word}：本轮通过，中文释义已显示` : `${item.word.word}：已记录遗忘，从第一周期重新开始`);
     updateSrsUI();
+    // 作答后的中文一直保留，直到用户关闭或重新打开记忆本；不再定时遮回去。
+  }
+
+  function escapeHTML(value) { const n = document.createElement('span'); n.textContent = value || ''; return n.innerHTML; }
+
+
+  async function enableSrsNotifications() {
+    if (!('Notification' in window)) { toast('当前浏览器不支持系统提醒，会继续使用页面弹提醒'); return; }
+    if (Notification.permission === 'granted') { toast('系统复习提醒已开启'); return; }
+    if (Notification.permission === 'denied') { toast('系统提醒已被浏览器关闭，请在浏览器网站设置中允许通知'); return; }
+    const permission = await Notification.requestPermission();
+    toast(permission === 'granted' ? '系统复习提醒已开启 ✓' : '未允许系统提醒，仍会在页面内提醒');
+  }
+
+  function notifySrsDue(count) {
+    const message = `有 ${count} 个单词到复习时间了，点击词卡确认本轮记忆。`;
+    toast('复习 · ' + message);
+    if ('Notification' in window && Notification.permission === 'granted') new Notification('WordPaper · 复习提醒', { body: message });
   }
 
   function startSrsTicker() {
     clearInterval(srsTimer);
     srsTimer = setInterval(() => {
       if (!settings.srsEnabled) return;
-      const beforeDue = window.Review ? window.Review.dueGroups(settings.library).length : 0;
-      updateSrsUI();
-      const afterDue = window.Review ? window.Review.dueGroups(settings.library).length : 0;
-      // 有新到期：重绘壁纸把复习组顶上来（闹钟提醒已在 updateSrsUI 里弹）
-      if (afterDue > 0 && beforeDue === 0) refresh(false);
+      const newlyDue = updateSrsUI();
+      // 每一批新增到期词都重绘一次；不再用同一 tick 内两个必然相等的计数比较。
+      if (newlyDue > 0) refresh(false);
     }, 30000);
+    setInterval(syncPetMemoryEvents, 15000);
+  }
+
+  async function syncPetMemoryEvents() {
+    if (petMemorySyncing || !window.Review || !settings || !settings.srsEnabled) return;
+    petMemorySyncing = true;
+    const storedCursor = window.Store.read('petMemoryCursor', {});
+    const cursor = storedCursor && typeof storedCursor === 'object' ? storedCursor : { streamId: '', lastId: Number(storedCursor) || 0 };
+    try {
+      const r = await fetch(`pet-memory-events.json?after=${Number(cursor.lastId) || 0}&stream=${encodeURIComponent(cursor.streamId || '')}`, { cache: 'no-store' });
+      if (!r.ok) return;
+      const data = await r.json(); const events = Array.isArray(data.events) ? data.events : [];
+      const snapshot = data.reset && Array.isArray(data.snapshot) ? data.snapshot : [];
+      snapshot.concat(events).forEach(event => {
+        if (event.word && event.library) window.Review.rememberWord(event.library, event.word);
+      });
+      window.Store.write('petMemoryCursor', { streamId: String(data.streamId || ''), lastId: Number(data.lastId) || 0 });
+      if (events.length || snapshot.length) {
+        updateSrsUI(); if ($('#memory-modal') && !$('#memory-modal').hidden) renderMemoryNotebook();
+        toast(data.reset ? `已从小词灵恢复 ${snapshot.length} 个首轮记录` : `小词灵已记录 ${events.length} 个首轮词并自动补位`);
+      }
+    } catch (e) { /* 独立网页或伴侣未运行时静默跳过 */ }
+    finally { petMemorySyncing = false; }
+  }
+
+  let petContextTimer = null;
+  function syncCompanionLearningContext() {
+    clearTimeout(petContextTimer);
+    petContextTimer = setTimeout(async () => {
+      if (!settings) return;
+      try {
+        await fetch('pet-sync.php', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            library: settings.library, wordsPerGroup: settings.wordsPerGroup,
+            uiTheme: settings.uiTheme,
+            wallpaperTheme: settings.theme,
+            bgPattern: settings.bgPattern,
+            webOrigin: window.location.origin,
+            knownWords: Array.from(window.Store.getKnownWords(settings.library)),
+            customWords: settings.library === 'custom' ? window.Store.getCustomWords() : undefined,
+          }),
+        });
+      } catch (e) { /* 伴侣未运行时静默跳过 */ }
+    }, 180);
   }
 
   function downloadPNG() {
@@ -1001,7 +1592,7 @@
     a.download = `wallpaper-${settings.layout}-${w}x${h}-${window.Words.dateKey(new Date())}.png`;
     a.href = window.Render.toPNG(currentCanvas);
     document.body.appendChild(a); a.click(); a.remove();
-    toast('PNG 已下载，去设为壁纸吧 🖼️');
+    toast('PNG 已下载，可以设为壁纸了');
   }
 
   /* ---------- desktop companion ---------- */
@@ -1026,6 +1617,31 @@
     window.location.href = 'companion.zip';
   }
 
+  function setPetDockState(state, status, label, disabled) {
+    const dock = $('#pet-dock');
+    const dockBtn = $('#btn-pet-dock');
+    const dockStatus = $('#pet-dock-status');
+    // 小词灵是工作台能力，不因公网模式或账号归属冲突而从界面消失。
+    if (dock) {
+      dock.hidden = false;
+      dock.dataset.state = state;
+    }
+    if (dockStatus) dockStatus.textContent = status;
+    if (dockBtn) {
+      dockBtn.textContent = label;
+      dockBtn.disabled = Boolean(disabled);
+      dockBtn.dataset.action = companionAction;
+      dockBtn.setAttribute('aria-pressed', state === 'active' ? 'true' : 'false');
+    }
+  }
+
+  function handleCompanionAction() {
+    if (companionAction === 'control') return togglePet();
+    if (companionAction === 'download') return downloadCompanion();
+    if (companionAction === 'switch-account') return window.Store.logout();
+    return enableCompanion();
+  }
+
   /* 一键启用：告诉本机 server 直接把桌面伴侣拉起来（零下载、零解压、零双击）。
    * 如果页面本身由 companion 提供（说明它已在跑），或 /companion/start 探测到它，
    * 按钮就只显示"运行中"。*/
@@ -1040,7 +1656,8 @@
       if (!j.ok) { toast('启动失败：' + (j.error || '未知错误')); return; }
       if (j.already) toast('桌面伴侣已在运行 ✓');
       else toast('桌面伴侣已启动 ✓ 桌面壁纸已换好，角落的小窗也开了');
-      syncCompanionButton();
+      await syncCompanionButton();
+      syncCompanionLearningContext();
     } catch (e) {
       toast('启动失败：' + e.message + '（请用 node server.js 打开本站）');
     } finally {
@@ -1050,24 +1667,53 @@
     }
   }
 
-  function syncCompanionButton() {
+  async function syncCompanionButton() {
     const btn = $('#btn-companion');
-    fetch('status.json').then(r => r.ok ? r.json() : Promise.reject()).then(j => {
+    setPetDockState('checking', '正在检查这台 Mac 上的小词灵…', '检查中…', true);
+    try {
+      const response = await fetch('status.json');
+      if (!response.ok) throw new Error('status unavailable');
+      const j = await response.json();
+      if (j && j.available === false) {
+        petOn = false;
+        const isPublic = j.mode === 'public';
+        companionAction = isPublic ? 'download' : 'switch-account';
+        if (btn) {
+          btn.textContent = isPublic ? '下载 Mac 桌面伴侣' : '切换到绑定账号';
+          btn.disabled = false;
+        }
+        setPetDockState(
+          'unavailable',
+          isPublic
+            ? '网页端已保留小词灵入口；下载 Mac 独立版后即可常驻桌面'
+            : '本机小词灵已绑定另一个账号；切换到绑定账号即可安全召唤',
+          isPublic ? '下载 Mac 版 ↓' : '切换账号 →',
+          false
+        );
+        const hint = $('#pet-hint');
+        if (hint) hint.textContent = isPublic
+          ? '公网服务只同步账号数据；桌面伴侣需安装在自己的 Mac 上。'
+          : '为保护不同账号的学习记录，当前账号不能直接控制已绑定的小词灵。';
+        return;
+      }
       // 伴侣页（8771）给 config；主 server（8770）探测到伴侣后给 companion:true
       const running = !!(j && (j.config || j.companion));
+      companionAction = running ? 'control' : 'start';
       if (running) {
-        btn.textContent = '✅ 桌面伴侣运行中';
-        btn.disabled = true;
+        if (btn) { btn.textContent = '桌面伴侣运行中'; btn.disabled = true; }
         const topBtn = $('#btn-companion-top');
-        if (topBtn) { topBtn.textContent = '✅ 桌面宠物已开启'; topBtn.disabled = true; }
-        const dockBtn = $('#btn-pet-dock');
-        if (dockBtn) { dockBtn.textContent = j.pet ? '🙈 隐藏小词灵' : '🐾 召唤小词灵'; dockBtn.disabled = false; }
-        const dockStatus = $('#pet-dock-status');
-        if (dockStatus) dockStatus.textContent = j.pet ? '小词灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小词灵出现';
-        const dockNext = $('#btn-pet-dock-next'); if (dockNext) dockNext.hidden = false;
+        if (topBtn) { topBtn.textContent = '桌面宠物已开启'; topBtn.disabled = true; }
         syncPetControls(j);
+      } else {
+        petOn = false;
+        if (btn) { btn.textContent = '一键启用桌面伴侣'; btn.disabled = false; }
+        setPetDockState('ready', '已整合到工作台，点一下把今日单词带到 Mac 桌面', '启动小词灵 ↗', false);
       }
-    }).catch(() => {});
+    } catch (_) {
+      companionAction = 'start';
+      if (btn) { btn.textContent = '一键启用桌面伴侣'; btn.disabled = false; }
+      setPetDockState('ready', '暂未连接桌面伴侣，点一下即可重新启动', '启动小词灵 ↗', false);
+    }
   }
 
   let petOn = false;
@@ -1076,40 +1722,42 @@
     if (!box) return;
     box.style.display = 'block';
     petOn = !!(j && j.pet);
+    companionAction = 'control';
     const btn = $('#btn-pet-toggle');
-    if (btn) btn.textContent = petOn ? '🙈 隐藏宠物' : '🐾 召唤宠物';
-    const dockBtn = $('#btn-pet-dock');
-    if (dockBtn) dockBtn.textContent = petOn ? '🙈 隐藏小词灵' : '🐾 召唤小词灵';
+    if (btn) btn.textContent = petOn ? '隐藏宠物' : '召唤宠物';
+    setPetDockState(
+      petOn ? 'active' : 'ready',
+      petOn ? '小词灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小词灵出现',
+      petOn ? '隐藏小词灵' : '召唤小词灵 ↗',
+      false
+    );
     const hint = $('#pet-hint');
-    if (hint) hint.textContent = '摸摸词灵换一组 · Shift＋单击回退 · 按住拖动 · 拖右下角 ⤡ 调大小';
-  }
-
-  async function petSwitch(dir) {
-    try {
-      const r = await fetch((dir > 0 ? 'next' : 'prev') + '.php', { method: 'POST' });
-      const j = await r.json();
-      if (j && j.ok) toast(dir > 0 ? '切到下一组词 ✓' : '回到上一组词 ✓');
-      else toast('切换失败');
-    } catch (e) { toast('切换失败：' + e.message); }
+    if (hint) hint.textContent = '点击词卡＝记住 · 按住空白处拖动 · 拖右下角 ⤡ 调大小';
   }
 
   async function togglePet() {
     const btn = $('#btn-pet-toggle');
-    if (!btn) return;
-    btn.disabled = true;
+    const dockBtn = $('#btn-pet-dock');
+    [btn, dockBtn].filter(Boolean).forEach(button => { button.disabled = true; });
     try {
       const action = petOn ? 'close' : 'open';
       const r = await fetch('pet.php?action=' + action, { method: 'POST' });
       const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || '桌面伴侣没有响应');
       petOn = !!j.pet;
-      btn.textContent = petOn ? '🙈 隐藏宠物' : '🐾 召唤宠物';
-      const dockBtn = $('#btn-pet-dock');
-      if (dockBtn) dockBtn.textContent = petOn ? '🙈 隐藏小词灵' : '🐾 召唤小词灵';
-      const dockStatus = $('#pet-dock-status');
-      if (dockStatus) dockStatus.textContent = petOn ? '小词灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小词灵出现';
-      toast(petOn ? '小词灵已召唤 ✓（单击换词，Shift+单击回退）' : '小词灵已隐藏');
-    } catch (e) { toast('操作失败：' + e.message); }
-    btn.disabled = false;
+      if (btn) btn.textContent = petOn ? '隐藏宠物' : '召唤宠物';
+      setPetDockState(
+        petOn ? 'active' : 'ready',
+        petOn ? '小词灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小词灵出现',
+        petOn ? '隐藏小词灵' : '召唤小词灵 ↗',
+        false
+      );
+      toast(petOn ? '小词灵已召唤 ✓（点击单词即可记住）' : '小词灵已隐藏');
+    } catch (e) {
+      toast('操作失败：' + e.message);
+      await syncCompanionButton();
+    }
+    [btn, dockBtn].filter(Boolean).forEach(button => { button.disabled = false; });
   }
 
   /* ---------- live (interactive) mode ---------- */
@@ -1217,6 +1865,46 @@
     t._t = setTimeout(() => t.classList.remove('show'), 2400);
   }
 
+  function bindPersistenceUI() {
+    const status = $('#sync-status');
+    const accountName = $('#account-name');
+    const legacyButton = $('#btn-import-legacy');
+    const setStatus = detail => {
+      if (!status) return;
+      const state = detail && detail.state || 'saved';
+      status.dataset.state = state;
+      status.textContent = state === 'saving' ? '保存中…'
+        : state === 'error' ? '未保存'
+        : state === 'conflict' ? '有冲突'
+        : '已同步';
+      if (detail && detail.message) status.title = detail.message;
+    };
+    window.addEventListener('wordpaper:sync-status', event => {
+      setStatus(event.detail);
+      if (event.detail && event.detail.message) toast(event.detail.message);
+    });
+    window.addEventListener('wordpaper:storage-warning', event => {
+      if (event.detail && event.detail.message) toast(event.detail.message);
+    });
+    window.addEventListener('wordpaper:legacy-available', () => {
+      if (legacyButton) legacyButton.hidden = false;
+    });
+    if (legacyButton) legacyButton.addEventListener('click', async () => {
+      if (!window.confirm('把这个浏览器里检测到的旧版 WordPaper 数据导入当前账号吗？当前账号中的同类数据会被替换。')) return;
+      legacyButton.disabled = true;
+      const imported = await window.Store.importLegacy();
+      if (imported) location.reload();
+      else { legacyButton.disabled = false; toast('旧数据尚未导入，请检查同步状态后重试'); }
+    });
+    const logout = $('#btn-logout');
+    if (logout) logout.addEventListener('click', () => window.Store.logout());
+    return () => {
+      const user = window.Store.currentUser();
+      if (accountName && user) accountName.textContent = user.username;
+      setStatus({ state: 'saved' });
+    };
+  }
+
   function seedOnce() {
     if (window.Store.getSeeded()) return;
     window.Reminders.save([
@@ -1236,20 +1924,38 @@
     });
   }
 
+  /* Liquid 主题的滑块进度条：按当前值更新 --pct，WebKit 轨道据此填充蓝色进度。 */
+  function syncRangeFill(input) {
+    const min = parseFloat(input.min) || 0, max = parseFloat(input.max) || 100, val = parseFloat(input.value);
+    input.style.setProperty('--pct', (((val - min) / (max - min)) * 100) + '%');
+  }
+  document.addEventListener('input', e => {
+    if (e.target instanceof HTMLInputElement && e.target.type === 'range') syncRangeFill(e.target);
+  }, { passive: true });
+
   async function init() {
+    const showAccount = bindPersistenceUI();
+    await window.Store.init();
+    showAccount();
     loadSettings();
     seedOnce();
     fillSizeSelect();
     applySettingsToUI();
+    $$('input[type="range"]').forEach(syncRangeFill);
     bindControls();
+    bindLiquidGlassMotion();
+    initModuleLayout();
     renderReminderUI();
     loadLibraryCounts();
     loadBgImage();
     await refresh(false);
+    openRequestedMemoryNotebook();
     startSrsTicker();
+    syncPetMemoryEvents();
+    syncCompanionLearningContext();
     window.Engine.markDay();
     if (!window.Store.read('dragHint', false)) {
-      setTimeout(() => toast('💡 按住预览里的单词块 / 提醒块 / 自定义文字，可以直接拖到任意位置'), 1500);
+      setTimeout(() => toast('按住预览里的单词块 / 提醒块 / 自定义文字，可以直接拖到任意位置'), 1500);
       window.Store.write('dragHint', true);
     }
     window.addEventListener('resize', () => { if (!liveActive) paintSelectionDebounced(); else paintLive(cyclePage); });

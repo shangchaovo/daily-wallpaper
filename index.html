@@ -1,10 +1,24 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-ui-theme="editorial">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>WordPaper · 把单词做成你的壁纸</title>
-<link rel="stylesheet" href="css/styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23f6efff'/%3E%3Cpath d='M12 17h9l5 25 6-19h7l6 19 5-25h9L50 48h-9l-6-18-6 18h-9z' fill='%23a176e5'/%3E%3C/svg%3E">
+<script>
+try {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('wp:uiTheme') || 'null'); } catch (_) {}
+  if (!['anime', 'editorial', 'liquid'].includes(saved)) {
+    try { saved = JSON.parse(localStorage.getItem('wp:settings') || '{}').uiTheme; } catch (_) {}
+  }
+  saved = ['anime', 'editorial', 'liquid'].includes(saved) ? saved : 'editorial';
+  document.documentElement.dataset.uiTheme = saved;
+  try { localStorage.setItem('wp:uiTheme', JSON.stringify(saved)); } catch (_) {}
+} catch (_) {}
+</script>
+<link rel="stylesheet" href="css/styles.css?v=20260812b">
+<link rel="stylesheet" href="css/ui-themes.css?v=20260812i">
 </head>
 <body>
 
@@ -25,10 +39,22 @@
         <p class="tagline">把每天的单词和小提醒，变成你的手机 / 电脑壁纸</p>
       </div>
     </div>
-    <div class="top-actions">
-      <button id="btn-set-wallpaper" class="btn soft" title="直接把当前壁纸设到 Mac 桌面">🖥️ 设为桌面壁纸</button>
-      <button id="btn-download" class="btn soft">⬇️ 下载 PNG</button>
-      <button id="btn-refresh" class="btn primary">✨ 换一组</button>
+    <div class="top-actions layout-actions">
+      <div id="ui-theme-picker" class="ui-theme-picker" role="group" aria-label="界面主题">
+        <span class="ui-theme-label">界面</span>
+        <button class="ui-theme-option" type="button" aria-label="糖果动漫主题" title="糖果动漫" aria-pressed="false" data-ui-theme="anime"><i class="theme-orb anime" aria-hidden="true"></i>糖果</button>
+        <button class="ui-theme-option" type="button" aria-label="校样工作室主题" title="校样工作室" aria-pressed="true" data-ui-theme="editorial"><i class="theme-orb editorial" aria-hidden="true"></i>校样</button>
+        <button class="ui-theme-option" type="button" aria-label="Liquid Glass 主题" title="Liquid Glass" aria-pressed="false" data-ui-theme="liquid"><i class="theme-orb liquid" aria-hidden="true"></i>Liquid</button>
+      </div>
+      <button id="btn-layout-edit" class="btn soft small" type="button">↕ 整理模块</button>
+      <button id="btn-layout-reset" class="btn ghost small" type="button" hidden>恢复默认</button>
+      <div class="account-tools" aria-label="账号与同步状态">
+        <span id="sync-status" class="sync-status" data-state="saved">已同步</span>
+        <span id="account-name" class="account-name"></span>
+        <button id="btn-import-legacy" class="account-link account-button legacy-import" type="button" hidden>迁移旧数据</button>
+        <a class="account-link" href="/api/export" download="wordpaper-backup.json">备份</a>
+        <button id="btn-logout" class="account-link account-button" type="button">退出</button>
+      </div>
     </div>
   </header>
 
@@ -37,10 +63,10 @@
     <aside class="panel panel-left">
       <div class="panel-col">
 
-      <section class="card">
+      <section id="module-library" class="card module-card">
         <div class="card-head">
-          <h2><span class="h-emoji">📚</span>选一个词库</h2>
-          <button id="btn-open-import" class="btn small soft" type="button">📥 导入</button>
+          <h2><span class="h-emoji" data-anime-icon="📚">库</span>选一个词库</h2>
+          <button id="btn-open-import" class="btn small soft" type="button">⇧ 导入</button>
         </div>
         <div id="library-cards" class="lib-cards"></div>
         <div class="selected-library-action" aria-live="polite">
@@ -61,8 +87,8 @@
         <p id="count-hint" class="input-hint">8 词起自动使用双列均分；多词数量会校正为偶数。</p>
       </section>
 
-      <section class="card">
-        <h2><span class="h-emoji">⏰</span>今天的小提醒</h2>
+      <section id="module-reminders" class="card module-card">
+        <h2><span class="h-emoji" data-anime-icon="⏰">时</span>今天的小提醒</h2>
         <div class="rem-input">
           <input id="inp-reminder" placeholder="比如：背单词 30 分钟">
           <input id="inp-reminder-time" type="time">
@@ -73,22 +99,23 @@
         <button id="btn-clear-done" class="btn small ghost">清除已完成</button>
       </section>
 
-      <section class="card srs-card">
+      <section id="module-srs" class="card srs-card module-card">
         <div class="card-head">
-          <h2><span class="h-emoji">🧠</span>记忆复习</h2>
+          <h2><span class="h-emoji" data-anime-icon="🧠">忆</span>记忆复习</h2>
           <label class="srs-switch"><input id="chk-srs" type="checkbox" checked><span>艾宾浩斯</span></label>
         </div>
-        <p class="hint">按<b>遗忘曲线</b>安排复习：记好的词会在 20分钟 / 1小时 / 1天… 后回到壁纸。</p>
-        <div id="srs-status" class="srs-status">已记 0 组 · 待复习 0 组</div>
-        <button id="btn-learned" class="btn primary srs-learn">✅ 这组记好了，换一组</button>
+        <p class="hint">在桌面小词灵点词卡完成首轮；该词会立即移出并自动补入新词，也可以前后翻页。到期后在记忆本完成后续轮次。</p>
+        <div id="srs-status" class="srs-status">已记 0 词 · 待复习 0 词</div>
+        <div id="srs-records" class="srs-records" aria-live="polite"></div>
+        <button id="btn-open-memory" class="btn primary srs-learn" type="button">打开艾宾浩斯记忆本 →</button>
         <div id="srs-countdown" class="srs-countdown" hidden>
-          <span class="srs-cd-icon">⏰</span>
+          <span class="srs-cd-icon">时</span>
           <span class="srs-cd-text">下次复习 <b id="srs-cd-time">--:--</b></span>
         </div>
       </section>
 
-      <details class="card">
-        <summary><span class="h-emoji">🔁</span>自动与轮换</summary>
+      <details id="module-automation" class="card module-card">
+        <summary><span class="h-emoji" data-anime-icon="🔁">轮</span>自动与轮换</summary>
         <div class="card-body">
         <div class="checks">
           <label><input id="chk-daily" type="checkbox" checked> 每天自动换一组</label>
@@ -115,47 +142,55 @@
       <div class="preview-top">
         <span id="meta"></span>
         <div class="meta-actions">
-          <button id="btn-refresh2" class="btn primary small">✨ 换一组</button>
-          <button id="btn-download2" class="btn soft small">⬇️ 下载</button>
-          <button id="btn-set-wallpaper2" class="btn soft small">🖥️ 设壁纸</button>
+          <button id="btn-refresh2" class="btn primary small">换一组</button>
+          <button id="btn-download2" class="btn soft small">↓ 下载</button>
+          <button id="btn-set-wallpaper2" class="btn soft small">▣ 设壁纸</button>
         </div>
       </div>
-      <section id="pet-dock" class="pet-dock" aria-label="桌面小词灵">
-        <span class="pet-dock-face" aria-hidden="true">Aa</span>
-        <div class="pet-dock-copy"><b>桌面小词灵</b><span id="pet-dock-status">把今日单词带到桌面上，随时摸摸就能换词</span></div>
+      <section id="pet-dock" class="pet-dock" data-state="checking" aria-label="桌面小词灵">
+        <span class="pet-dock-face" aria-hidden="true">
+          <svg viewBox="0 0 40 40" focusable="false">
+            <circle cx="20" cy="20" r="18.2" fill="#182a35" stroke="#c7a56b" stroke-width="1.4"/>
+            <circle cx="20" cy="20.5" r="13.2" fill="#efd6c1"/>
+            <path d="M7.7 19.3C8.3 10.1 13 6.8 20 6.8c7.4 0 11.8 4.2 12.3 12.9-3.7-1.1-5.9-2.9-7.5-5.2-1.1 2.6-2.5 2.8-4.1.1-2.3 2.7-6.5 4.1-13 4.7Z" fill="#516473"/>
+            <path d="M13.4 21.5c1.3-1 2.5-1 3.8 0m5.6 0c1.3-1 2.5-1 3.8 0" fill="none" stroke="#273741" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M18.5 27c1 .8 2 .8 3 0" fill="none" stroke="#b96e55" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div class="pet-dock-copy"><b>桌面小词灵</b><span id="pet-dock-status" aria-live="polite">正在检查这台 Mac 上的小词灵…</span></div>
         <div class="pet-dock-actions">
-          <button id="btn-pet-dock" class="btn pet-dock-main" type="button">🐾 召唤小词灵</button>
-          <button id="btn-pet-dock-next" class="btn ghost small" type="button" hidden>换一组 ▶</button>
+          <button id="btn-pet-memory" class="btn pet-memory-shortcut" type="button">记忆本 <span id="pet-memory-badge" hidden>0</span></button>
+          <button id="btn-pet-dock" class="btn pet-dock-main" type="button">召唤小词灵 ↗</button>
         </div>
       </section>
       <div id="preview-stage" class="stage">
         <canvas id="preview-canvas"></canvas>
         <div id="drag-legend" class="drag-legend" hidden aria-live="polite">
-          <span>🖼️ 空白处：拖动背景</span><span>⇧ + 拖动：移动单词组</span>
+          <span>背景：空白处拖动</span><span>⇧ + 拖动：移动单词组</span>
         </div>
         <div id="drag-state" class="drag-state" hidden></div>
-        <section id="word-inspector" class="word-inspector" hidden aria-live="polite">
-          <div class="word-inspector-head"><span class="inspector-kicker">正在编辑</span><b id="selected-word-label">—</b><span>会同步整组单词</span></div>
-          <label id="word-scale-control">字号 <input id="sel-word-scale" type="range" min="0.7" max="1.7" step="0.05" value="1"><input id="sel-word-scale-number" type="number" min="70" max="170" step="5" value="100" aria-label="整组字号百分比"><em>%</em></label>
-          <span id="multi-word-scale-note" class="scale-auto-note" hidden>6 词起自动适配字号</span>
-          <label>粗细 <select id="sel-word-weight"><option value="500">细</option><option value="600">中</option><option value="700">粗</option><option value="800">特粗</option></select></label>
-          <label>字体 <select id="sel-word-font"><option value="yuan">圆体</option><option value="hei">黑体</option><option value="song">宋体</option><option value="kai">楷体</option><option value="heiti">粗黑</option></select></label>
-          <label>颜色 <input id="sel-word-color" type="color" value="#4a3b2e"></label>
-          <button id="btn-reset-word-style" class="chip" type="button">恢复默认</button>
-        </section>
       </div>
+      <section id="word-inspector" class="word-inspector" hidden aria-live="polite">
+        <div class="word-inspector-head"><span class="inspector-kicker">正在编辑</span><b id="selected-word-label">—</b><span>会同步整组单词</span></div>
+        <label id="word-scale-control">字号 <input id="sel-word-scale" type="range" min="0.7" max="1.7" step="0.05" value="1"><input id="sel-word-scale-number" type="number" min="70" max="170" step="5" value="100" aria-label="整组字号百分比"><em>%</em></label>
+        <span id="multi-word-scale-note" class="scale-auto-note" hidden>6 词起自动适配字号</span>
+        <label>粗细 <select id="sel-word-weight"><option value="500">细</option><option value="600">中</option><option value="700">粗</option><option value="800">特粗</option></select></label>
+        <label>字体 <select id="sel-word-font"><option value="yuan">圆体</option><option value="hei">黑体</option><option value="song">宋体</option><option value="kai">楷体</option><option value="heiti">粗黑</option></select></label>
+        <label>颜色 <input id="sel-word-color" type="color" value="#4a3b2e"></label>
+        <button id="btn-reset-word-style" class="chip" type="button">恢复默认</button>
+      </section>
     </section>
 
     <!-- ============ right panel: 外观（版式 + 字体） ============ -->
     <aside class="panel panel-right">
       <div class="panel-col">
 
-      <section class="card">
-        <h2><span class="h-emoji">🎨</span>版式与外观</h2>
+      <section id="module-appearance" class="card module-card">
+        <h2><span class="h-emoji" data-anime-icon="🎨">版</span>版式与外观</h2>
         <div class="row"><span>版式</span>
           <div id="layout-switch" class="seg">
-            <button class="seg-btn on" data-layout="group">📋 单词组</button>
-            <button class="seg-btn" data-layout="poster">🔠 大字海报</button>
+            <button class="seg-btn on" data-layout="group">单词组</button>
+            <button class="seg-btn" data-layout="poster">大字海报</button>
           </div>
         </div>
         <label class="row"><span>壁纸尺寸</span><select id="sel-size"></select></label>
@@ -166,7 +201,7 @@
             <input id="inp-ch" type="number" min="100" max="8000" value="1920">
           </div>
         </div>
-        <div class="row"><span>主题配色</span><div id="theme-swatches" class="swatches"></div></div>
+        <div class="row"><span>壁纸配色</span><div id="theme-swatches" class="swatches"></div></div>
         <div class="bg-photo">
           <div class="mini-label">背景纹理</div>
           <div id="pattern-picker" class="pattern-picker"></div>
@@ -176,7 +211,7 @@
           <div class="bg-photo-row">
             <label class="import-tile bg-tile">
               <input id="file-bgphoto" type="file" accept="image/*">
-              <span class="it-icon">🖼️</span><b>上传照片</b><i>铺满壁纸</i>
+              <span class="it-icon">图</span><b>上传照片</b><i>铺满壁纸</i>
             </label>
             <div id="bgphoto-preview" class="bgphoto-preview" hidden>
               <img id="bgphoto-thumb" alt="背景预览">
@@ -192,8 +227,8 @@
         </div>
       </section>
 
-      <section class="card">
-        <h2><span class="h-emoji">🔤</span>字体与排版</h2>
+      <section id="module-typography" class="card module-card">
+        <h2><span class="h-emoji" data-anime-icon="🔤">字</span>字体与排版</h2>
         <label class="row slider-row">
           <span>字号大小</span>
           <input id="rng-fontscale" type="range" min="0.7" max="1.7" step="0.05" value="1">
@@ -231,30 +266,28 @@
         </label>
       </section>
 
-      <section class="card desktop-card">
-        <h2><span class="h-emoji">💻</span>搬到电脑桌面上</h2>
+      <section id="module-desktop" class="card desktop-card module-card">
+        <h2><span class="h-emoji" data-anime-icon="💻">桌</span>搬到电脑桌面上</h2>
         <p class="hint">想在 Mac 桌面<b>真正换壁纸</b>、还要一个常驻不遮挡的小宠物？点一下下面按钮就行，<b>不用下载、不用解压、不用敲命令</b>。</p>
-        <button id="btn-companion" class="btn soft">⚡ 一键启用桌面伴侣</button>
+        <button id="btn-companion" class="btn soft">一键启用桌面伴侣</button>
         <div class="pack-row dl-row">
           <span class="mini-label">没在本机跑本站？</span>
-          <button id="btn-companion-dl" class="chip">⬇️ 下载独立版</button>
+          <button id="btn-companion-dl" class="chip">↓ 下载独立版</button>
         </div>
         <div id="pet-controls" style="display:none">
           <div class="pet-group">
-            <div class="pet-group-label">🐾 宠物</div>
+            <div class="pet-group-label">桌面宠物</div>
             <div class="pet-group-btns">
               <button id="btn-pet-toggle" class="chip">召唤宠物</button>
-              <button id="btn-pet-prev" class="chip">◀ 回退</button>
-              <button id="btn-pet-next" class="chip">前进 ▶</button>
             </div>
           </div>
           <p class="mini-label pet-hint" id="pet-hint"></p>
         </div>
-        <button id="btn-live" class="btn ghost">🔲 或者先试网页实时壁纸</button>
+        <button id="btn-live" class="btn ghost">或者先试网页实时壁纸</button>
       </section>
 
-      <details class="card">
-        <summary><span class="h-emoji">✍️</span>自定义文字</summary>
+      <details id="module-custom" class="card module-card">
+        <summary><span class="h-emoji" data-anime-icon="✍️">注</span>自定义文字</summary>
         <div class="card-body">
         <p class="hint">开启后文字会出现在壁纸上，<b>直接在预览里拖动</b>就能摆到任意位置。</p>
         <div class="checks"><label><input id="chk-custom" type="checkbox"> 启用自定义文字</label></div>
@@ -270,10 +303,23 @@
   </main>
 </div>
 
+<!-- ============ Ebbinghaus memory notebook ============ -->
+<div id="memory-modal" class="modal-overlay memory-modal" hidden>
+  <div class="modal-card memory-card" role="dialog" aria-modal="true" aria-labelledby="memory-title">
+    <div class="modal-head">
+      <div><h2 id="memory-title"><span class="h-emoji" data-anime-icon="🧠">忆</span>艾宾浩斯记忆本</h2><p id="memory-subtitle" class="hint">先回想答案，再选择“还没记住”或“记住了”；作答后显示中文。</p></div>
+      <button id="btn-close-memory" class="modal-close" type="button" title="关闭" aria-label="关闭记忆本">✕</button>
+    </div>
+    <div id="memory-summary" class="memory-summary"></div>
+    <div id="memory-notebook-list" class="memory-notebook-list" aria-live="polite"></div>
+    <button id="btn-enable-srs-notice" class="chip srs-notice" type="button">开启系统复习提醒</button>
+  </div>
+</div>
+
 <!-- ============ live (interactive) overlay ============ -->
 <div id="live-overlay" class="live-overlay" hidden>
   <canvas id="live-canvas"></canvas>
-  <button id="btn-exit-live" class="live-exit" title="退出实时壁纸">✕</button>
+  <button id="btn-exit-live" class="live-exit" title="退出实时壁纸" aria-label="退出实时壁纸">✕</button>
   <div id="live-peek" class="live-peek" hidden></div>
   <div id="unlock-ring" class="unlock-ring" hidden></div>
 </div>
@@ -282,27 +328,27 @@
 <div id="import-modal" class="modal-overlay" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="import-title">
     <div class="modal-head">
-      <h2 id="import-title"><span class="h-emoji">📥</span>导入单词到我的词库</h2>
-      <button id="btn-close-import" class="modal-close" type="button" title="关闭">✕</button>
+      <h2 id="import-title"><span class="h-emoji" data-anime-icon="📥">导</span>导入单词到我的词库</h2>
+      <button id="btn-close-import" class="modal-close" type="button" title="关闭" aria-label="关闭导入窗口">✕</button>
     </div>
-    <p class="hint">截图、CSV / Excel / 粘贴都行，导入后归到「✨ 我的词库」。</p>
+    <p class="hint">截图、CSV / Excel / 粘贴都行，导入后归到「我的词库」。</p>
 
     <div class="import-grid">
       <label class="import-tile">
         <input id="file-screenshot" type="file" accept="image/*">
-        <span class="it-icon">📷</span><b>截图识别</b><i>拍照/截图单词表</i>
+        <span class="it-icon">截</span><b>截图识别</b><i>拍照/截图单词表</i>
       </label>
       <label class="import-tile">
         <input id="file-import" type="file" accept=".csv,.txt,.tsv,.xlsx,.xls,image/*">
-        <span class="it-icon">📄</span><b>文件导入</b><i>CSV / Excel / TXT</i>
+        <span class="it-icon">文</span><b>文件导入</b><i>CSV / Excel / TXT</i>
       </label>
     </div>
 
     <div class="mini-label">下载模板，填好再导入：</div>
     <div class="chips pack-chips">
-      <button class="chip" data-pack="simple">📄 简洁模板</button>
-      <button class="chip" data-pack="full">📋 完整模板</button>
-      <button class="chip" data-pack="excel">📊 Excel 模板</button>
+      <button class="chip" data-pack="simple">简洁模板</button>
+      <button class="chip" data-pack="full">完整模板</button>
+      <button class="chip" data-pack="excel">Excel 模板</button>
     </div>
 
     <div class="divider"></div>
@@ -333,7 +379,7 @@
   <div class="modal-card library-card" role="dialog" aria-modal="true" aria-labelledby="library-modal-title">
     <div class="modal-head">
       <div><h2 id="library-modal-title">词书浏览</h2><p id="library-modal-source" class="hint"></p></div>
-      <button id="btn-close-library" class="modal-close" type="button" title="关闭">✕</button>
+      <button id="btn-close-library" class="modal-close" type="button" title="关闭" aria-label="关闭词书窗口">✕</button>
     </div>
     <div class="library-screening-bar">
       <input id="library-search" type="search" placeholder="搜索单词、读音或释义">
@@ -350,14 +396,14 @@
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <!-- ?v= busts browser cache — bump after any js/ change -->
-<script src="js/store.js?v=20260809f"></script>
-<script src="js/words.js?v=20260809f"></script>
-<script src="js/importer.js?v=20260809f"></script>
-<script src="js/ocr.js?v=20260809f"></script>
-<script src="js/reminders.js?v=20260809f"></script>
-<script src="js/review.js?v=20260809f"></script>
-<script src="js/render.js?v=20260809f"></script>
-<script src="js/engine.js?v=20260809f"></script>
-<script src="js/app.js?v=20260809f"></script>
+<script src="js/store.js?v=20260811b"></script>
+<script src="js/words.js?v=20260810j"></script>
+<script src="js/importer.js?v=20260810f"></script>
+<script src="js/ocr.js?v=20260810f"></script>
+<script src="js/reminders.js?v=20260810f"></script>
+<script src="js/review.js?v=20260810j"></script>
+<script src="js/render.js?v=20260812i"></script>
+<script src="js/engine.js?v=20260810f"></script>
+<script src="js/app.js?v=20260812j"></script>
 </body>
 </html>

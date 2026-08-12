@@ -100,6 +100,11 @@
       }
       }
     }
+    if (theme && theme.liquid) {
+      drawLiquidBackground(ctx, W, H, theme, settings);
+      return;
+    }
+
     var g = ctx.createLinearGradient(0, 0, W, H);
     g.addColorStop(0, theme.bg);
     g.addColorStop(1, theme.bg2 || theme.bg);
@@ -116,6 +121,95 @@
     if (pattern === 'waves') drawWaves(ctx, W, H, theme);
     ctx.restore();
     drawCartoon(ctx, W, H, theme);
+  }
+
+  /* Liquid Glass wallpaper material. This is not a flat blue gradient: several
+   * broad light fields are composited beneath a pair of soft caustic bands so
+   * the exported PNG keeps the same refractive, pearl-like depth as the UI. */
+  function drawLiquidBackground(ctx, W, H, theme, settings) {
+    // 尊重 theme 的 bg/bg2：珍珠白等中性配色渲染纯白，蓝色「玻璃」保持原浅蓝灰。
+    var neutral = theme.bg === '#ffffff' || theme.name === '珍珠';
+    var base = ctx.createLinearGradient(0, 0, W, H);
+    if (neutral) {
+      base.addColorStop(0, theme.bg || '#ffffff');
+      base.addColorStop(.55, '#fbfbfd');
+      base.addColorStop(1, theme.bg2 || '#f1f1f4');
+    } else {
+      base.addColorStop(0, '#fbfdff');
+      base.addColorStop(.34, '#eef5fa');
+      base.addColorStop(.72, '#dfeaf2');
+      base.addColorStop(1, '#d5e1ea');
+    }
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, W, H);
+
+    var fields = neutral ? [
+      [W * .12, H * .05, Math.max(W, H) * .58, 'rgba(255,255,255,.96)'],
+      [W * .91, H * .12, Math.max(W, H) * .44, 'rgba(228,228,234,.42)'],
+      [W * .18, H * .94, Math.max(W, H) * .46, 'rgba(232,232,238,.34)'],
+      [W * .82, H * .86, Math.max(W, H) * .38, 'rgba(224,224,230,.30)'],
+    ] : [
+      [W * .12, H * .05, Math.max(W, H) * .58, 'rgba(255,255,255,.96)'],
+      [W * .91, H * .12, Math.max(W, H) * .44, 'rgba(183,219,239,.42)'],
+      [W * .18, H * .94, Math.max(W, H) * .46, 'rgba(218,226,245,.34)'],
+      [W * .82, H * .86, Math.max(W, H) * .38, 'rgba(211,233,237,.30)'],
+    ];
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    fields.forEach(function (field) {
+      var glow = ctx.createRadialGradient(field[0], field[1], 0, field[0], field[1], field[2]);
+      glow.addColorStop(0, field[3]);
+      glow.addColorStop(.48, field[3].replace(/\.[0-9]+\)$/, '.16)'));
+      glow.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
+    });
+
+    // Wide specular bands mimic light bending through a continuous sheet.
+    var band = ctx.createLinearGradient(0, 0, W, H);
+    band.addColorStop(0, 'rgba(255,255,255,0)');
+    band.addColorStop(.38, 'rgba(255,255,255,.44)');
+    band.addColorStop(.55, neutral ? 'rgba(232,232,238,.24)' : 'rgba(190,223,240,.24)');
+    band.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.strokeStyle = band;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(18, Math.min(W, H) * .045);
+    ctx.shadowColor = 'rgba(255,255,255,.52)';
+    ctx.shadowBlur = Math.max(16, Math.min(W, H) * .025);
+    ctx.beginPath();
+    ctx.moveTo(-W * .08, H * .22);
+    ctx.bezierCurveTo(W * .24, H * .06, W * .61, H * .34, W * 1.08, H * .12);
+    ctx.stroke();
+    ctx.globalAlpha = .62;
+    ctx.lineWidth *= .62;
+    ctx.beginPath();
+    ctx.moveTo(-W * .06, H * .88);
+    ctx.bezierCurveTo(W * .30, H * .70, W * .72, H * 1.02, W * 1.06, H * .76);
+    ctx.stroke();
+    ctx.restore();
+
+    // A translucent inner rim gives the whole wallpaper a sheet-of-glass edge.
+    ctx.save();
+    var edge = Math.max(3, Math.round(Math.min(W, H) * .003));
+    var inset = edge * 2;
+    var rim = ctx.createLinearGradient(0, 0, W, H);
+    rim.addColorStop(0, 'rgba(255,255,255,.88)');
+    rim.addColorStop(.34, 'rgba(255,255,255,.20)');
+    rim.addColorStop(.72, neutral ? 'rgba(150,150,160,.16)' : 'rgba(135,174,202,.16)');
+    rim.addColorStop(1, 'rgba(255,255,255,.62)');
+    ctx.strokeStyle = rim;
+    ctx.lineWidth = edge;
+    rr(ctx, inset, inset, W - inset * 2, H - inset * 2, Math.max(18, Math.min(W, H) * .024));
+    ctx.stroke();
+    ctx.restore();
+
+    // Explicit pattern choices remain available, but Liquid starts on `none`.
+    var pattern = (settings && settings.bgPattern) || 'none';
+    if (pattern === 'soft' || pattern === 'blobs') drawBlobs(ctx, W, H, theme, pattern === 'blobs' ? 3 : 1);
+    if (pattern === 'dots') drawDots(ctx, W, H, theme);
+    if (pattern === 'grid') drawGrid(ctx, W, H, theme);
+    if (pattern === 'diag') drawDiag(ctx, W, H, theme);
+    if (pattern === 'waves') drawWaves(ctx, W, H, theme);
   }
   function drawBlobs(ctx, W, H, theme, count) {
     var spots = [[0.85, 0.12, 0.6], [0.1, 0.85, 0.5], [0.5, 0.5, 0.7]];
@@ -200,6 +294,8 @@
   }
   /* 卡通点缀：角落/边缘的小星星 + 圆点，克制不抢单词。仅作用于主题背景（无照片时）。 */
   function drawCartoon(ctx, W, H, theme) {
+    // Refined palettes (Liquid Glass) deliberately have no automatic stars or
+    // edge dots. Explicit texture choices are still handled above.
     if (!theme || theme.blob === false) return;
     var A = theme.accentSoft || theme.accent || '#ffd9b8';
     var B = theme.patternInk || theme.sub || '#d9b48f';
@@ -420,8 +516,16 @@
     // 卡通贴纸底卡：每个单词一格极淡圆角底色，像贴纸卡，不遮字。
     if (settings.wordCards !== false && !settings.bgImage) {
       ctx.save();
-      ctx.fillStyle = theme.accentSoft || theme.accent || '#ffd9b8';
-      ctx.globalAlpha = single ? 0.16 : 0.30;
+      var liquidCards = !!theme.liquid;
+      ctx.fillStyle = liquidCards ? 'rgba(255,255,255,.24)' : (theme.accentSoft || theme.accent || '#ffd9b8');
+      ctx.globalAlpha = liquidCards ? 1 : (single ? 0.16 : 0.30);
+      if (liquidCards) {
+        ctx.strokeStyle = 'rgba(255,255,255,.64)';
+        ctx.lineWidth = Math.max(1.5, W * .0012);
+        ctx.shadowColor = theme.name === '珍珠' ? 'rgba(60,60,70,.13)' : 'rgba(54,83,105,.14)';
+        ctx.shadowBlur = Math.max(8, W * .009);
+        ctx.shadowOffsetY = Math.max(2, W * .0025);
+      }
       var padX = Math.round(W * 0.012);
       var cardR = Math.min(Math.round(rowH * 0.30), Math.round(W * 0.02));
       for (var ci = 0; ci < n; ci++) {
@@ -430,6 +534,7 @@
         var cx0 = single ? (margin + xNudge - padX) : cp.x;
         rr(ctx, cx0, cp.y + Math.round(rowH * 0.05), cwid, rowH - Math.round(rowH * 0.12), cardR);
         ctx.fill();
+        if (liquidCards) ctx.stroke();
         if (settings.selectedWordIndex === ci) {
           ctx.save();
           ctx.strokeStyle = theme.accent || '#ff8f4d';
@@ -596,6 +701,26 @@
     var y = Math.max(minY, Math.min(maxY, desiredY));
     var xN = Math.round((settings.offWords.x || 0) * W);
     var blockTop = y;
+    // 海报没有单独词卡，也要把主词的真实点击区域回传给页面：
+    // 普通单击记住，Shift+单击打开整组外观编辑。
+    ctx.font = weight + ' ' + fs + 'px ' + F;
+    var posterWordW = Math.min(W - margin * 2, Math.max(Math.round(fs * 1.2), measureSpaced(ctx, w.word || '', spacing)));
+    settings.wordCells = [{ index: 0, x: (margin + xN) / W, y: (blockTop + accentGap) / H, w: posterWordW / W, h: Math.round(fs * 1.18 * lineHMul) / H }];
+
+    if (theme.liquid && !settings.bgImage) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,.22)';
+      ctx.strokeStyle = 'rgba(255,255,255,.68)';
+      ctx.lineWidth = Math.max(2, W * .0014);
+      ctx.shadowColor = theme.name === '珍珠' ? 'rgba(60,60,70,.14)' : 'rgba(45,72,94,.16)';
+      ctx.shadowBlur = Math.max(12, W * .014);
+      ctx.shadowOffsetY = Math.max(3, W * .004);
+      var slabPadX = Math.round(W * .035);
+      var slabPadY = Math.round(W * .025);
+      rr(ctx, margin + xN - slabPadX, blockTop - slabPadY, W - margin * 2 + slabPadX * 2, blockH + slabPadY * 2, Math.round(W * .035));
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
 
     ctx.textBaseline = 'top';
     ctx.fillStyle = theme.accent;
