@@ -231,11 +231,17 @@ function completePetFirstPass(word) {
   const library = CFG.library, deck = ensurePetDeck(library), page = deck.pages[deck.index], key = petWordKey(word), now = Date.now();
   const index = page.words.findIndex(item => petWordKey(item) === key);
   if (index < 0 || learnedFor(library)[key]) return { page, duplicate: true };
-  page.words.splice(index, 1);
   learnedFor(library)[key] = { word, at: now };
-  refillPetPage(library, deck, page);
+  // 原位替换:只把被点槽位换成一个新词,其余词位置完全不动(用户要求:点哪个换哪个,
+  // 旁边词不跟着变)。先抽一个候选,放进被点槽位;抽不到(词库见底)才退化为移除顺移。
+  const inUse = new Set();
+  deck.pages.forEach(p => (p.words || []).forEach(w => inUse.add(petWordKey(w))));
+  const candidate = drawPetWords(library, deck, 1, inUse)[0];
+  if (candidate) page.words[index] = candidate;
+  else { page.words.splice(index, 1); refillPetPage(library, deck, page); }
+  page.exhausted = page.words.length === 0 && availablePetWords(library).length === 0;
   state.petMemorySeq = Math.max(0, Number(state.petMemorySeq) || 0) + 1;
-  const event = { id: state.petMemorySeq, at: now, library, word, action: 'learn', firstPass: true, page: deck.index + 1, refilled: page.words.length >= petSlotCount() };
+  const event = { id: state.petMemorySeq, at: now, library, word, action: 'learn', firstPass: true, page: deck.index + 1, refilled: Boolean(candidate) };
   state.petMemoryEvents.push(event);
   state.petMemoryEvents = state.petMemoryEvents.slice(-160);
   saveState();
@@ -754,6 +760,7 @@ function buildPetJXA(W, H) {
   const memoryTarget = localWebOrigin(CFG.webOrigin) || `http://localhost:${CFG.port}`;
   return `
 ObjC.import('Cocoa');
+ObjC.import('QuartzCore');
 function run(argv){
   var pngPath = argv[0], corner = argv[1], posFile = argv[2], savedPos = argv[3], closeFile = argv[4], W = ${W}, H = ${H};
   var META = ${meta};
@@ -777,12 +784,26 @@ function run(argv){
   function applyKeys(body){
     try { var d = JSON.parse(body || '{}'); if (d && d.ok && Object.prototype.toString.call(d.keys) === '[object Array]') KEYS = d.keys; } catch (e) {}
   }
-  // 原地换图：服务端已把新 PNG 写到同一路径（同步 POST 返回时渲染已完成），
-  // 立刻重读并标记重绘——新词直接顶替旧词，不轮询、不重启窗口，零闪屏。
+  // 原地换图：服务端已把新 PNG 写到同一路径（同步 POST 返回时渲染已完成）。
+  // 丝滑过渡:先把视图淡出,NSTimer 0.15s 后换入新图再淡入——旧词淡出、新词淡入。
+  // 全程只用 NSView.animator + NSTimer(本文件已验证可用的 API),避开 JXA 对 GCD /
+  // block 回调支持不稳的坑;动画失败自动退化为瞬时替换,绝不影响功能。
   function reloadImg(){
     lastMtime = Date.now() / 1000;   // 抬高轮询基线，避免 0.6s 轮询再覆盖一次
-    img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
-    grip.setNeedsDisplay(true);
+    var newImg = $.NSImage.alloc.initWithContentsOfFile(pngPath);
+    var swap = function(){          // 换入新图并淡入
+      img = newImg;
+      grip.setNeedsDisplay(true);
+      try { grip.animator.alphaValue = 1; } catch (e) { grip.alphaValue = 1; }
+    };
+    try {
+      grip.wantsLayer = true;
+      $.NSAnimationContext.beginGrouping;
+      $.NSAnimationContext.currentContext.duration = 0.14;
+      grip.animator.alphaValue = 0;        // 旧图淡出
+      $.NSAnimationContext.endGrouping;
+      $.NSTimer.scheduledTimerWithTimeIntervalRepeatsBlock(0.15, false, function(){ swap(); });
+    } catch (e) { swap(); }
   }
   // 动态布局：所有命中区都按“当前窗口尺寸”算，拉伸后无需重启窗口
   function layout(){
