@@ -388,6 +388,9 @@ textarea { width: 100%; resize: vertical; margin-bottom: 8px; }
 .memory-entry.mastered { border-color:#a7ccb5; background:linear-gradient(145deg,#fbfff9,#edf8f1); }
 .memory-entry.mastered::after { content:"已巩固"; position:absolute; right:12px; top:12px; padding:4px 7px; border-radius:999px; background:#dff2e6; color:#387052; font-size:10px; font-weight:900; }
 .memory-result { display:inline-flex; margin-top:12px; padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.82); color:var(--accent-2); font-size:11px; font-weight:900; }
+.memory-undo { display:inline-flex; margin-top:12px; margin-left:7px; padding:5px 11px; border-radius:999px; border:1px solid rgba(150,110,70,.35); background:rgba(255,255,255,.7); color:#8a6a4a; font:800 11px/1 var(--font); cursor:pointer; vertical-align:top; transition:background .15s ease, transform .15s ease; }
+.memory-undo:hover { background:#fff; transform:translateY(-1px); }
+.memory-undo:active { transform:translateY(0); }
 @keyframes memory-answer-pop { from { transform:scale(.96); opacity:.72; } to { transform:scale(1); opacity:1; } }
 .memory-empty { grid-column:1/-1; padding:30px 16px; text-align:center; border:1px dashed var(--line-strong); border-radius:18px; color:var(--sub); font-size:13px; background:rgba(255,255,255,.45); }
 @media (max-width:620px){ .memory-notebook-list{grid-template-columns:1fr;} }

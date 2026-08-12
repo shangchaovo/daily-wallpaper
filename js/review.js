@@ -75,6 +75,8 @@
     if (!item) return { action: 'missing', item: null };
     if (item.stage >= INTERVALS_MIN.length) return { action: 'mastered', item: item };
     if (!item.due || item.due > t) return { action: 'early', item: item };
+    // 撤销快照:变更前完整复制,供 undoReview 恢复(防误触)。随 saveReview 持久化。
+    var snapshot = JSON.parse(JSON.stringify(item)); delete snapshot.lastUndo;
     item.events = item.events || [];
     item.reviewCount = (item.reviewCount || 0) + 1;
     if (remembered) {
@@ -83,6 +85,7 @@
       item.due = item.stage < INTERVALS_MIN.length ? t + INTERVALS_MIN[item.stage] * 60000 : null;
       item.events.push({ at: t, type: item.due ? 'review-pass' : 'mastered' }); item.events = item.events.slice(-64);
       item.lastSeenAt = t;
+      item.lastUndo = { snapshot: snapshot, action: item.due ? 'review' : 'mastered', at: t };
       saveLib(lib, L);
       return { action: item.due ? 'review' : 'mastered', item: item };
     }
@@ -91,9 +94,23 @@
     item.due = t + INTERVALS_MIN[0] * 60000;
     item.events.push({ at: t, type: 'forgot' }); item.events = item.events.slice(-64);
     item.lastSeenAt = t;
+    item.lastUndo = { snapshot: snapshot, action: 'forgot', at: t };
     saveLib(lib, L);
     return { action: 'forgot', item: item };
   }
+
+  /* 撤销上一次「记住了/还没记住」:把单词恢复到点击前状态(防误触)。
+   * 返回 {action:'undo', item} 或 {action:'none'|'missing'}。 */
+  function undoReview(lib, word) {
+    var L = getLib(lib), key = wordKey(word), item = L.words[key];
+    if (!item) return { action: 'missing', item: null };
+    if (!item.lastUndo || !item.lastUndo.snapshot) return { action: 'none', item: item };
+    var snap = item.lastUndo.snapshot;
+    L.words[key] = snap;                 // 完整恢复快照(已剔除 lastUndo,不可二次撤销)
+    saveLib(lib, L);
+    return { action: 'undo', item: L.words[key] };
+  }
+  function canUndo(lib, word) { var item = getLib(lib).words[wordKey(word)]; return !!(item && item.lastUndo && item.lastUndo.snapshot); }
 
   function rememberWords(lib, words) {
     var records = (words || []).map(function (word) { return rememberWord(lib, word); }).filter(Boolean);
@@ -127,5 +144,6 @@
     getLib: getLib, getWord: getWord, allWords: allWords, masteredWords: masteredWords,
     activeWords: activeWords, dueWords: dueWords, soonestDue: soonestDue,
     rememberWord: rememberWord, rememberWords: rememberWords, reviewWord: reviewWord,
+    undoReview: undoReview, canUndo: canUndo,
     stats: stats, recentWords: recentWords, reset: reset };
 })();

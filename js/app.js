@@ -1531,9 +1531,20 @@
     const meta = card.querySelector('.memory-meta');
     if (meta) meta.textContent = result.action === 'mastered' ? '全部周期完成 · 已真正记住' : (remembered ? '本轮通过 · 已安排下一周期' : '已记录没记住 · 20 分钟后重新检测');
     const resultTag = document.createElement('span'); resultTag.className = 'memory-result'; resultTag.textContent = remembered ? '✓ 记住了' : '↺ 还没记住'; card.appendChild(resultTag);
+    // 防误触:作答后可撤销,恢复到点击前状态。
+    const undoBtn = document.createElement('button'); undoBtn.type = 'button'; undoBtn.className = 'memory-undo'; undoBtn.textContent = '撤销';
+    undoBtn.addEventListener('click', () => undoNotebookWord(item, card));
+    card.appendChild(undoBtn);
     toast(remembered ? `${item.word.word}：本轮通过，中文释义已显示` : `${item.word.word}：已记录遗忘，从第一周期重新开始`);
     updateSrsUI();
     // 作答后的中文一直保留，直到用户关闭或重新打开记忆本；不再定时遮回去。
+  }
+  function undoNotebookWord(item, card) {
+    const result = window.Review.undoReview(settings.library, item.word);
+    if (!result || result.action !== 'undo') { toast('没有可撤销的操作'); return; }
+    toast(`${item.word.word}：已撤销，恢复到作答前`);
+    renderMemoryNotebook();
+    updateSrsUI();
   }
 
   function escapeHTML(value) { const n = document.createElement('span'); n.textContent = value || ''; return n.innerHTML; }
