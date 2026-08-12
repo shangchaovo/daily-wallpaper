@@ -2,20 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-WordPaper（原「每日壁纸」）— 把每日单词 + 当天提醒做成手机/电脑壁纸的**纯前端**工具。打开即「左控制面板 / 右 canvas 实时预览」，两种版式 × 多尺寸 × 六主题，下载 PNG 或进入实时壁纸模式。无后端、无打包、零运行时依赖，数据全在浏览器 `localStorage`（命名空间 `wp:`）。
+WordPaper（原「每日壁纸」）— 把每日单词 + 当天提醒做成手机/电脑壁纸的多用户 Web 工具。浏览器仍是无构建的经典脚本 + canvas；`server.js` 同时提供账号认证、同源 API 和 SQLite 持久化。localStorage 只是按用户分区的缓存，服务端数据库才是权威数据源。
 
 **V3 现状**（2026-08）：8 个 ECDICT 词库（每库 1500–3000 核心词）+ 我的词库；日期/时钟已从壁纸移除（更干净、更专注）；**整个排版可视化拖拽**——单词块/提醒块/自定义文字都能在预览上按住拖到任意位置；字体风格（黑/宋/楷/圆/粗黑）+ 文字颜色可选；背景可上传**自定义照片**（cover-fit + 留白 scrim 保证可读）。
 
 ## Commands
 
 ```bash
-node server.js                 # 开发服务器 http://localhost:8770（端口被占自动 +1）
-python3 scripts/e2e.py         # 端到端验证（43 项断言，自带独立空闲端口，不碰 8770）
+npm start                      # 开发服务器 http://localhost:8770（端口占用时直接失败，不漂移 origin）
+npm test                       # 账号隔离/重启持久化/安全边界 + SRS + companion 测试
+python3 scripts/e2e.py         # 端到端验证（55 项断言，自带临时数据库/账号/端口，不碰 8770）
 python3 scripts/render_v3.py   # v3 渲染验证：真渲染 PNG 到 scripts/out_v3/ 并做像素级断言
 python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json（需 /tmp/ecdict.csv）
 ```
 
-- **没有构建 / lint / 单测框架，也没有 `package.json`** —— 不要去 `npm run`。`js/` 是浏览器经典脚本（IIFE），改完刷新即可。
+- **没有前端构建器，也没有第三方 npm 运行依赖**。`js/` 是浏览器经典脚本（IIFE）；`package.json` 只提供启动/测试入口并约束 Node 22.23.2+ / 24（需要内置 `node:sqlite`）。
 - `scripts/e2e.py` 自包含：在**临时空闲端口**拉起自己的 `server.js`，跑完即杀。首次需 `pip install playwright && playwright install chromium`。末尾断言无 `pageerror` / `console.error`。
 - 常驻（可选）：`cp launchd/com.daily-wallpaper.server.plist ~/Library/LaunchAgents/ && launchctl load -w ...`
 
@@ -39,7 +40,9 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 **可视化拖拽**（`app.js` 的 `bindDrag`/`hitTestBlock`）：`pointerdown` 命中测试决定抓的是哪块（自定义文字优先，其次按 `remindersSplitY()` 分单词/提醒），按下即 `applyDisplaySize(disp, disp, true)` **把预览缩到视口内**（整个壁纸都在视野里，拖哪儿都看得见），`pointermove` 把位移写回 `offWords/offReminders`（分数偏移，x clamp ±0.5、y clamp ±1.0）或 `custom.pos[key]`（绝对分数位置，clamp 0.02..0.98），重画用 **rAF 合帧**（一帧只重画一次，拖拽顺滑）。拖拽期间 `dragHl={kind,key}` 传入渲染，`render.js` 的 `drawHlRect` 画主题色**虚线框**标出正在拖的块；抬起后 `dragHl` 清空、预览恢复大尺寸、`saveSettings()`。偏移都是**分数**（相对 W/H），换尺寸不漂移。`render.js` 的 `blockTopFor` 只把块钳在「至少露出一部分」的范围内，**不再限制在自由带内**——可以拖到画布任意位置（含压到提醒块上）。
 
-**持久化键**（`store.js`，前缀 `wp:`）：`wp:settings`（合并到 `DEFAULT_SETTINGS` 之上，升级时新键自动出现；`custom.pos`/`offWords`/`offReminders` 单独深合并）、`wp:customWords`、`wp:reminders`、`wp:engine`、`wp:seeded`。改 `DEFAULT_SETTINGS` 加新键时，UI 默认值要在 `applySettingsToUI` 里同步。
+**持久化**：`lib/storage.js` 使用 SQLite 的 `users / sessions / user_state`；`user_state` 主键是 `(user_id, namespace)`，路由只从 session 取 user id。`store.js` 在 `App.init()` 最前面 `await Store.init()`，把服务器状态 hydrate 到内存，随后保持原有同步 getter API；write 乐观更新并带 revision 异步 PUT。localStorage 使用 `wp:user:<id>:<key>`，旧版全局 `wp:*` 仅在首次创建账号时迁入一次。改 namespace 时必须同时改前后端 allowlist，并补 A/B 隔离测试。
+
+**服务边界**：`server.js` 只允许静态访问 `index/login/css/js/data`，源码、`.git`、数据库和伴侣状态绝不能加入白名单。`public` 模式只开放同一个 Web/API 端口并禁用本机 companion 控制；8771 只能是 Mac 用户机器上的 loopback companion。端口占用必须 fail-fast，不能恢复自动 `+1`。
 
 **实时壁纸 + 防误触**（`app.js` 的 `enterLive/setupAntiTouch`）：进入后 `body.live` 隐藏控制面板、`#live-overlay` 全屏 cover-fit 画布，并 `setTimeout` 到次日 00:00:05 自动翻页（叠加 `rotateEnabled` 的间隔刷新）。`antiTouch` 开启时按住满 `antiTouchMs` 才唤出 `#live-peek`（带环形进度），短按/抬起即取消。右上角 `#btn-exit-live` 始终可达。
 
@@ -47,11 +50,11 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 **小窗为什么不用 WKWebView**：实测 WKWebView 会吞掉鼠标事件，`movableByWindowBackground` / 盖透明把手都拖不动窗口（也踩过本机 JXA `ObjC.registerSubclass` 的 protocol 崩溃坑）。所以小窗改成 `buildPetSVG` 把卡片渲成 SVG → `rasterizeSVG`(sips) 出 PNG → JXA 里 `registerSubclass` 一个 `DWGrip`：**自定义拖动**（`mouseDown:/mouseDragged:/mouseUp:` + `NSEvent.mouseLocation` + `setFrameOrigin`，按住任意位置即拖，右上角 ✕ 区域则 `orderOut` + `terminate` 关闭小窗并写 `pet-closed` 标记），`drawRect:` 把 PNG 画出来。位置每 3s 存 `pet-position.json`，重启留在原位；`pet-closed` 在伴侣启动时清掉，所以**重启伴侣即可恢复小窗**。
 
-**一键切换（宠物可视化按钮 / 卡片单击）**：`companion-state.json` 存一个 `bump` 计数，混进选词种子（`todaySeed()`，bump=0 时与旧行为逐字节一致），壁纸和宠物**同步**跳到下一组词。宠物窗口**底部有可视化按钮「◀ 回退 / 前进 ▶」**（SVG 画 + JXA `mouseDown` 命中，几何由 `PET_BTN`/`PET_FOOTER_H` 常量统一），按钮上方有一行标注「单击卡片＝前进 · Shift＋单击＝回退」。卡片单击＝前进、Shift+单击＝回退（非拖动、按住 <400ms）。都 POST `/next.php`/`/prev.php` → `bumpDelta(±1)` + `runAdvance(dir)`（渲染+设壁纸+重建宠物，串行防并发，快速连点进 pending 队列）。**防幽灵事件**：宠物窗口 spawn 后 1.5s 预热期忽略鼠标事件，且服务端 `lastAdvanceAt` 500ms 节流——两者防「advance→重生成→幽灵 mouseUp→再 advance」的级联风暴。全局热键（`hotkeyEnabled`，默认关）由独立 `osascript` 监听实现，macOS Tahoe 需「输入监控」授权，代码保留。**宠物召唤**：网站「搬到电脑桌面上」卡片里，伴侣运行中会出现宠物控制（◀回退/前进▶/召唤隐藏/形状）→ `/pet.php?action=open|close|status`（`open` 先清 `pet-closed` 再 `startPet`）；主 server 8770 的 `/pet.php` 代理到 8771，`/status.json` 探测伴侣返回 `pet`+`hotkey` 状态。
+**桌面小词灵首轮**：`companion-state.json` 的 `petGroup` 保存当前封闭词组及其已点词。点击词卡只做一次**首轮学习**：该词立即从小窗移除，不以新词补位；整组清空后，才从未首轮学习过的词里自动生成下一组。事件通过 `/pet-memory-events.json` 传给网页记忆本。`bump` 与 `/next.php`/`/prev.php` 仍只用于手动换壁纸/全局热键，不干扰小词灵的首轮进度。小词灵右下角保持圆形缩放把手，空白处可拖动。
 
-**宠物可拉伸 / 自适应形状**：宠物窗口**右下角有三条斜线拉伸手柄**（`PET_RESIZE` 常量，大、好抓）。按住拖动 → `mouseDragged` 里 `win.setFrame` 实时改尺寸（保持左上角不动），同时 **120ms 节流 POST `/pet-render.php?w=&h=` 实时重渲 PNG**（sips 仅 ~50ms，拖动全程清晰不糊）；松手 POST `/pet-size.php?w=&h=` 把尺寸存进 `state.petSize` 并重渲一次。**关键**：JXA 里所有命中区（✕/按钮/手柄）用 `layout()` **按当前窗口尺寸动态计算**，拉伸后**无需重启窗口**——宠物用 **0.6s 轮询 PNG 的 mtime** 自动加载外部重渲（网页换形状/定时刷新），全程不闪。`buildPetSVG` 按 `W/H` 比例（`petMode()`）自动切换排列：`tall`（≤0.75）= 逐行堆叠、`square`（0.75–1.5）= 两列网格、`wide`（≥1.5）= 自适应多行网格（列数放不下自动换行，保证全部单词始终显示，不再 slice 截断丢词）。尺寸范围 `MIN_PET_W/H`–`MAX_PET`。网站宠物面板有「竖版/方形/横版」形状预设按钮，也 POST `/pet-size.php`。
+**宠物可拉伸 / 自适应形状**：宠物窗口右下角有圆形缩放把手（`PET_RESIZE`）；拖动时实时重渲，松手把尺寸存进 `state.petSize`。词卡数每次变化会重建透明小窗，使原生命中网格与当前剩余词数一致。`buildPetSVG` 按 `W/H` 比例（`petMode()`）自动切换排列：`tall`（≤0.75）= 逐行堆叠、`square`（0.75–1.5）= 两列网格、`wide`（≥1.5）= 自适应多行网格。尺寸范围 `MIN_PET_W/H`–`MAX_PET`。
 
-**一键启用（主路径，零下载）**：网页「一键启用桌面伴侣」按钮 POST `/companion/start`（`server.js` 的 `startCompanion`）。前提是 server 就跑在用户自己 Mac 上（本来就是 `node server.js`）：先 `probeCompanion()` 探测 8771 是否已有 companion（`/status.json` 返回带 `config`），没有就 `spawn(process.execPath, [companion.js], {cwd, detached, stdio 落到 ~/Library/Logs/daily-wallpaper-companion.log})` 拉起并轮询等它起来，返回 `{ok, already|spawned}`。`child.unref()` 让它在 server 退出后继续跑。`?dry=1` 只返回不真正拉起（e2e 用）。主 server 也回 `/status.json` 为 `{ok:true, companion:false}`，供前端 `syncCompanionButton` 区分「本页是不是伴侣提供的」。
+**一键启用（仅 local 模式）**：网页 POST `/companion/start` 后，主服务只允许 loopback 请求，并把本地 companion owner 固定为首次使用它的 Web 账号。`public` 模式绝不在云主机 probe/spawn 8771，端点返回 404；公网用户需在自己的 Mac 安装伴侣。主 server 的 companion 端口来自 `WORDPAPER_COMPANION_PORT`，不再与应用端口自动漂移冲突。
 
 **下载独立版（兜底）**：`/companion.zip`（`serveCompanionZip` 即时跑 `scripts/package_companion.py`）——zip 内含 `启动伴侣.command`（bash 启动器，zip 里以 `external_attr` 0o755 落盘可双击）、`companion.js`、`data/words_*.json` ×8、`使用说明.txt`。用户**解压 → 双击启动器**即用，不用敲命令；启动器找不到 node 会给指引并打开 nodejs.org。注意：浏览器下载不会带 `+x`，所以单文件 `.command` 双击会「Permission denied」，独立版必须走 zip（Finder 解压会保留 +x）。
 
@@ -70,14 +73,18 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 ## 验证矩阵
 
-`scripts/e2e.py`（43 项）覆盖主路径 + v3 控件存在性 + 伴侣一键包 zip + 一键启用端点 + 记忆复习（SRS）；`scripts/render_v3.py`（7 项）真渲染 PNG 并做像素级断言（字体栈写入、文字颜色持久化、背景照片铺满且非主题色、**锚点真的移动单词块**、自定义文字拖拽位置持久化、海报+楷体）。手工补查：两版式 × 六主题 × 手机/桌面各抽查一张 PNG（用 canvas 的 `toDataURL` 导出看，别用元素截图）；竖屏 6 词、横屏 6 词都不溢出、不压提醒块；导入 Excel/CSV/粘贴三路径；实时壁纸长按能唤出、短按不唤出。
+`scripts/e2e.py`（55 项）覆盖主路径 + v3 控件存在性 + 完整可迁移伴侣 zip + 一键启用端点 + 记忆复习（SRS）；`scripts/render_v3.py`（7 项）真渲染 PNG 并做像素级断言（字体栈写入、文字颜色持久化、背景照片铺满且非主题色、**锚点真的移动单词块**、自定义文字拖拽位置持久化、海报+楷体）。账号/隔离/重启/静态目录安全另由 `scripts/test_server.js` 与 `scripts/test_accounts_browser.py` 覆盖。
+
+## 模块整理
+
+顶部「↕️ 整理模块」进入有序拖放模式。可移动模块由 `MODULE_DEFAULTS`（`app.js`）定义：词库、提醒、记忆复习、自动轮换、版式外观、自定义文字。拖拽把手只能将卡片插入左/右面板的纵向槽位，保证统一间距与列对齐；布局以 `moduleLayout` namespace 保存（本地镜像为 `wp:user:<id>:moduleLayout`），恢复默认会重建该顺序。预览画布固定居中，避免主工作区失去稳定性。
 
 ## 记忆复习（艾宾浩斯 SRS）
 
-`review.js` 是**按「组」做的间隔重复**（非逐词）。用户点「✅ 这组记好了，换一组」→ `Review.learn(lib, words)` 把当前这组登记进复习队列（`stage=0`，20 分钟后首次到期），并推进该库游标换一组新词。到期的旧组会在 `refresh()` 里由 `mixReviews()` ** prepend 回壁纸**复习，看完一次 `advanceStage` 推进到下一档。间隔（分钟）：`[20, 60, 540, 1440, 2880, 4320, 8640, 17280]` = 20分钟/1小时/9小时/1天/2天/3天/6天/15天，走完 8 档即「记牢」。
+`review.js` 是**按「单词」做的间隔重复**。只有桌面小词灵的词卡点击会调用 `Review.rememberWord(lib, word)` 建立记录（`stage=0`，20 分钟后首次到期）；壁纸预览点击只用于选中样式。到期后在「📖 艾宾浩斯记忆本」再次确认，才会推进下一档。间隔（分钟）：`[20, 60, 540, 1440, 2880, 4320, 8640, 17280]` = 20分钟/1小时/9小时/1天/2天/3天/6天/15天，走完 8 档即「记牢」。
 
-- **状态**：`localStorage` 键 `wp:review`，按词库分桶 `{[libId]:{cursor, groups:{[groupKey]:{words,learnedAt,stage,due,learnedCount,learnedLog}}}}`。`groupKey` = 组内各词 `word|meaning` 排序连接（顺序无关）。
-- **UI**：`index.html` 的「🧠 记忆复习」卡片（`#chk-srs` 开关 / `#srs-status` 统计 / `#btn-learned` 记好了 / `#srs-countdown` 倒计时闹钟）。`app.js` 的 `updateSrsUI()` 刷新状态行 + 倒计时，**边沿检测**（`srsWasDue`）在新到期时弹一次 toast 闹钟；`startSrsTicker()` 每 30s 刷新倒计时并在有新到期时 `refresh(false)` 把复习组顶上壁纸。
-- **我的词库（custom）不参与轮换**：`onLearned`/`updateSrsUI` 都对 `library==='custom'` 短路（按钮禁用、提示「不参与记忆轮换」）。
-- **联动桌面宠物**：`onLearned` 里 best-effort `fetch('next.php', {method:'POST'})` 让宠物也切到下一组；主 server 把 `/next.php`/`/prev.php` 代理到伴侣 8771（伴侣不在线时 `proxyToCompanion` 回 200 `{ok:false}`，不会 404）。
+- **状态**：账号的 `review` namespace，按词库分桶 `{[libId]:{words:{[word|meaning]:{word,learnedAt,stage,due,learnedCount,reviewCount,events}}}}`；本地仅缓存为 `wp:user:<id>:review`，旧的 `groups` 数据会在读取时兼容迁移。
+- **UI**：`index.html` 的「🧠 记忆复习」卡片（`#chk-srs` / `#srs-status` / `#btn-open-memory` / `#srs-countdown`）只提供状态与唯一入口。记忆本中未确认的中文释义使用遮盖条；用户点击到期词卡后才显示。`updateSrsUI()` 做边沿提醒，`startSrsTicker()` 每 30 秒刷新。
+- **我的词库（custom）同样参与轮换**：网页通过 `/pet-sync.php` 原子同步自定义词条，伴侣与记忆本都按 `custom` 独立分桶。
+- **联动桌面小词灵**：伴侣的 `/remember.php?i=n&key=...` 只记录首轮点击；已点词会立刻移出当前页并自动补位，实体「上一页 / 下一页」用于切换首轮词页。网页轮询 `/pet-memory-events.json`，用流 ID、游标和快照补偿把首次记录幂等写入同一词书的 `Review`。后续复习只在网页记忆本通过「还没记住 / 记住了」确认，直到所有周期结束才标记为已巩固；小词灵始终展示释义，记忆本在作答后持续显示中文至本次关闭。
 - 开关存 `settings.srsEnabled`（默认 true）。

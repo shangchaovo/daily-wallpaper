@@ -1,143 +1,131 @@
-/* review.js — 艾宾浩斯遗忘曲线记忆轮换。把「记好了」的单词组按经典间隔
- * （20分钟 / 1小时 / 9小时 / 1天 / 2天 / 3天 / 6天 / 15天）排期，到期后混回壁纸复习。
- * 纯本地：状态存 localStorage（Store 的 `review` 键）。IIFE -> 全局 `Review`。 */
+/* review.js — 单词级艾宾浩斯记忆记录。
+ * 每个被点击「记住」的单词都有独立阶段、下次到期时间与学习事件；
+ * 20分钟 / 1小时 / 9小时 / 1天 / 2天 / 3天 / 6天 / 15天后再出现。 */
 (function () {
   'use strict';
 
-  // 经典艾宾浩斯复习间隔（分钟）。stage 索引到这条数组。
   var INTERVALS_MIN = [20, 60, 540, 1440, 2880, 4320, 8640, 17280];
-
   function nowMs() { return Date.now(); }
+  function wordKey(w) { return (w && w.word ? String(w.word) : '') + '|' + (w && w.meaning ? String(w.meaning) : ''); }
+  function groupKeyFor(words) { return (words || []).map(wordKey).sort().join(';;'); }
 
-  /* 一个单词的稳定 key：用词本身 + 释义，足够区分同库里的词。 */
-  function wordKey(w) {
-    return (w && w.word ? String(w.word) : '') + '|' + (w && w.meaning ? String(w.meaning) : '');
-  }
-
-  /* 一组单词的稳定 key：把组内各词 key 排序后连接，顺序无关（同一组词任何排列同 key）。 */
-  function groupKeyFor(words) {
-    return (words || []).map(wordKey).sort().join(';;');
-  }
-
-  /* 取出某词库的复习状态（没有则给空壳）。 */
   function getLib(lib) {
     var all = window.Store.getReview();
     var L = all[lib];
-    if (!L || typeof L !== 'object') L = { cursor: 0, groups: {} };
+    if (!L || typeof L !== 'object') L = { cursor: 0, groups: {}, words: {} };
     if (!L.groups) L.groups = {};
+    if (!L.words) L.words = {};
     if (typeof L.cursor !== 'number') L.cursor = 0;
+    // 兼容旧版「整组记住」数据：首次读到时按原到期时间拆成单词记录。
+    Object.keys(L.groups).forEach(function (key) {
+      var group = L.groups[key];
+      (group && group.words || []).forEach(function (word) {
+        var wk = wordKey(word);
+        if (!wk || L.words[wk]) return;
+        L.words[wk] = {
+          word: word, learnedAt: group.learnedAt || nowMs(), stage: Number(group.stage) || 0,
+          due: group.due || null, learnedCount: group.learnedCount || 1,
+          reviewCount: Math.max(0, Number(group.stage) || 0), successCount: Math.max(0, Number(group.stage) || 0), failCount: 0,
+          events: (group.learnedLog || []).map(function (at) { return { at: at, type: 'legacy' }; }),
+        };
+      });
+    });
     return L;
   }
-  function saveLib(lib, L) {
-    var all = window.Store.getReview();
-    all[lib] = L;
-    window.Store.saveReview(all);
-  }
+  function saveLib(lib, L) { var all = window.Store.getReview(); all[lib] = L; window.Store.saveReview(all); }
+  function currentGroupKey(sel) { return sel && sel.words && sel.words.length ? groupKeyFor(sel.words) : ''; }
 
-  /* 当前壁纸这组词对应的 groupKey（供「记好了」标记 / 状态显示用）。 */
-  function currentGroupKey(sel) {
-    return sel && sel.words && sel.words.length ? groupKeyFor(sel.words) : '';
-  }
-
-  /* 该词库里「已学过、未到最终阶段」的复习组（按到期时间升序）。 */
-  function activeGroups(lib) {
+  function activeWords(lib) {
     var L = getLib(lib);
-    var out = [];
-    Object.keys(L.groups).forEach(function (k) {
-      var g = L.groups[k];
-      if (g && g.words && g.words.length && g.stage < INTERVALS_MIN.length) out.push(g);
-    });
-    out.sort(function (a, b) { return (a.due || 0) - (b.due || 0); });
-    return out;
+    return Object.keys(L.words).map(function (key) { return L.words[key]; }).filter(function (item) {
+      return item && item.word && item.stage < INTERVALS_MIN.length;
+    }).sort(function (a, b) { return (a.due || Infinity) - (b.due || Infinity); });
   }
-
-  /* 到期的复习组（due <= now）。可能多个，全都要复习。 */
-  function dueGroups(lib, now) {
-    var t = (now == null ? nowMs() : now);
-    return activeGroups(lib).filter(function (g) { return (g.due || 0) <= t; });
+  function dueWords(lib, now) {
+    var t = now == null ? nowMs() : now;
+    return activeWords(lib).filter(function (item) { return item.due && item.due <= t; });
   }
+  function soonestDue(lib) { var list = activeWords(lib).filter(function (item) { return item.due; }); return list.length ? list[0].due : null; }
 
-  /* 下一次复习到期的毫秒时间戳；没有排期则 null。 */
-  function soonestDue(lib) {
-    var a = activeGroups(lib);
-    return a.length ? (a[0].due || null) : null;
-  }
-
-  /* 把当前这组标记为「记好了」：登记进复习队列（stage=0，20 分钟后首次到期），
-   * 并把游标前移到「下一组新词」。返回 { group, nextOffset }。 */
-  function learn(lib, words) {
-    var L = getLib(lib);
-    var key = groupKeyFor(words);
-    var t = nowMs();
-    var g = L.groups[key];
-    if (g) {
-      // 已经学过：重新点亮复习（不丢历史，只把下次到期拉到第一档）。
-      g.learnedCount = (g.learnedCount || 0) + 1;
-      (g.learnedLog = g.learnedLog || []).push(t);
-      // 若已全部复习完，重新从 0 开始一轮；否则保持当前 stage 重新计时。
-      if (g.stage >= INTERVALS_MIN.length) g.stage = 0;
-      g.due = t + INTERVALS_MIN[Math.min(g.stage, INTERVALS_MIN.length - 1)] * 60000;
+  /* 小词灵点击只登记「首次学习」，绝不推进复习阶段。这样即使同步事件重复、
+   * 或事件恰好在到期时送达，也不会被误判成用户已经通过本轮检测。 */
+  function rememberWord(lib, word) {
+    var L = getLib(lib), key = wordKey(word), t = nowMs();
+    if (!key) return null;
+    var item = L.words[key];
+    var action = 'seen';
+    if (!item) {
+      item = L.words[key] = { word: word, learnedAt: t, stage: 0, due: t + INTERVALS_MIN[0] * 60000, learnedCount: 1, reviewCount: 0, successCount: 0, failCount: 0, events: [{ at: t, type: 'learn' }] };
+      action = 'learn';
     } else {
-      g = L.groups[key] = {
-        words: words,
-        learnedAt: t,
-        stage: 0,
-        due: t + INTERVALS_MIN[0] * 60000,
-        learnedCount: 1,
-        learnedLog: [t],
-      };
+      // 快照补偿、断线重放与重复请求都必须真正幂等，不增长计数或事件历史。
+      return { item: item, action: action };
     }
-    L.cursor = (L.cursor || 0) + 1;
+    item.word = word || item.word;
+    item.lastSeenAt = t;
     saveLib(lib, L);
-    return { group: g, cursor: L.cursor };
+    return { item: item, action: action };
   }
 
-  /* 复习组被「又看了一遍」后推进到下一阶段（下次到期按更长间隔）。 */
-  function advanceStage(lib, groupKey) {
+  /* 记忆本中的明确作答。只有到期词可以作答：
+   * - 记住了：推进一档；跑完全部 8 档后才 mastered。
+   * - 还没记住：记录一次遗忘，并从 20 分钟档重新开始整条周期。 */
+  function reviewWord(lib, word, remembered) {
+    var L = getLib(lib), key = wordKey(word), t = nowMs(), item = L.words[key];
+    if (!item) return { action: 'missing', item: null };
+    if (item.stage >= INTERVALS_MIN.length) return { action: 'mastered', item: item };
+    if (!item.due || item.due > t) return { action: 'early', item: item };
+    item.events = item.events || [];
+    item.reviewCount = (item.reviewCount || 0) + 1;
+    if (remembered) {
+      item.stage = Math.min((Number(item.stage) || 0) + 1, INTERVALS_MIN.length);
+      item.successCount = (item.successCount || 0) + 1;
+      item.due = item.stage < INTERVALS_MIN.length ? t + INTERVALS_MIN[item.stage] * 60000 : null;
+      item.events.push({ at: t, type: item.due ? 'review-pass' : 'mastered' }); item.events = item.events.slice(-64);
+      item.lastSeenAt = t;
+      saveLib(lib, L);
+      return { action: item.due ? 'review' : 'mastered', item: item };
+    }
+    item.stage = 0;
+    item.failCount = (item.failCount || 0) + 1;
+    item.due = t + INTERVALS_MIN[0] * 60000;
+    item.events.push({ at: t, type: 'forgot' }); item.events = item.events.slice(-64);
+    item.lastSeenAt = t;
+    saveLib(lib, L);
+    return { action: 'forgot', item: item };
+  }
+
+  function rememberWords(lib, words) {
+    var records = (words || []).map(function (word) { return rememberWord(lib, word); }).filter(Boolean);
+    var L = getLib(lib); L.cursor = (L.cursor || 0) + 1; saveLib(lib, L);
+    return { records: records, cursor: L.cursor };
+  }
+
+  function getWord(lib, word) { return getLib(lib).words[wordKey(word)] || null; }
+  function allWords(lib) {
     var L = getLib(lib);
-    var g = L.groups[groupKey];
-    if (!g) return null;
-    g.stage = Math.min((g.stage || 0) + 1, INTERVALS_MIN.length);
-    if (g.stage < INTERVALS_MIN.length) {
-      g.due = nowMs() + INTERVALS_MIN[g.stage] * 60000;
-    } else {
-      g.due = null; // 已完成全部复习轮次
-    }
-    saveLib(lib, L);
-    return g;
+    return Object.keys(L.words).map(function (key) { return L.words[key]; }).filter(function (item) { return item && item.word; });
   }
-
-  /* 统计：某词库已学组数 / 待复习组数 / 已彻底记住组数。 */
+  function masteredWords(lib) { return allWords(lib).filter(function (item) { return item.stage >= INTERVALS_MIN.length; }); }
   function stats(lib) {
-    var L = getLib(lib);
-    var total = 0, pending = 0, done = 0;
-    Object.keys(L.groups).forEach(function (k) {
-      var g = L.groups[k]; if (!g) return;
-      total++;
-      if (g.stage >= INTERVALS_MIN.length) done++; else pending++;
+    var L = getLib(lib), total = 0, pending = 0, done = 0, due = 0, reviews = 0, failures = 0;
+    Object.keys(L.words).forEach(function (key) {
+      var item = L.words[key]; if (!item) return;
+      total++; reviews += item.reviewCount || 0; failures += item.failCount || 0;
+      if (item.stage >= INTERVALS_MIN.length) done++; else { pending++; if (item.due && item.due <= nowMs()) due++; }
     });
-    return { total: total, pending: pending, done: done, cursor: L.cursor || 0 };
+    return { total: total, pending: pending, done: done, due: due, reviews: reviews, failures: failures, cursor: L.cursor || 0 };
   }
-
-  /* 清空某词库的记忆进度（换库重来时用）。 */
-  function reset(lib) {
-    var all = window.Store.getReview();
-    delete all[lib];
-    window.Store.saveReview(all);
+  function recentWords(lib, limit) {
+    var L = getLib(lib);
+    return Object.keys(L.words).map(function (key) { return L.words[key]; }).filter(Boolean)
+      .sort(function (a, b) { return (b.lastSeenAt || b.learnedAt || 0) - (a.lastSeenAt || a.learnedAt || 0); }).slice(0, limit || 4);
   }
+  function reset(lib) { var all = window.Store.getReview(); delete all[lib]; window.Store.saveReview(all); }
 
-  window.Review = {
-    INTERVALS_MIN: INTERVALS_MIN,
-    wordKey: wordKey,
-    groupKeyFor: groupKeyFor,
-    currentGroupKey: currentGroupKey,
-    getLib: getLib,
-    activeGroups: activeGroups,
-    dueGroups: dueGroups,
-    soonestDue: soonestDue,
-    learn: learn,
-    advanceStage: advanceStage,
-    stats: stats,
-    reset: reset,
-  };
+  window.Review = { INTERVALS_MIN: INTERVALS_MIN, wordKey: wordKey, groupKeyFor: groupKeyFor, currentGroupKey: currentGroupKey,
+    getLib: getLib, getWord: getWord, allWords: allWords, masteredWords: masteredWords,
+    activeWords: activeWords, dueWords: dueWords, soonestDue: soonestDue,
+    rememberWord: rememberWord, rememberWords: rememberWords, reviewWord: reviewWord,
+    stats: stats, recentWords: recentWords, reset: reset };
 })();

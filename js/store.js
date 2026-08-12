@@ -1,13 +1,27 @@
-/* store.js — localStorage persistence, namespaced `wp:`. IIFE -> global `Store`. */
+/* store.js — authenticated server persistence with a per-user local cache. */
 (function () {
   'use strict';
   const NS = 'wp:';
+  const STATE_KEYS = [
+    'settings', 'uiTheme', 'customWords', 'knownWords', 'reminders', 'engine',
+    'review', 'seeded', 'moduleLayout', 'petMemoryCursor', 'dragHint',
+  ];
+  let cache = {};
+  let revisions = {};
+  let pending = {};
+  let currentUser = null;
+  let csrfToken = '';
+  let userPrefix = '';
+  let availableLegacy = {};
+  const syncing = new Map();
+  const timers = new Map();
 
   const DEFAULT_SETTINGS = {
+    uiTheme: 'editorial',      // 'anime' | 'editorial' | 'liquid'（网站界面皮肤）
     library: 'ielts',          // see LIBRARIES in app.js (chuzhong/gaozhong/cet4/.../custom)
     layout: 'group',           // 'group' | 'poster'
     size: 'phone-1080x2400',   // see SIZES in app.js
-    theme: 'cream',            // theme key, see THEMES in app.js
+    theme: 'cream',            // cream/.../liquid, see THEMES in app.js
     bgPattern: 'soft',         // 'none'|'soft'|'dots'|'grid'|'diag'|'waves'|'blobs'
     wordsPerGroup: 6,          // words shown in 'group' layout (multi-col wraps 7+)
     wordCols: 0,               // 0 = 自动列数（按词数+宽高比），1-3 = 强制列数
@@ -49,27 +63,245 @@
     },
   };
 
-  function read(key, fallback) {
+  function parseJSON(raw, fallback) {
     try {
-      const raw = localStorage.getItem(NS + key);
       if (raw == null) return fallback;
       return JSON.parse(raw);
-    } catch (e) {
-      return fallback;
+    } catch (_) { return fallback; }
+  }
+
+  function localGet(storageKey, fallback) {
+    try { return parseJSON(localStorage.getItem(storageKey), fallback); }
+    catch (_) { return fallback; }
+  }
+
+  function emit(name, detail) {
+    try { window.dispatchEvent(new CustomEvent(name, { detail: detail || {} })); } catch (_) {}
+  }
+
+  function localSet(storageKey, value) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      emit('wordpaper:storage-warning', { message: '浏览器本地缓存空间不足；数据仍会尝试保存到账号。', error: String(error && error.message || error) });
+      return false;
     }
+  }
+
+  function sameJSON(a, b) {
+    try { return JSON.stringify(a) === JSON.stringify(b); } catch (_) { return false; }
+  }
+
+  function read(key, fallback) {
+    return Object.prototype.hasOwnProperty.call(cache, key) ? cache[key] : fallback;
+  }
+
+  function persistPending() {
+    if (userPrefix) localSet(userPrefix + 'syncPending', pending);
+  }
+
+  function scheduleSync(key, delay) {
+    clearTimeout(timers.get(key));
+    timers.set(key, setTimeout(function () { syncKey(key); }, delay == null ? 100 : delay));
+  }
+
+  async function syncKey(key) {
+    if (!pending[key] || syncing.has(key) || !csrfToken) return true;
+    const snapshot = pending[key];
+    const serialized = JSON.stringify(snapshot.value);
+    emit('wordpaper:sync-status', { state: 'saving' });
+
+    const task = fetch('/api/state/' + encodeURIComponent(key), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ value: snapshot.value, expectedRevision: snapshot.expectedRevision }),
+    }).then(async function (response) {
+      const body = await response.json().catch(function () { return {}; });
+      if (response.status === 401) {
+        location.assign('/login.html');
+        throw new Error('登录已过期');
+      }
+      if (response.status === 409) {
+        revisions[key] = Number(body.revision) || 0;
+        if (sameJSON(body.value, snapshot.value)) {
+          const latest = pending[key];
+          if (latest && JSON.stringify(latest.value) === serialized) delete pending[key];
+          else if (latest) { latest.expectedRevision = revisions[key]; scheduleSync(key, 0); }
+          persistPending();
+          emit('wordpaper:sync-status', { state: Object.keys(pending).length ? 'saving' : 'saved' });
+          return true;
+        }
+        localSet(userPrefix + 'conflict:' + key, { value: snapshot.value, at: Date.now(), serverRevision: revisions[key] });
+        delete pending[key];
+        persistPending();
+        emit('wordpaper:sync-status', { state: 'conflict', message: '另一台设备已修改这份数据；服务器版本未被覆盖，本机冲突副本已保留。请刷新后再操作。' });
+        return false;
+      }
+      if (!response.ok) throw new Error(body.error || '保存失败');
+
+      revisions[key] = Number(body.revision) || snapshot.expectedRevision + 1;
+      const latest = pending[key];
+      if (latest && JSON.stringify(latest.value) === serialized && latest.expectedRevision === snapshot.expectedRevision) {
+        delete pending[key];
+      } else if (latest) {
+        latest.expectedRevision = revisions[key];
+        scheduleSync(key, 0);
+      }
+      persistPending();
+      emit('wordpaper:sync-status', { state: Object.keys(pending).length ? 'saving' : 'saved' });
+      return true;
+    }).catch(function (error) {
+      emit('wordpaper:sync-status', { state: 'error', message: '账号数据暂未保存：' + error.message });
+      scheduleSync(key, 3000);
+      return false;
+    }).finally(function () {
+      syncing.delete(key);
+    });
+    syncing.set(key, task);
+    return task;
+  }
+
+  async function flush() {
+    const keys = Object.keys(pending);
+    if (!keys.length) return true;
+    const results = await Promise.all(keys.map(syncKey));
+    return results.every(Boolean) && Object.keys(pending).length === 0;
+  }
+
+  function queueWrite(key, value) {
+    if (!STATE_KEYS.includes(key)) return false;
+    cache[key] = value;
+    const localOk = userPrefix ? localSet(userPrefix + key, value) : false;
+    if (key === 'uiTheme') localSet(NS + 'uiTheme', value); // harmless pre-paint preference, shared only on this browser
+    if (currentUser) {
+      if (!pending[key]) pending[key] = { value: value, expectedRevision: Number(revisions[key]) || 0 };
+      else pending[key].value = value;
+      persistPending();
+      scheduleSync(key);
+    }
+    return localOk;
+  }
+
+  function legacyState() {
+    const state = {};
+    STATE_KEYS.forEach(function (key) {
+      const raw = localStorage.getItem(NS + key);
+      if (raw != null) state[key] = parseJSON(raw, null);
+    });
+    return state;
+  }
+
+  async function init() {
+    const sessionResponse = await fetch('/api/session', { cache: 'no-store' });
+    if (!sessionResponse.ok) {
+      location.assign('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
+      throw new Error('authentication required');
+    }
+    const session = await sessionResponse.json();
+    currentUser = session.user;
+    csrfToken = session.csrfToken;
+    userPrefix = NS + 'user:' + currentUser.id + ':';
+
+    const stateResponse = await fetch('/api/state', { cache: 'no-store' });
+    if (!stateResponse.ok) throw new Error('无法读取账号数据');
+    const remote = await stateResponse.json();
+    cache = Object.assign({}, remote.state || {});
+    revisions = Object.assign({}, remote.revisions || {});
+    pending = localGet(userPrefix + 'syncPending', {});
+    if (!pending || typeof pending !== 'object' || Array.isArray(pending)) pending = {};
+
+    const localUserState = {};
+    STATE_KEYS.forEach(function (key) {
+      const value = localGet(userPrefix + key, undefined);
+      if (value !== undefined) localUserState[key] = value;
+    });
+    const unscopedLegacy = !localStorage.getItem(NS + 'legacyMigratedTo') ? legacyState() : {};
+    availableLegacy = Object.keys(unscopedLegacy).some(function (key) { return key !== 'uiTheme'; }) ? unscopedLegacy : {};
+
+    Object.keys(pending).forEach(function (key) {
+      const entry = pending[key];
+      if (!STATE_KEYS.includes(key) || !entry || !Object.prototype.hasOwnProperty.call(entry, 'value')) { delete pending[key]; return; }
+      if ((Number(revisions[key]) || 0) > Number(entry.expectedRevision || 0) && sameJSON(cache[key], entry.value)) {
+        delete pending[key];
+        return;
+      }
+      cache[key] = entry.value;
+    });
+
+    let importingLegacy = false;
+    if (!Object.keys(cache).length && !Object.keys(pending).length) {
+      const source = Object.keys(localUserState).length ? localUserState
+        : (session.allowLegacyImport ? availableLegacy : {});
+      importingLegacy = Object.keys(source).length > 0 && source !== localUserState;
+      Object.keys(source).forEach(function (key) {
+        cache[key] = source[key];
+        pending[key] = { value: source[key], expectedRevision: 0 };
+      });
+    }
+
+    STATE_KEYS.forEach(function (key) {
+      if (Object.prototype.hasOwnProperty.call(cache, key)) localSet(userPrefix + key, cache[key]);
+    });
+    persistPending();
+
+    if (Object.keys(pending).length) {
+      emit('wordpaper:sync-status', { state: 'saving', message: importingLegacy ? '正在把本机旧数据迁入账号…' : '' });
+      const saved = await flush();
+      if (saved && importingLegacy) {
+        localStorage.setItem(NS + 'legacyMigratedTo', String(currentUser.id));
+        STATE_KEYS.forEach(function (key) { if (key !== 'uiTheme') localStorage.removeItem(NS + key); });
+        availableLegacy = {};
+        emit('wordpaper:sync-status', { state: 'saved', message: '本机旧数据已迁入当前账号' });
+      }
+    }
+
+    if (!importingLegacy && Object.keys(availableLegacy).length) {
+      emit('wordpaper:legacy-available', { keys: Object.keys(availableLegacy) });
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') flush();
+    });
+    window.addEventListener('pagehide', flush);
+    return currentUser;
+  }
+
+  async function importLegacy() {
+    if (!currentUser || !Object.keys(availableLegacy).length) return false;
+    Object.keys(availableLegacy).forEach(function (key) {
+      const value = availableLegacy[key];
+      cache[key] = value;
+      localSet(userPrefix + key, value);
+      pending[key] = { value: value, expectedRevision: Number(revisions[key]) || 0 };
+    });
+    persistPending();
+    const saved = await flush();
+    if (!saved) return false;
+    localStorage.setItem(NS + 'legacyMigratedTo', String(currentUser.id));
+    STATE_KEYS.forEach(function (key) { if (key !== 'uiTheme') localStorage.removeItem(NS + key); });
+    availableLegacy = {};
+    return true;
   }
 
   function write(key, value) {
-    try {
-      localStorage.setItem(NS + key, JSON.stringify(value));
-    } catch (e) {
-      /* QuotaExceededError — caller may surface a backup hint */
-    }
+    return queueWrite(key, value);
   }
 
   const Store = {
+    init,
+    importLegacy,
+    flush,
+    currentUser() { return currentUser; },
+    async logout() {
+      await flush();
+      await fetch('/api/session', { method: 'DELETE', headers: { 'X-CSRF-Token': csrfToken } }).catch(function () {});
+      cache = {}; revisions = {}; pending = {}; currentUser = null; csrfToken = ''; userPrefix = '';
+      location.assign('/login.html');
+    },
     getSettings() {
-      const s = read('settings', {});
+      const raw = read('settings', {});
+      const s = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
       // Merge over defaults so new keys appear on upgrade.
       const merged = Object.assign({}, DEFAULT_SETTINGS, s);
       merged.custom = Object.assign({}, DEFAULT_SETTINGS.custom, s.custom || {});
@@ -78,10 +310,21 @@
       merged.offReminders = Object.assign({}, DEFAULT_SETTINGS.offReminders, s.offReminders || {});
       merged.bgImagePos = Object.assign({}, DEFAULT_SETTINGS.bgImagePos, s.bgImagePos || {});
       merged.bgImageZoom = Math.max(1, Number(s.bgImageZoom) || DEFAULT_SETTINGS.bgImageZoom);
+      const mirroredTheme = read('uiTheme', null);
+      merged.uiTheme = ['anime', 'editorial', 'liquid'].includes(mirroredTheme)
+        ? mirroredTheme
+        : (['anime', 'editorial', 'liquid'].includes(merged.uiTheme) ? merged.uiTheme : DEFAULT_SETTINGS.uiTheme);
+      if (!['anime', 'editorial', 'liquid'].includes(mirroredTheme)) write('uiTheme', merged.uiTheme);
       return merged;
     },
     saveSettings(settings) {
+      write('uiTheme', ['anime', 'editorial', 'liquid'].includes(settings.uiTheme) ? settings.uiTheme : DEFAULT_SETTINGS.uiTheme);
       write('settings', settings);
+    },
+    setUITheme(theme) {
+      const value = ['anime', 'editorial', 'liquid'].includes(theme) ? theme : DEFAULT_SETTINGS.uiTheme;
+      write('uiTheme', value);
+      return value;
     },
 
     // Custom / imported words (user's own library). Array of word objects.

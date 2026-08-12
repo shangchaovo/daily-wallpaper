@@ -16,7 +16,9 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
+import shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -95,17 +97,32 @@ def first_dark_row(page):
 def main():
     os.makedirs(OUT, exist_ok=True)
     port = free_port()
-    env = dict(os.environ, PORT=str(port))
+    data_dir = tempfile.mkdtemp(prefix="wordpaper-render-")
+    env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", WORDPAPER_MODE="public",
+               WORDPAPER_DATA_DIR=data_dir, NODE_ENV="test")
     server = subprocess.Popen(["node", "server.js"], cwd=ROOT, env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     try:
         if not wait_up(port):
             print("server did not start"); sys.exit(1)
         with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page(viewport={"width": 1400, "height": 1000})
+            try:
+                browser = p.chromium.launch()
+            except Exception as exc:
+                if "Executable doesn't exist" not in str(exc):
+                    raise
+                browser = p.chromium.launch(channel="chrome")
+            context = browser.new_context(viewport={"width": 1400, "height": 1000})
+            base = f"http://127.0.0.1:{port}"
+            account = context.request.post(base + "/api/auth/register", headers={"Origin": base}, data={
+                "username": "render_user_" + str(port), "password": "wordpaper-render-password",
+            })
+            if account.status != 201:
+                raise RuntimeError("test account registration failed: " + account.text())
+            page = context.new_page()
             page.on("pageerror", lambda e: print("PAGEERROR:", e))
-            page.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
+            page.goto(f"http://127.0.0.1:{port}/", wait_until="domcontentloaded")
+            page.wait_for_selector("#preview-canvas")
             page.wait_for_timeout(600)
 
             # seed a known library + a few reminders for deterministic-ish output
@@ -118,9 +135,15 @@ def main():
             canvas_png(page, os.path.join(OUT, "1_group_baseline.png"))
 
             # ---- 2. fontStyle=song + ink override (#1e3a52) ----
-            page.select_option("#sel-fontstyle", "song")
-            page.locator("#ink-picker .ink-chip.sw").nth(1).click()  # #1e3a52
-            page.wait_for_timeout(500)
+            # (右侧重复字体卡 #module-typography 已隐藏，字体改走预览词检视器；
+            #  这里与 offWords/bgImage 一致用 Store + reload 直接驱动渲染路径。)
+            page.evaluate(
+                "() => { const s=window.Store.getSettings(); s.fontStyle='song'; s.inkOverride='#1e3a52';"
+                " window.Store.saveSettings(s); }"
+            )
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_selector("#preview-canvas")
+            page.wait_for_timeout(600)
             font_used = page.evaluate(
                 "() => window.Render.FONT_STACKS.song"
             )
@@ -136,7 +159,8 @@ def main():
                 TINY_PHOTO,
             )
             # reload so loadBgImage() rehydrates, then force a repaint
-            page.reload(wait_until="networkidle")
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_selector("#preview-canvas")
             page.wait_for_timeout(700)
             has_bg = page.evaluate("() => !!window.Store.getSettings().bgImage")
             check("背景照片持久化", has_bg)
@@ -158,7 +182,8 @@ def main():
                     "(y) => { const s=window.Store.getSettings(); s.custom.enabled=false;"
                     " s.showReminders=false; s.wordsPerGroup=3; s.offWords={x:0,y:y};"
                     " window.Store.saveSettings(s); }", offy)
-                page.reload(wait_until="networkidle")
+                page.reload(wait_until="domcontentloaded")
+                page.wait_for_selector("#preview-canvas")
                 page.wait_for_timeout(600)
             seed_pos(0)
             top_row = first_dark_row(page)
@@ -191,7 +216,13 @@ def main():
             canvas_png(page, os.path.join(OUT, "5_custom_dragged.png"))
 
             # ---- 6. POSTER with kai font ----
-            page.select_option("#sel-fontstyle", "kai")
+            page.evaluate(
+                "() => { const s=window.Store.getSettings(); s.fontStyle='kai';"
+                " window.Store.saveSettings(s); }"
+            )
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_selector("#preview-canvas")
+            page.wait_for_timeout(600)
             page.locator('#layout-switch .seg-btn[data-layout="poster"]').click()
             page.wait_for_timeout(500)
             canvas_png(page, os.path.join(OUT, "6_poster_kai.png"))
@@ -205,6 +236,7 @@ def main():
             server.wait(timeout=5)
         except Exception:
             server.kill()
+        shutil.rmtree(data_dir, ignore_errors=True)
 
     print("\n==== 结果 ====")
     passed = sum(1 for _, ok in results if ok)

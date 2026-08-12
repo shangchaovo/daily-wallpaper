@@ -278,8 +278,8 @@
     radial-gradient(circle at 24% 12%, rgba(255,255,255,.96), transparent 36%),
     linear-gradient(145deg, rgba(255,255,255,.66), rgba(255,255,255,.2));
   box-shadow: inset 0 1px 0 rgba(255,255,255,.96), inset 0 -1px 0 rgba(62,62,62,.08), 0 8px 22px rgba(0,0,0,.11);
-  -webkit-backdrop-filter: blur(18px) saturate(1.18);
-  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(11px) saturate(1.18);
+  backdrop-filter: blur(11px) saturate(1.18);
   transform: none;
   animation: none;
   font: 700 20px/1 var(--font-editorial);
@@ -325,8 +325,8 @@
   border: 1px solid rgba(255,255,255,.76);
   background: var(--glass-regular);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(18px) saturate(1.08) brightness(1.05);
-  backdrop-filter: blur(18px) saturate(1.08) brightness(1.05);
+  -webkit-backdrop-filter: blur(11px) saturate(1.08) brightness(1.05);
+  backdrop-filter: blur(11px) saturate(1.08) brightness(1.05);
 }
 :root[data-ui-theme="liquid"] .top-actions.layout-actions {
   gap: 4px;
@@ -387,8 +387,8 @@
   background:
     linear-gradient(145deg, rgba(255,255,255,.7), rgba(255,255,255,.52));
   box-shadow: inset 0 1px 0 rgba(255,255,255,.94), 0 1px 2px rgba(0,0,0,.05), 0 18px 46px rgba(0,0,0,.07);
-  -webkit-backdrop-filter: blur(12px) saturate(1.04);
-  backdrop-filter: blur(12px) saturate(1.04);
+  -webkit-backdrop-filter: blur(8px) saturate(1.04);
+  backdrop-filter: blur(8px) saturate(1.04);
 }
 /* 滚动条中性灰（替代继承自卡通主题的橙色） */
 :root[data-ui-theme="liquid"] .panel-col { scrollbar-width: thin; scrollbar-color: rgba(123,123,123,.3) transparent; }
@@ -669,8 +669,8 @@
   border-radius: 22px;
   background: var(--glass-thick);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.94), inset 0 -1px 0 rgba(62,62,62,.07), 0 32px 90px rgba(0,0,0,.2);
-  -webkit-backdrop-filter: blur(24px) saturate(1.1) brightness(1.04);
-  backdrop-filter: blur(24px) saturate(1.1) brightness(1.04);
+  -webkit-backdrop-filter: blur(15px) saturate(1.1) brightness(1.04);
+  backdrop-filter: blur(15px) saturate(1.1) brightness(1.04);
   animation: liquid-modal-in .34s cubic-bezier(.22,1,.36,1);
 }
 :root[data-ui-theme="liquid"] .modal-card::before { display: none; }
@@ -833,13 +833,13 @@
     0 1px 2px rgba(43,43,43,.04),
     0 8px 24px rgba(49,49,49,.06),
     0 20px 48px rgba(52,52,52,.04);
-  -webkit-backdrop-filter: blur(20px) saturate(1.05) brightness(1.26);
-  backdrop-filter: blur(20px) saturate(1.05) brightness(1.26);
+  -webkit-backdrop-filter: blur(12px) saturate(1.05) brightness(1.26);
+  backdrop-filter: blur(12px) saturate(1.05) brightness(1.26);
 }
 :root[data-ui-theme="liquid"] :where(.panel-col, .stage, .modal-card) {
   background: var(--liquid-shell-thick);
-  -webkit-backdrop-filter: blur(28px) saturate(1.06) brightness(1.27);
-  backdrop-filter: blur(28px) saturate(1.06) brightness(1.27);
+  -webkit-backdrop-filter: blur(16px) saturate(1.06) brightness(1.27);
+  backdrop-filter: blur(16px) saturate(1.06) brightness(1.27);
 }
 :root[data-ui-theme="liquid"] .panel-col {
   border-radius: 25px;
@@ -873,7 +873,7 @@
 }
 
 :root[data-ui-theme="liquid"] [data-liquid-optic] {
-  --optic-blur: 22px;
+  --optic-blur: 13px;
   --glass-scale: 1;
   --glass-lift: 0px;
   transform: perspective(1200px) rotateX(var(--glass-tilt-x)) rotateY(var(--glass-tilt-y)) translateY(var(--glass-lift)) scale(var(--glass-scale)) translateZ(0);
@@ -887,8 +887,8 @@
     0 36px 84px rgba(56,56,56,.08);
   transition: box-shadow .34s ease, border-color .3s ease, transform .5s cubic-bezier(.22,1,.36,1);
 }
-:root[data-ui-theme="liquid"] [data-liquid-optic="thick"] { --optic-blur: 28px; }
-:root[data-ui-theme="liquid"] [data-liquid-optic="deep"] { --optic-blur: 36px; }
+:root[data-ui-theme="liquid"] [data-liquid-optic="thick"] { --optic-blur: 16px; }
+:root[data-ui-theme="liquid"] [data-liquid-optic="deep"] { --optic-blur: 20px; }
 :root[data-ui-theme="liquid"] [data-liquid-optic].liquid-refraction-ready {
   -webkit-backdrop-filter: var(--liquid-refraction) blur(var(--optic-blur)) saturate(1.06) brightness(1.25) contrast(0.995);
   backdrop-filter: var(--liquid-refraction) blur(var(--optic-blur)) saturate(1.06) brightness(1.25) contrast(0.995);
@@ -959,8 +959,8 @@
   overflow: hidden;
   background: linear-gradient(155deg, rgba(255,255,255,.42), rgba(255,255,255,.15));
   box-shadow: inset 0 1px 0 rgba(255,255,255,.78), 0 2px 5px rgba(51,51,51,.07);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
-  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  backdrop-filter: blur(8px) saturate(1.2);
   transition: transform .42s cubic-bezier(.22,1,.36,1), border-radius .42s cubic-bezier(.22,1,.36,1), background .25s ease, box-shadow .3s ease;
 }
 :root[data-ui-theme="liquid"] :is(.btn, .chip, .pattern-chip, .seg-btn)::after {

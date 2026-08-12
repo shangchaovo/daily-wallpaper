@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 · WordPaper</title>
+  <link rel="stylesheet" href="/css/auth.css?v=20260812c">
+</head>
+<body>
+  <main class="auth-shell">
+    <section class="auth-intro" aria-labelledby="auth-brand">
+      <div class="auth-logo" aria-hidden="true"><span>W</span></div>
+      <p class="eyebrow">WORDPAPER · YOUR SPACE</p>
+      <h1 id="auth-brand">从任意设备，<br>接着昨天的进度。</h1>
+      <p class="intro-copy">选择熟悉的方式进入。词库、提醒、复习记录和壁纸设置始终归属于你的独立账号。</p>
+      <ul class="trust-list">
+        <li><span>01</span> SQLite 持久化，重启后继续</li>
+        <li><span>02</span> 每个账号独立的数据空间</li>
+        <li><span>03</span> 同一公网地址，跨电脑登录</li>
+      </ul>
+    </section>
+
+    <section class="auth-card">
+      <header class="card-heading">
+        <p class="card-kicker">安全登录</p>
+        <h2>继续使用 WordPaper</h2>
+        <p>首次使用 Google 或邮箱时会自动创建独立账号。</p>
+      </header>
+
+      <div class="provider-stack" aria-label="第三方账号登录">
+        <button id="auth-google" class="provider-button provider-button-google" type="button" data-provider="google" disabled aria-disabled="true">
+          <span class="provider-mark google" aria-hidden="true">G</span>
+          <span class="provider-copy"><strong>使用 Google 继续</strong><small data-provider-state>正在检查可用性…</small></span>
+          <span class="provider-arrow" aria-hidden="true">›</span>
+        </button>
+      </div>
+      <p id="provider-status" class="sr-only" role="status" aria-live="polite"></p>
+
+      <div class="auth-divider"><span>或使用邮箱</span></div>
+
+      <div id="email-panel" class="email-panel" role="tabpanel" aria-labelledby="tab-login">
+        <div class="auth-tabs" role="tablist" aria-label="邮箱账号操作">
+          <button id="tab-login" class="auth-tab active" type="button" role="tab" aria-selected="true" aria-controls="email-panel" tabindex="0">登录</button>
+          <button id="tab-register" class="auth-tab" type="button" role="tab" aria-selected="false" aria-controls="email-panel" tabindex="-1">注册</button>
+        </div>
+
+        <form id="auth-form" novalidate aria-describedby="form-hint auth-error">
+          <div class="form-heading">
+            <h3 id="form-title">邮箱登录</h3>
+            <p id="form-hint">登录后会从服务器恢复你的全部 WordPaper 数据。</p>
+          </div>
+          <label>
+            <span id="identifier-label">邮箱地址或旧用户名</span>
+            <input id="username" name="identifier" autocomplete="username" minlength="3" maxlength="254" required placeholder="name@example.com">
+          </label>
+          <div id="verification-row" class="verification-field" hidden>
+            <label for="email-code"><span>邮箱验证码</span></label>
+            <div class="verification-control">
+              <input id="email-code" name="verificationCode" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="6 位验证码" aria-describedby="email-code-hint">
+              <button id="send-email-code" class="send-code-button" type="button">发送验证码</button>
+            </div>
+            <p id="email-code-hint" class="field-hint" aria-live="polite">验证码 10 分钟内有效。</p>
+          </div>
+          <label>
+            <span>密码</span>
+            <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="至少 8 个字符">
+          </label>
+          <label id="confirm-row" hidden>
+            <span>确认密码</span>
+            <input id="password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="再次输入密码">
+          </label>
+          <p id="auth-error" class="auth-error" role="alert" hidden></p>
+          <p id="auth-status" class="sr-only" role="status" aria-live="polite"></p>
+          <button id="submit-auth" class="submit-auth" type="submit">使用邮箱登录</button>
+        </form>
+      </div>
+      <p class="migration-note">首次注册会将本浏览器原有的 WordPaper 数据迁入该账号；Google 和邮箱账号之间不会自动共享或合并数据。</p>
+    </section>
+  </main>
+  <script src="/js/auth.js?v=20260812e"></script>
+</body>
+</html>

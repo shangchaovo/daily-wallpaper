@@ -384,7 +384,7 @@ def main():
             check("中央展示板使用深层玻璃折射", stage_optics["optic"] == "deep"
                   and stage_optics["ready"] is True
                   and "url(" in stage_optics["filter"]
-                  and "blur(36px)" in stage_optics["filter"])
+                  and "blur(20px)" in stage_optics["filter"])
 
             # Pointer light, gentle parallax and liquid press feedback are
             # functional states, rather than a static glass-coloured skin.

@@ -4,14 +4,23 @@ wallpaper-*.png
 custom-*.png
 companion-config.json
 companion-state.json
+custom-words.json
 pet-position.json
 pet-closed
+wordpaper.sqlite*
+.wordpaper-data/
+runtime-data/
 
 # render-test output
 scripts/out_v3/
 
 # companion one-click zip (rebuilt on demand by server /companion.zip)
 scripts/每日壁纸伴侣.zip
+
+# Local deployment secrets. Keep the documented template only.
+.env
+.env.*
+!.env.example
 
 # OS / editor
 .DS_Store

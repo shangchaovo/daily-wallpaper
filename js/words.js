@@ -22,7 +22,8 @@
   function wordKey(word) { return String(word.word || '') + '\u0000' + String(word.phonetic || ''); }
   function availableLibrary(id, list) {
     const known = window.Store.getKnownWords(id);
-    return (list || []).filter(word => !known.has(wordKey(word)));
+    const mastered = new Set(window.Review ? window.Review.masteredWords(id).map(item => wordKey(item.word)) : []);
+    return (list || []).filter(word => !known.has(wordKey(word)) && !mastered.has(wordKey(word)));
   }
 
   // Deterministic 32-bit hash of a string (FNV-1a-ish) for seeding.

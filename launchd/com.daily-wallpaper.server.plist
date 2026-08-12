@@ -2,44 +2,32 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- Portable template. Run scripts/install_macos_service.sh; do not copy this file directly. -->
     <key>Label</key>
-    <string>com.daily-wallpaper.server</string>
+    <string>com.wordpaper.server</string>
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/xieshangchao/.local/bin/node</string>
-        <string>/Users/xieshangchao/daily-wallpaper/server.js</string>
+        <string>__NODE_PATH__</string>
+        <string>__PROJECT_DIR__/server.js</string>
     </array>
 
     <key>EnvironmentVariables</key>
     <dict>
-        <key>PORT</key>
-        <string>8770</string>
-        <key>PATH</key>
-        <string>/Users/xieshangchao/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PORT</key><string>8770</string>
+        <key>HOST</key><string>127.0.0.1</string>
+        <key>WORDPAPER_MODE</key><string>local</string>
+        <key>WORDPAPER_DATA_DIR</key><string>__DATA_DIR__</string>
+        <key>PATH</key><string>__NODE_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
 
     <key>WorkingDirectory</key>
-    <string>/Users/xieshangchao/daily-wallpaper</string>
-
-    <key>RunAtLoad</key>
-    <true/>
-
+    <string>__PROJECT_DIR__</string>
+    <key>RunAtLoad</key><true/>
     <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-        <key>Crashed</key>
-        <true/>
-    </dict>
-
-    <key>ThrottleInterval</key>
-    <integer>10</integer>
-
-    <key>StandardOutPath</key>
-    <string>/Users/xieshangchao/Library/Logs/daily-wallpaper/server.log</string>
-
-    <key>StandardErrorPath</key>
-    <string>/Users/xieshangchao/Library/Logs/daily-wallpaper/server.log</string>
+    <dict><key>SuccessfulExit</key><false/><key>Crashed</key><true/></dict>
+    <key>ThrottleInterval</key><integer>10</integer>
+    <key>StandardOutPath</key><string>__LOG_PATH__</string>
+    <key>StandardErrorPath</key><string>__LOG_PATH__</string>
 </dict>
 </plist>

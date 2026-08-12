@@ -24,9 +24,28 @@ const os = require('os');
 const ROOT = __dirname;
 const DEFAULT_PORT = 8771;
 const isMac = process.platform === 'darwin';
+const RUNTIME_ROOT = path.resolve(process.env.WORDPAPER_COMPANION_DATA_DIR || (isMac
+  ? path.join(os.homedir(), 'Library', 'Application Support', 'WordPaper', 'companion')
+  : path.join(os.homedir(), '.wordpaper', 'companion')));
+fs.mkdirSync(RUNTIME_ROOT, { recursive: true, mode: 0o700 });
+
+/* Runtime state must survive code updates and moving/re-extracting the app.
+ * Copy the old in-repository files once, but keep the originals for rollback. */
+function migratedRuntimePath(name) {
+  const target = path.join(RUNTIME_ROOT, name);
+  const legacy = path.join(ROOT, name);
+  if (!fs.existsSync(target) && fs.existsSync(legacy) && legacy !== target) {
+    try { fs.copyFileSync(legacy, target, fs.constants.COPYFILE_EXCL); } catch {}
+  }
+  return target;
+}
+
+const CUSTOM_WORDS_PATH = process.env.WORDPAPER_CUSTOM_WORDS_PATH || migratedRuntimePath('custom-words.json');
+const PET_CLOSED_PATH = migratedRuntimePath('pet-closed');
+const PET_POSITION_PATH = migratedRuntimePath('pet-position.json');
 
 /* ---------------- config ---------------- */
-const CONFIG_PATH = path.join(ROOT, 'companion-config.json');
+const CONFIG_PATH = process.env.WORDPAPER_CONFIG_PATH || migratedRuntimePath('companion-config.json');
 function loadConfig() {
   const dflt = {
     port: DEFAULT_PORT,
@@ -40,12 +59,14 @@ function loadConfig() {
     wordsPerGroup: 6,
     bgPattern: 'soft',
     showReminders: true,
+    uiTheme: 'editorial',          // 'anime' | 'editorial' | 'liquid'（网页外观与小词灵同步）
     // floating pet window
     petEnabled: true,
     petCorner: 'top-right',       // 'top-right'|'top-left'|'bottom-right'|'bottom-left'
+    petWordsPerPage: 6,           // 小词灵连续词槽；与壁纸每组数量相互独立
     reminders: [],                // optional: hard-code reminders for wallpaper
-    // one-key switch to the next word group + refresh the desktop wallpaper
-    advanceByClick: true,         // single-click the pet = advance, shift-click = back
+    // 换壁纸快捷键仍可选；小词灵本身点击词卡只记录记忆，不再换词。
+    advanceByClick: true,
     hotkeyEnabled: false,         // global hotkey (needs Input Monitoring; off by default)
     hotkey: 'ctrl+alt+w',         // format: ctrl/alt/shift/cmd + '+' + a-z or 'space'
     hotkeyBack: 'ctrl+alt+shift+w', // back (undo last advance)
@@ -59,16 +80,180 @@ function loadConfig() {
   }
 }
 const CFG = loadConfig();
+if (process.env.WORDPAPER_WEB_ORIGIN) {
+  try {
+    const origin = new URL(process.env.WORDPAPER_WEB_ORIGIN);
+    if (origin.protocol === 'http:' && ['localhost', '127.0.0.1', '::1'].includes(origin.hostname)) CFG.webOrigin = origin.origin;
+  } catch {}
+}
+const PET_UI_THEMES = new Set(['anime', 'editorial', 'liquid']);
+if (!PET_UI_THEMES.has(CFG.uiTheme)) CFG.uiTheme = 'editorial';
+if (process.env.WORDPAPER_PORT) CFG.port = Math.max(1, Number(process.env.WORDPAPER_PORT) || DEFAULT_PORT);
+if (process.env.WORDPAPER_TEST_MODE === '1') { CFG.autoSetWallpaper = false; CFG.petEnabled = false; CFG.hotkeyEnabled = false; }
+function saveConfig() {
+  const tmp = `${CONFIG_PATH}.tmp-${process.pid}`;
+  try { fs.writeFileSync(tmp, JSON.stringify(CFG, null, 2)); fs.renameSync(tmp, CONFIG_PATH); }
+  catch { try { fs.unlinkSync(tmp); } catch {} }
+}
 
 /* Manual-advance state: each "next" (pet click or global hotkey) bumps the
  * counter, which is mixed into the pick seed so the wallpaper + pet jump to a
  * new word group right away (the auto interval still rotates by bucket). */
-const STATE_PATH = path.join(ROOT, 'companion-state.json');
-let state = { bump: 0 };
-try { state = Object.assign({ bump: 0 }, JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'))); } catch {}
+const STATE_PATH = process.env.WORDPAPER_STATE_PATH || migratedRuntimePath('companion-state.json');
+const STATE_DEFAULTS = { bump: 0, petMemoryEvents: [], petMemorySeq: 0, petMemoryStreamId: '', petLearnedByLibrary: {}, petDecksByLibrary: {}, petKnownByLibrary: {} };
+let state = Object.assign({}, STATE_DEFAULTS);
+try { state = Object.assign({}, STATE_DEFAULTS, JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'))); } catch {}
+if (!Array.isArray(state.petMemoryEvents)) state.petMemoryEvents = [];
+if (!state.petLearnedByLibrary || typeof state.petLearnedByLibrary !== 'object') state.petLearnedByLibrary = {};
+if (!state.petDecksByLibrary || typeof state.petDecksByLibrary !== 'object') state.petDecksByLibrary = {};
+if (!state.petKnownByLibrary || typeof state.petKnownByLibrary !== 'object') state.petKnownByLibrary = {};
+function makeStreamId() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
+if (!state.petMemoryStreamId) state.petMemoryStreamId = makeStreamId();
+function saveState() {
+  const tmp = `${STATE_PATH}.tmp-${process.pid}`;
+  try { fs.writeFileSync(tmp, JSON.stringify(state)); fs.renameSync(tmp, STATE_PATH); }
+  catch { try { fs.unlinkSync(tmp); } catch {} }
+}
+// 移除 PushPlus 后立即丢弃遗留的通知凭据，避免继续保存在本机状态中。
+let migratedState = false;
+if (state.notification) { delete state.notification; migratedState = true; }
+function petWordKey(word) { return String((word && word.word) || '') + '|' + String((word && word.meaning) || ''); }
+function screeningKey(word) { return String((word && word.word) || '') + '\u0000' + String((word && word.phonetic) || ''); }
+
+// 迁移旧版全局状态到按词库隔离的结构；历史事件/排期中有完整 word 时可恢复快照。
+if (state.petGroup && state.petGroup.library) { state.petDecksByLibrary[state.petGroup.library] = { library: state.petGroup.library, index: 0, drawSeq: Number(state.petGroup.round) || 1, pages: [state.petGroup] }; migratedState = true; }
+Object.keys(state.petGroupsByLibrary || {}).forEach(library => {
+  if (!state.petDecksByLibrary[library]) state.petDecksByLibrary[library] = { library, index: 0, drawSeq: Number(state.petGroupsByLibrary[library].round) || 1, pages: [state.petGroupsByLibrary[library]] };
+  migratedState = true;
+});
+const legacyWords = {};
+(state.petMemoryEvents || []).forEach(event => { if (event && event.word) legacyWords[petWordKey(event.word)] = { word: event.word, at: event.at || Date.now() }; });
+Object.keys(state.petReviewSchedule || {}).forEach(key => {
+  const item = state.petReviewSchedule[key]; if (item && item.word) legacyWords[key] = { word: item.word, at: item.learnedAt || item.lastSeenAt || Date.now() };
+});
+Object.keys(state.petRemembered || {}).forEach(key => {
+  const record = legacyWords[key]; if (!record) return;
+  const lib = ((state.petMemoryEvents || []).find(event => event && event.word && petWordKey(event.word) === key) || {}).library || CFG.library;
+  if (!state.petLearnedByLibrary[lib]) state.petLearnedByLibrary[lib] = {};
+  if (!state.petLearnedByLibrary[lib][key]) state.petLearnedByLibrary[lib][key] = record;
+  migratedState = true;
+});
+if ('petGroup' in state) { delete state.petGroup; migratedState = true; }
+if ('petGroupsByLibrary' in state) { delete state.petGroupsByLibrary; migratedState = true; }
+if ('petRemembered' in state) { delete state.petRemembered; migratedState = true; }
+if ('petReviewSchedule' in state) { delete state.petReviewSchedule; migratedState = true; }
+if (migratedState) saveState();
+
+function learnedFor(library) {
+  if (!state.petLearnedByLibrary[library]) state.petLearnedByLibrary[library] = {};
+  return state.petLearnedByLibrary[library];
+}
+function knownFor(library) { return new Set(Array.isArray(state.petKnownByLibrary[library]) ? state.petKnownByLibrary[library] : []); }
+function uniquePetWords(list) {
+  const seen = new Set(), out = [];
+  (list || []).forEach(word => { const key = petWordKey(word); if (key && !seen.has(key)) { seen.add(key); out.push(word); } });
+  return out;
+}
+// 壁纸数量与小词灵词槽解耦：壁纸可以显示任意数量，小词灵始终维护连续的
+// 6 个学习位置（除非整个候选词库只剩不到 6 个），点击一词就补回一词。
+function petSlotCount() {
+  const requested = Math.max(1, Math.min(36, Number(CFG.petWordsPerPage) || 6));
+  return requested > 1 && requested % 2 ? Math.min(36, requested + 1) : requested;
+}
+
+/* 小词灵采用可翻页的连续首轮队列：点掉一词就补一词；上一页/下一页只切换
+ * 尚未完成首轮的词，不会推进艾宾浩斯阶段。 */
+function availablePetWords(library) {
+  const learned = learnedFor(library), known = knownFor(library);
+  return uniquePetWords(loadWords(library)).filter(word => !learned[petWordKey(word)] && !known.has(screeningKey(word)));
+}
+function deckFor(library) {
+  let deck = state.petDecksByLibrary[library];
+  if (!deck || !Array.isArray(deck.pages)) deck = state.petDecksByLibrary[library] = { library, index: 0, drawSeq: 0, pages: [] };
+  deck.library = library;
+  deck.index = Math.max(0, Math.min(Number(deck.index) || 0, Math.max(0, deck.pages.length - 1)));
+  deck.drawSeq = Math.max(0, Number(deck.drawSeq) || 0);
+  return deck;
+}
+function drawPetWords(library, deck, count, excluded) {
+  const candidates = availablePetWords(library).filter(word => !excluded.has(petWordKey(word)));
+  if (!candidates.length || count <= 0) return [];
+  deck.drawSeq += 1;
+  return pickForDate(candidates, count, `pet-deck:${dateKey(new Date())}:${deck.drawSeq}`, 'random');
+}
+function refillPetPage(library, deck, page) {
+  const learned = learnedFor(library), known = knownFor(library), count = petSlotCount();
+  const availableKeys = new Set(uniquePetWords(loadWords(library)).map(petWordKey));
+  page.words = uniquePetWords(page.words).filter(word => availableKeys.has(petWordKey(word)) && !learned[petWordKey(word)] && !known.has(screeningKey(word)));
+  const current = new Set(page.words.map(petWordKey));
+  const acrossPages = new Set();
+  deck.pages.forEach(other => (other.words || []).forEach(word => acrossPages.add(petWordKey(word))));
+  let added = drawPetWords(library, deck, count - page.words.length, acrossPages);
+  if (added.length < count - page.words.length) {
+    added = added.concat(drawPetWords(library, deck, count - page.words.length - added.length, new Set([...current, ...added.map(petWordKey)])));
+  }
+  page.words = uniquePetWords(page.words.concat(added)).slice(0, count);
+  page.exhausted = page.words.length === 0 && availablePetWords(library).length === 0;
+  return page;
+}
+function newPetPage(library, deck, excludeAllPages) {
+  const excluded = new Set();
+  if (excludeAllPages) deck.pages.forEach(page => (page.words || []).forEach(word => excluded.add(petWordKey(word))));
+  const count = petSlotCount();
+  let words = drawPetWords(library, deck, count, excluded);
+  if (!words.length) words = drawPetWords(library, deck, count, new Set());
+  return { library, id: `${Date.now().toString(36)}-${deck.drawSeq}`, words, exhausted: words.length === 0 };
+}
+function ensurePetDeck(library) {
+  const lib = library || CFG.library, deck = deckFor(lib);
+  if (!deck.pages.length) deck.pages.push(newPetPage(lib, deck, false));
+  deck.index = Math.max(0, Math.min(deck.index, deck.pages.length - 1));
+  refillPetPage(lib, deck, deck.pages[deck.index]);
+  saveState();
+  return deck;
+}
+function currentPetPage(library) { const deck = ensurePetDeck(library); return deck.pages[deck.index]; }
+function petFirstPassWords() { return currentPetPage(CFG.library).words.slice(); }
+function navigatePetPage(direction) {
+  const library = CFG.library, deck = ensurePetDeck(library), dir = direction < 0 ? -1 : 1;
+  if (dir < 0) deck.index = Math.max(0, deck.index - 1);
+  else if (deck.index < deck.pages.length - 1) deck.index += 1;
+  else {
+    deck.pages.push(newPetPage(library, deck, true));
+    deck.index = deck.pages.length - 1;
+    if (deck.pages.length > 24) { deck.pages.shift(); deck.index -= 1; }
+  }
+  refillPetPage(library, deck, deck.pages[deck.index]);
+  saveState();
+  return { page: deck.index + 1, words: deck.pages[deck.index].words.length, exhausted: deck.pages[deck.index].exhausted };
+}
+function completePetFirstPass(word) {
+  const library = CFG.library, deck = ensurePetDeck(library), page = deck.pages[deck.index], key = petWordKey(word), now = Date.now();
+  const index = page.words.findIndex(item => petWordKey(item) === key);
+  if (index < 0 || learnedFor(library)[key]) return { page, duplicate: true };
+  page.words.splice(index, 1);
+  learnedFor(library)[key] = { word, at: now };
+  refillPetPage(library, deck, page);
+  state.petMemorySeq = Math.max(0, Number(state.petMemorySeq) || 0) + 1;
+  const event = { id: state.petMemorySeq, at: now, library, word, action: 'learn', firstPass: true, page: deck.index + 1, refilled: page.words.length >= petSlotCount() };
+  state.petMemoryEvents.push(event);
+  state.petMemoryEvents = state.petMemoryEvents.slice(-160);
+  saveState();
+  return { page, deck, duplicate: false, event };
+}
+function learnedSnapshot() {
+  const out = [];
+  Object.keys(state.petLearnedByLibrary).forEach(library => {
+    Object.keys(state.petLearnedByLibrary[library] || {}).forEach(key => {
+      const record = state.petLearnedByLibrary[library][key];
+      if (record && record.word) out.push({ library, word: record.word, at: record.at || 0 });
+    });
+  });
+  return out;
+}
 function bumpDelta(d) {
   state.bump = (((state.bump + d) % 1000000) + 1000000) % 1000000;
-  try { fs.writeFileSync(STATE_PATH, JSON.stringify(state)); } catch {}
+  saveState();
 }
 function bumpNext() { bumpDelta(1); }
 function bumpPrev() { bumpDelta(-1); }
@@ -98,11 +283,21 @@ function parseHotkey(spec) {
 /* ---------------- word data ---------------- */
 function loadWords(library) {
   if (library === 'custom') {
-    try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'custom-words.json'), 'utf8')); }
+    try { const words = JSON.parse(fs.readFileSync(CUSTOM_WORDS_PATH, 'utf8')); return Array.isArray(words) ? words : []; }
     catch { return []; }
   }
   const f = path.join(ROOT, 'data', `words_${library}.json`);
   try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return []; }
+}
+
+function saveCustomWords(words) {
+  const clean = (Array.isArray(words) ? words : []).filter(word => word && typeof word === 'object' && String(word.word || '').trim()).slice(0, 10000).map(word => ({
+    word: String(word.word || '').trim(), phonetic: String(word.phonetic || ''), pos: String(word.pos || ''),
+    meaning: String(word.meaning || ''), example: String(word.example || ''),
+  }));
+  const tmp = `${CUSTOM_WORDS_PATH}.tmp-${process.pid}`;
+  try { fs.writeFileSync(tmp, JSON.stringify(clean, null, 2)); fs.renameSync(tmp, CUSTOM_WORDS_PATH); return clean; }
+  catch { try { fs.unlinkSync(tmp); } catch {} return null; }
 }
 
 function hash(str) {
@@ -162,6 +357,7 @@ const THEMES = {
   cream: { bg: '#fdf6ec', bg2: '#f7e8d4', ink: '#4a3b2e', sub: '#a08a73', accent: '#e8834a', accentSoft: '#fbe0c8', line: 'rgba(74,59,46,0.12)', patternInk: '#d9b48f' },
   mint: { bg: '#eafaf1', bg2: '#d3f2e0', ink: '#1f4536', sub: '#6f9a87', accent: '#2fae7d', accentSoft: '#c0ecd8', line: 'rgba(31,69,54,0.12)', patternInk: '#9ed9bd' },
   sky: { bg: '#e8f4fd', bg2: '#d3e9fb', ink: '#1e3a52', sub: '#6f8ba3', accent: '#3b8fd9', accentSoft: '#c2e0f7', line: 'rgba(30,58,82,0.12)', patternInk: '#a4cdec' },
+  liquid: { bg: '#f8fbff', bg2: '#dce7f0', ink: '#223242', sub: '#6a7f92', accent: '#7299b8', accentSoft: '#dbe8f2', line: 'rgba(53,79,101,0.12)', patternInk: '#bfd2e0', liquid: true },
   night: { bg: '#151a2e', bg2: '#1f2745', ink: '#eef1f8', sub: '#8b95b3', accent: '#7aa2f7', accentSoft: '#2a3358', line: 'rgba(238,241,248,0.14)', patternInk: '#3a4670' },
   forest: { bg: '#12211c', bg2: '#1c332a', ink: '#e8f0ea', sub: '#8fae9f', accent: '#5ec99a', accentSoft: '#234534', line: 'rgba(232,240,234,0.12)', patternInk: '#2e5040' },
 };
@@ -177,11 +373,16 @@ function buildSVG(opts) {
   const margin = Math.round(W * 0.06);
   const parts = [];
   parts.push(`<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="${t.bg}"/><stop offset="1" stop-color="${t.bg2 || t.bg}"/></linearGradient>
+    <stop offset="0" stop-color="${t.bg}"/><stop offset="${t.liquid ? '.36' : '1'}" stop-color="${t.liquid ? '#edf5fa' : (t.bg2 || t.bg)}"/><stop offset="1" stop-color="${t.bg2 || t.bg}"/></linearGradient>
     <radialGradient id="blob" cx="0.85" cy="0.12" r="0.6">
-    <stop offset="0" stop-color="${t.accentSoft}" stop-opacity="0.6"/><stop offset="1" stop-color="${t.accentSoft}" stop-opacity="0"/></radialGradient></defs>`);
+    <stop offset="0" stop-color="${t.accentSoft}" stop-opacity="0.6"/><stop offset="1" stop-color="${t.accentSoft}" stop-opacity="0"/></radialGradient>
+    <radialGradient id="liquidSky" cx="0.9" cy="0.12" r="0.52"><stop offset="0" stop-color="#a9d2e8" stop-opacity=".48"/><stop offset="1" stop-color="#dceaf3" stop-opacity="0"/></radialGradient>
+    <radialGradient id="liquidPearl" cx="0.16" cy="0.92" r="0.48"><stop offset="0" stop-color="#dcd9f0" stop-opacity=".36"/><stop offset="1" stop-color="#eef5fa" stop-opacity="0"/></radialGradient></defs>`);
   parts.push(`<rect width="${W}" height="${H}" fill="url(#g)"/>`);
-  if (settings.bgPattern !== 'none') parts.push(`<rect width="${W}" height="${H}" fill="url(#blob)"/>`);
+  if (t.liquid) {
+    parts.push(`<rect width="${W}" height="${H}" fill="url(#liquidSky)"/><rect width="${W}" height="${H}" fill="url(#liquidPearl)"/>`);
+    parts.push(`<rect x="${Math.round(W * .008)}" y="${Math.round(H * .008)}" width="${Math.round(W * .984)}" height="${Math.round(H * .984)}" rx="${Math.round(Math.min(W,H) * .025)}" fill="none" stroke="#ffffff" stroke-opacity=".7" stroke-width="${Math.max(2,Math.round(Math.min(W,H)*.003))}"/>`);
+  } else if (settings.bgPattern !== 'none') parts.push(`<rect width="${W}" height="${H}" fill="url(#blob)"/>`);
   const fam = 'Yuanti SC, YouYuan, 幼圆, PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif';
   const text = (x, y, s, size, fill, weight, anchor) =>
     `<text x="${x}" y="${y}" font-family="${fam}" font-size="${size}" fill="${fill}" font-weight="${weight || 400}"${anchor ? ` text-anchor="${anchor}"` : ''}>${esc(s)}</text>`;
@@ -285,204 +486,255 @@ function rasterizeSVG(svg, outPng, W, H, cb) {
  * HTML in a borderless-ish WKWebView. No install, no focus stealing (Accessory
  * policy), lives on every Space. Respawned on a timer to refresh its content;
  * killed on companion exit. */
-/* Pet card footer: a hint line + two visible ←回退 / 前进→ buttons, so the
- * window is self-explanatory without remembering click gestures. These geometry
- * constants feed BOTH the SVG (where buttons are drawn) and the JXA (where they
- * are hit-tested), so they must stay in sync. */
-const PET_FOOTER_H = 70;                       // 底部提示行 + 按钮栏总高 (pt)
-const PET_BTN = { w: 96, h: 32, bottomPad: 8, gap: 16 };  // 按钮宽/高/距底边距/间距 (pt)
-const PET_RESIZE = { pad: 4, size: 32 };       // 右下角拉伸手柄尺寸 (pt) — 大一点好抓
-const MIN_PET_W = 250, MIN_PET_H = 170, MAX_PET = 900;   // 宠物可拉伸的尺寸范围 (pt)
+const PET_FOOTER_H = 78;
+const PET_BTN = { w: 110, h: 34, bottomPad: 10, gap: 8, count: 3 };
+// SVG 与 JXA 共用同一套几何，避免视觉元素与鼠标热区错位。
+const PET_FRAME = { padX: 14, padY: 12, headerH: 54, bodyBottomGap: 7 };
+// 视觉为圆形小把手，热区略大，避免旧版直角三角形既突兀又难抓。
+const PET_RESIZE = { pad: 9, size: 36 };
+// 六个连续词槽在最小尺寸下仍需要完整展示中文，因此不再允许缩到无法学习的细条。
+const MIN_PET_W = 280, MIN_PET_H = 360, MAX_PET = 520;   // 宠物可拉伸的尺寸范围 (pt)
 
 /* 形状 → 排列模式：竖版窄条=逐行堆叠；横版宽条=每词一列；方形=两列网格。 */
 function petMode(W, H) {
   const r = W / H;
-  if (r >= 1.5) return 'wide';
-  if (r <= 0.75) return 'tall';
+  if (r >= 1.32) return 'wide';
+  if (r <= 0.72) return 'tall';
   return 'square';
 }
 /* 文字等比缩放：相对默认卡（320×428）的几何平均比例，放大卡片字也跟着放大。
- * clamp 到 0.7–2.6 防止极小/极大窗口下文字失控。 */
+ * clamp 到 0.74–1.65，让放大有辨识度但不会变成遮挡桌面的巨型卡片。 */
 function petScale(W, H) {
   const s = Math.sqrt((W / 320) * (H / 428));
-  return Math.max(0.7, Math.min(2.6, s));
+  return Math.max(0.74, Math.min(1.65, s));
 }
+
+/* 三套界面主题共用同一套几何与命中区域，只替换材质。Liquid 的外壳会
+ * 露出下方原生 NSGlassEffectView；词卡仍保持较实的承载面，确保细字可读。 */
+const PET_SKINS = {
+  editorial: {
+    font: 'Avenir Next, PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif',
+    shell: '#172731', shell2: '#233945', shellLine: '#49606c', shellOpacity: .965,
+    top1: '#223744', top2: '#1b2e39', top3: '#263e49', topOpacity: 1,
+    card: '#f5f0e7', card2: '#ebe4d9', cardStroke: '#d5cec2', cardOpacity: 1,
+    ink: '#27343b', sub: '#686159', phonetic: '#59615f',
+    moss: '#648f7d', rust: '#b96e55', rustStrong: '#914d3b', gold: '#c7a56b', mist: '#dce4e2',
+    title: '#f5f0e7', titleSub: '#aebdc3', empty: '#f3eee5', emptySub: '#9eafb5', footerSub: '#9eafb5', reminder: '#d8e0df',
+    avatarOuter: '#14232d', avatarStroke: '#c7a56b', avatarFace: '#efd6c1', avatarHair: '#516473', avatarHairLine: '#405563', avatarEye: '#273741', avatarSpark: '#f9f6ef',
+    closeFill: '#324955', closeStroke: '#607580', closeInk: '#edf1ef',
+    prevFill: '#2c414c', prevStroke: '#617783', prevInk: '#f6f0e8', memoryFill: '#496f63', memoryStroke: '#7da190', memoryInk: '#f6f0e8', nextFill: '#914d3b', nextStroke: '#c98a72', nextInk: '#f6f0e8',
+    handleFill: '#f5f0e7', handleStroke: '#c7a56b', handleInk: '#233945', shellShadow: '#071116', shellShadowOpacity: .34, cardShadow: '#071116', cardShadowOpacity: .2,
+  },
+  anime: {
+    font: 'Yuanti SC, YouYuan, PingFang SC, Hiragino Sans GB, sans-serif',
+    shell: '#f8f2ff', shell2: '#e9f7ff', shellLine: '#c3a8e8', shellOpacity: .985,
+    top1: '#fff3fa', top2: '#f0eaff', top3: '#d9f5ed', topOpacity: .97,
+    card: '#fffdfd', card2: '#f8f0ff', cardStroke: '#e2cdec', cardOpacity: 1,
+    ink: '#40335f', sub: '#7c709d', phonetic: '#9b79ad',
+    moss: '#65cdb1', rust: '#ff82b2', rustStrong: '#a777e8', gold: '#f3d76b', mist: '#edf9ff',
+    title: '#40335f', titleSub: '#806f9e', empty: '#51416f', emptySub: '#8e7ca9', footerSub: '#8b77a5', reminder: '#5d4b7c',
+    avatarOuter: '#5b4586', avatarStroke: '#f3d76b', avatarFace: '#ffe2d3', avatarHair: '#9a76d5', avatarHairLine: '#7658aa', avatarEye: '#40335f', avatarSpark: '#fffdfd',
+    closeFill: '#fffafd', closeStroke: '#d5c2ed', closeInk: '#7a63a6',
+    prevFill: '#f4eeff', prevStroke: '#cbb4ec', prevInk: '#7153a7', memoryFill: '#e4f7ff', memoryStroke: '#9fcef1', memoryInk: '#386888', nextFill: '#ff82b2', nextStroke: '#d967a1', nextInk: '#fffdfd',
+    handleFill: '#fffdfd', handleStroke: '#b9a0df', handleInk: '#7658aa', shellShadow: '#8063ad', shellShadowOpacity: .18, cardShadow: '#8e6bb6', cardShadowOpacity: .14,
+  },
+  liquid: {
+    font: '-apple-system, BlinkMacSystemFont, SF Pro Text, PingFang SC, sans-serif',
+    shell: '#fbfbfd', shell2: '#ececf1', shellLine: '#ffffff', shellOpacity: .36,
+    top1: '#ffffff', top2: '#f7f4f7', top3: '#f1f5f2', topOpacity: .44,
+    card: '#ffffff', card2: '#f4f4f7', cardStroke: '#ffffff', cardOpacity: .84,
+    ink: '#1d1d1f', sub: '#626269', phonetic: '#6e6e73',
+    moss: '#248a53', rust: '#636366', rustStrong: '#007aff', gold: '#ffffff', mist: '#ffffff',
+    title: '#1d1d1f', titleSub: '#66666e', empty: '#2c2c2e', emptySub: '#6e6e73', footerSub: '#6e6e73', reminder: '#48484a',
+    avatarOuter: '#ffffff', avatarStroke: '#d8d8de', avatarFace: '#f0d4c2', avatarHair: '#6c7078', avatarHairLine: '#5d626b', avatarEye: '#2c2c2e', avatarSpark: '#ffffff',
+    closeFill: '#ffffff', closeStroke: '#ffffff', closeInk: '#3a3a3c',
+    prevFill: '#fafafd', prevStroke: '#ffffff', prevInk: '#3a3a3c', memoryFill: '#f2f2f7', memoryStroke: '#d8d8de', memoryInk: '#3a3a3c', nextFill: '#007aff', nextStroke: '#84bdff', nextInk: '#ffffff',
+    handleFill: '#fafafd', handleStroke: '#ffffff', handleInk: '#3a3a3c', shellShadow: '#000000', shellShadowOpacity: .13, cardShadow: '#000000', cardShadowOpacity: .09,
+    liquid: true,
+  },
+};
+function petSkin(name) { return PET_SKINS[PET_UI_THEMES.has(name) ? name : 'editorial']; }
 
 /* Render the pet card as SVG (rasterized to PNG later). The pet WINDOW is a
  * borderless draggable grip that just draws this image — no WKWebView, because
  * a web view swallows the mouse drag (movableByWindowBackground won't work). */
-function buildPetSVG(words, reminders, theme, W, H) {
+function buildPetSVG(words, reminders, uiTheme, W, H) {
   const s = 2; // render at 2x so it's crisp on retina
   const w = W * s, h = H * s;
-  const padX = 15, padY = 30;                  // pt（标题落在词灵头部内部，而非透明边缘）
+  const { padX, padY, headerH, bodyBottomGap } = PET_FRAME;
   const footerH = PET_FOOTER_H;
   const parts = [];
-  parts.push(`<defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">` +
-    `<stop offset="0" stop-color="${theme.bg}"/><stop offset="1" stop-color="${theme.bg2 || theme.bg}"/></linearGradient>` +
-    `<filter id="petShadow" x="-15%" y="-12%" width="130%" height="135%"><feDropShadow dx="0" dy="${4 * s}" stdDeviation="${5 * s}" flood-color="#1f2740" flood-opacity="0.18"/></filter></defs>`);
-  // 不再用一整块巨大的「宠物身体」包住内容。词灵由独立猫脸和悬浮词泡泡组成：
-  // 放大时仍是轻巧的角色组件，单词永远是视觉主角。
-  const fam = 'Yuanti SC, YouYuan, 幼圆, PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif';
+  const skin = petSkin(uiTheme);
+  const { shell, shell2, shellLine, card, card2, ink, sub, moss, rust, rustStrong, gold, mist, phonetic } = skin;
+  parts.push(`<defs>` +
+    `<linearGradient id="shellG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${shell}"/><stop offset="1" stop-color="${shell2}"/></linearGradient>` +
+    `<linearGradient id="topG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${skin.top1}"/><stop offset=".58" stop-color="${skin.top2}"/><stop offset="1" stop-color="${skin.top3}"/></linearGradient>` +
+    `<linearGradient id="cardG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${card}"/><stop offset="1" stop-color="${card2}"/></linearGradient>` +
+    `<linearGradient id="liquidRim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".32" stop-color="#f4e4ec"/><stop offset=".58" stop-color="#e7f2ed"/><stop offset=".78" stop-color="#ebe8f6"/><stop offset="1" stop-color="#ffffff"/></linearGradient>` +
+    `<filter id="shellShadow" x="-18%" y="-15%" width="136%" height="140%"><feDropShadow dx="0" dy="${5 * s}" stdDeviation="${7 * s}" flood-color="${skin.shellShadow}" flood-opacity="${skin.shellShadowOpacity}"/></filter>` +
+    `<filter id="cardShadow" x="-12%" y="-14%" width="124%" height="135%"><feDropShadow dx="0" dy="${1.6 * s}" stdDeviation="${2.2 * s}" flood-color="${skin.cardShadow}" flood-opacity="${skin.cardShadowOpacity}"/></filter>` +
+    `</defs>`);
+  const fam = skin.font;
   const txt = (x, y, str, size, fill, weight) =>
     `<text x="${x}" y="${y}" font-family="${fam}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ''}>${esc(str)}</text>`;
   const ctxt = (cx, cy, str, size, fill, weight) =>
     `<text x="${cx}" y="${cy}" text-anchor="middle" font-family="${fam}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ''}>${esc(str)}</text>`;
+  const rtxt = (x, y, str, size, fill, weight) =>
+    `<text x="${x}" y="${y}" text-anchor="end" font-family="${fam}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ''}>${esc(str)}</text>`;
   const maxW = w - 2 * padX * s;
   const estW = (str, fs) => { let u = 0; for (const ch of String(str)) u += /[　-鿿豈-﫿]/.test(ch) ? 1 : (ch === ' ' ? 0.3 : 0.55); return u * fs; };
-  // 卡通点缀：角落小星星 + 圆点（低透明，不抢单词）
-  const star4 = (cx, cy, r, fill, op) => {
-    let d = `M ${cx} ${cy - r}`;
-    for (let i = 1; i <= 8; i++) {
-      const ang = -Math.PI / 2 + (i * Math.PI) / 4;
-      const rr = (i % 2 === 0) ? r : r * 0.42;
-      d += ` L ${cx + Math.cos(ang) * rr} ${cy + Math.sin(ang) * rr}`;
-    }
-    return `<path d="${d} Z" fill="${fill}" opacity="${op}"/>`;
-  };
-  parts.push(star4(w * 0.10, h * 0.10, 7 * s, theme.accentSoft || theme.accent, 0.7));
-  parts.push(star4(w * 0.90, h * 0.20, 5.5 * s, theme.accentSoft || theme.accent, 0.6));
-  parts.push(star4(w * 0.12, h * 0.90, 6 * s, theme.accentSoft || theme.accent, 0.55));
-  parts.push(`<circle cx="${w * 0.28}" cy="${h * 0.07}" r="${2.6 * s}" fill="${theme.patternInk || theme.sub}" opacity="0.4"/>`);
-  parts.push(`<circle cx="${w * 0.94}" cy="${h * 0.55}" r="${2.2 * s}" fill="${theme.patternInk || theme.sub}" opacity="0.35"/>`);
-  parts.push(`<circle cx="${w * 0.20}" cy="${h * 0.55}" r="${2.0 * s}" fill="${theme.patternInk || theme.sub}" opacity="0.3"/>`);
-  // ---- 卡通调色 + 可复用件（先定义再画）----
-  const soft = theme.accentSoft || '#ffe0c2';
-  const acc = theme.accent || '#ff8f4d';
-  const dark = theme.ink || '#503722';
-  const lightLine = theme.line || 'rgba(128,90,40,0.16)';
-  // 词灵：小耳朵、圆脸、腮红与微笑。单词卡被放在它的“肚皮”里。
+  // 外壳是一个悬浮的记忆舱，而不是动物身体或笔记本轮廓。
+  parts.push(`<rect x="${4 * s}" y="${4 * s}" width="${(W - 8) * s}" height="${(H - 8) * s}" rx="${22 * s}" fill="url(#shellG)" opacity="${skin.shellOpacity}" filter="url(#shellShadow)"/>`);
+  parts.push(`<rect x="${5 * s}" y="${5 * s}" width="${(W - 10) * s}" height="${(H - 10) * s}" rx="${21 * s}" fill="none" stroke="${shellLine}" stroke-width="${.8 * s}" opacity=".72"/>`);
+  parts.push(`<rect x="${7 * s}" y="${7 * s}" width="${(W - 14) * s}" height="${(headerH + 5) * s}" rx="${17 * s}" fill="url(#topG)" opacity="${skin.topOpacity}"/>`);
+  if (skin.liquid) {
+    parts.push(`<rect x="${5.7 * s}" y="${5.7 * s}" width="${(W - 11.4) * s}" height="${(H - 11.4) * s}" rx="${20.4 * s}" fill="none" stroke="url(#liquidRim)" stroke-width="${1.15 * s}" opacity=".78"/>`);
+    parts.push(`<path d="M ${20 * s} ${12 * s} Q ${W * .34 * s} ${4.5 * s} ${W * .57 * s} ${11 * s}" fill="none" stroke="#fff" stroke-width="${1.25 * s}" stroke-linecap="round" opacity=".68"/>`);
+  }
+  parts.push(`<path d="M ${18 * s} ${(padY + headerH - 1) * s} H ${(W - 18) * s}" stroke="${gold}" stroke-width="${.8 * s}" opacity=".42"/>`);
+  // 可拖动的标题区用三根短线做暗示，不添加新交互。
+  [0, 1, 2].forEach(i => parts.push(`<rect x="${(W / 2 - 13 + i * 10) * s}" y="${10 * s}" width="${6 * s}" height="${1.2 * s}" rx="${.6 * s}" fill="${mist}" opacity=".28"/>`));
+
+  // 小词灵只保留一枚精致二次元头像徽章：头发、表情和领口构成陪伴感，没有巨大耳朵或身体。
   const sprite = (cx, cy, r) => (
-    `<path d="M ${cx - r * .72} ${cy - r * .35} L ${cx - r * .78} ${cy - r * 1.1} L ${cx - r * .13} ${cy - r * .67} Z" fill="${soft}" stroke="${acc}" stroke-width="${1.5 * s}"/>` +
-    `<path d="M ${cx + r * .72} ${cy - r * .35} L ${cx + r * .78} ${cy - r * 1.1} L ${cx + r * .13} ${cy - r * .67} Z" fill="${soft}" stroke="${acc}" stroke-width="${1.5 * s}"/>` +
-    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${soft}" stroke="${acc}" stroke-width="${1.6 * s}"/>` +
-    `<circle cx="${cx - r * 0.34}" cy="${cy - r * 0.05}" r="${r * 0.13}" fill="${dark}"/>` +
-    `<circle cx="${cx + r * 0.34}" cy="${cy - r * 0.05}" r="${r * 0.13}" fill="${dark}"/>` +
-    `<circle cx="${cx - r * 0.58}" cy="${cy + r * 0.28}" r="${r * 0.16}" fill="${acc}" opacity="0.45"/>` +
-    `<circle cx="${cx + r * 0.58}" cy="${cy + r * 0.28}" r="${r * 0.16}" fill="${acc}" opacity="0.45"/>` +
-    `<path d="M ${cx - r * 0.22} ${cy + r * 0.28} Q ${cx} ${cy + r * 0.55} ${cx + r * 0.22} ${cy + r * 0.28}" stroke="${dark}" stroke-width="${1.8 * s}" fill="none" stroke-linecap="round"/>`
+    `<circle cx="${cx}" cy="${cy}" r="${r * 1.18}" fill="${skin.avatarOuter}" stroke="${skin.avatarStroke}" stroke-width="${1.1 * s}"/>` +
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${skin.avatarFace}"/>` +
+    `<path d="M ${cx - r * .95} ${cy - r * .08} Q ${cx - r * .76} ${cy - r * 1.08} ${cx} ${cy - r * .98} Q ${cx + r * .92} ${cy - r * .88} ${cx + r * .95} ${cy + r * .05} Q ${cx + r * .66} ${cy - r * .30} ${cx + r * .35} ${cy - r * .50} Q ${cx + r * .14} ${cy - r * .12} ${cx - r * .03} ${cy - r * .55} Q ${cx - r * .38} ${cy - r * .18} ${cx - r * .95} ${cy - r * .08} Z" fill="${skin.avatarHair}"/>` +
+    `<path d="M ${cx - r * .94} ${cy + r * .02} Q ${cx - r * .91} ${cy + r * .72} ${cx - r * .45} ${cy + r * .92} M ${cx + r * .94} ${cy + r * .02} Q ${cx + r * .91} ${cy + r * .72} ${cx + r * .45} ${cy + r * .92}" stroke="${skin.avatarHairLine}" stroke-width="${2.1 * s}" fill="none" stroke-linecap="round"/>` +
+    `<path d="M ${cx - r * .47} ${cy + r * .08} Q ${cx - r * .27} ${cy - r * .02} ${cx - r * .08} ${cy + r * .08} M ${cx + r * .08} ${cy + r * .08} Q ${cx + r * .27} ${cy - r * .02} ${cx + r * .47} ${cy + r * .08}" stroke="${skin.avatarEye}" stroke-width="${1.3 * s}" fill="none" stroke-linecap="round"/>` +
+    `<circle cx="${cx - r * .31}" cy="${cy + r * .05}" r="${r * .055}" fill="${skin.avatarSpark}"/><circle cx="${cx + r * .31}" cy="${cy + r * .05}" r="${r * .055}" fill="${skin.avatarSpark}"/>` +
+    `<path d="M ${cx - r * .13} ${cy + r * .42} Q ${cx} ${cy + r * .51} ${cx + r * .13} ${cy + r * .42}" stroke="${rust}" stroke-width="${1.1 * s}" fill="none" stroke-linecap="round"/>` +
+    `<path d="M ${cx - r * .28} ${cy + r * 1.02} L ${cx} ${cy + r * .77} L ${cx + r * .28} ${cy + r * 1.02}" fill="${rust}" opacity=".9"/>`
   );
-  // 悬浮词泡泡：不依附大底板，避免被看成笔记本或夸张的动物身体。
+  // 六个词槽是暖雾白「任务片」，左侧苔玉状态线将它们连成连续词流。
   const tile = (x, y, tw, th, rr) =>
-    `<rect x="${x}" y="${y + 2 * s}" width="${tw}" height="${th}" rx="${rr}" fill="${acc}" opacity="0.12"/>` +
-    `<rect x="${x}" y="${y}" width="${tw}" height="${th}" rx="${rr}" fill="url(#pg)" opacity="0.96" stroke="${lightLine}" stroke-width="${1.2 * s}"/>`;
-  // 独立的圆脸做角色锚点；会随窗口适度放大，但严格限制上限，不会反过来抢走单词的注意力。
-  const faceScale = Math.min(1.55, petScale(W, H));
-  const faceR = 12 * faceScale;
-  const faceX = W * .5 - 82 * faceScale;
-  const faceY = padY + faceR + 2;
-  const headerH = Math.round(36 * faceScale);
+    `<rect x="${x}" y="${y + 1.5 * s}" width="${tw}" height="${th}" rx="${rr}" fill="${skin.cardShadow}" opacity="${skin.cardShadowOpacity}" filter="url(#cardShadow)"/>` +
+    `<rect x="${x}" y="${y}" width="${tw}" height="${th}" rx="${rr}" fill="url(#cardG)" fill-opacity="${skin.cardOpacity}" stroke="${skin.cardStroke}" stroke-width="${.8 * s}"/>` +
+    `<rect x="${x + 1.2 * s}" y="${y + rr * .7}" width="${2.2 * s}" height="${Math.max(0, th - rr * 1.4)}" rx="${1.1 * s}" fill="${moss}" opacity=".86"/>`;
+  const faceR = 12.5;
+  const faceX = padX + 18;
+  const faceY = padY + 25;
   parts.push(sprite(faceX * s, faceY * s, faceR * s));
-  parts.push(txt((faceX + faceR * 1.75) * s, (faceY + 5 * faceScale) * s, '小词灵 · 今日词组', 13 * s * faceScale, dark, 800));
+  const deck = state.petDecksByLibrary[CFG.library] || { index: 0, pages: [] };
+  const pageLabel = words.length ? `第 ${deck.index + 1} 页 · ${words.length} 个首轮词` : '首轮新词已完成';
+  parts.push(txt((faceX + 22) * s, (padY + 22) * s, '小词灵 · 首轮词流', 12.2 * s, skin.title, 700));
+  parts.push(txt((faceX + 22) * s, (padY + 39) * s, pageLabel, 9.5 * s, skin.titleSub, 500));
+  parts.push(`<circle cx="${(faceX + 14) * s}" cy="${(padY + 39 - 3) * s}" r="${2 * s}" fill="${moss}"/>`);
   // 右上角关闭按钮（✕），点击可关闭小窗
-  const cR = 14 * s;
+  const cR = 12 * s;
   const cX = w - padX * s - cR, cY = padY * s + cR;
-  parts.push(`<circle cx="${cX}" cy="${cY}" r="${cR}" fill="${theme.sub}" opacity="0.55"/>`);
-  parts.push(`<path d="M ${cX - 6 * s} ${cY - 6 * s} L ${cX + 6 * s} ${cY + 6 * s} M ${cX + 6 * s} ${cY - 6 * s} L ${cX - 6 * s} ${cY + 6 * s}" stroke="#ffffff" stroke-width="${2 * s}" stroke-linecap="round"/>`);
+  parts.push(`<circle cx="${cX}" cy="${cY}" r="${cR}" fill="${skin.closeFill}" fill-opacity="${skin.liquid ? .62 : 1}" stroke="${skin.closeStroke}" stroke-width="${.8 * s}"/>`);
+  parts.push(`<path d="M ${cX - 4.5 * s} ${cY - 4.5 * s} L ${cX + 4.5 * s} ${cY + 4.5 * s} M ${cX + 4.5 * s} ${cY - 4.5 * s} L ${cX - 4.5 * s} ${cY + 4.5 * s}" stroke="${skin.closeInk}" stroke-width="${1.45 * s}" stroke-linecap="round"/>`);
   // 单词区（底部预留 footerH 给提示行 + 按钮栏）
   const mode = petMode(W, H);
   const scale = petScale(W, H);              // 文字等比缩放：卡片越大字越大
-  const footerTop = (H - footerH);                       // pt
+  const footerTop = H - footerH;                       // pt
   const waX = padX, waY = padY + headerH;
-  const waW = W - 2 * padX, waH = H - footerH - padY - headerH - padY;
+  const waW = W - 2 * padX, waH = footerTop - waY - bodyBottomGap;
   const n = Math.max(1, words.length);
   const shown = words.slice(0, n);
+  // 小词灵是日常学习卡：中文释义始终可见；只有记忆本会遮盖中文来做回忆检测。
   const meaning = wd => (wd.pos ? wd.pos + ' ' : '') + (wd.meaning || '');
+  if (!words.length) {
+    parts.push(ctxt(w / 2, (waY + waH * .45) * s, '这一词书的首轮新词已完成', 14 * s * scale, skin.empty, 700));
+    parts.push(ctxt(w / 2, (waY + waH * .45 + 23 * scale) * s, '继续去艾宾浩斯记忆本巩固吧', 10 * s * scale, skin.emptySub));
+  }
   if (mode === 'wide') {
-    // 横版宽条：每词一格（词上释义下，居中）。列数放不下就自动换行成多行网格，
-    // 保证全部单词都显示——旧版 slice(0, cols) 会在拉伸时「丢失」后面的词。
-    const minCol = 80 * scale;                                 // 每列最小宽度
-    const cols = Math.max(1, Math.min(n, Math.floor(waW / minCol) || 1));
+    // 横版固定最多三列，保持卡片宽度与三层文字层级，不为填满宽度而挤成六个细条。
+    const cols = Math.max(1, Math.min(n, 3, Math.floor(waW / (125 * scale)) || 1));
     const rows = Math.ceil(n / cols);
     const colW = waW / cols;
     const rowH = waH / rows;
-    // 行高不够时略缩字号，避免挤爆
-    const cellScale = Math.min(scale, Math.max(0.55, rowH / 56));
-    const gapX = 7 * scale, gapY = 6 * scale;
+    const cellScale = Math.min(scale, Math.max(0.78, rowH / 86));
+    const gapX = 8 * scale, gapY = 7 * scale;
     shown.forEach((wd, i) => {
       const c = i % cols, r = Math.floor(i / cols);
       const cellX = waX + c * colW;
       const cellTop = waY + r * rowH;
-      const cx = cellX + colW / 2;
-      const mid = cellTop + rowH / 2;
-      const wordFs = 14 * cellScale;
-      const subFs = 9.5 * cellScale;
-      parts.push(tile((cellX + gapX / 2) * s, (cellTop + gapY / 2) * s, (colW - gapX) * s, (rowH - gapY) * s, 12 * s * cellScale));
-      // 词 + 音标 + 释义垂直居中于该格
-      const blockH = (wd.phonetic ? 3 : 2) * (subFs + 4) + wordFs * 0.2;
-      let yy = mid - blockH / 2 + wordFs * 0.75;
-      parts.push(ctxt(cx * s, yy * s, wd.word, wordFs * s, dark, 800));
-      yy += wordFs * 0.95;
-      if (wd.phonetic) { parts.push(ctxt(cx * s, yy * s, wd.phonetic, 9 * s * cellScale, theme.sub)); yy += subFs + 3; }
-      parts.push(ctxt(cx * s, yy * s, truncate(meaning(wd), subFs * s, (colW - 14) * s), subFs * s, theme.sub));
+      const cardTop = cellTop + gapY / 2, cardH = rowH - gapY;
+      const ix = cellX + gapX / 2 + 11 * cellScale;
+      const right = cellX + colW - gapX / 2 - 10 * cellScale;
+      parts.push(tile((cellX + gapX / 2) * s, cardTop * s, (colW - gapX) * s, cardH * s, 11 * s * cellScale));
+      const phoneticSize = Math.max(9, 8.4 * cellScale);
+      const meaningSize = Math.max(9.3, 9.3 * cellScale);
+      parts.push(txt(ix * s, (cardTop + cardH * .32) * s, truncate(wd.word, 14.5 * s * cellScale, (colW - gapX - 19) * s), 14.5 * s * cellScale, ink, 700));
+      if (wd.phonetic) parts.push(rtxt(right * s, (cardTop + cardH * .57) * s, truncate(wd.phonetic, phoneticSize * s, (colW - gapX - 19) * s), phoneticSize * s, phonetic));
+      parts.push(txt(ix * s, (cardTop + cardH * .79) * s, truncate(meaning(wd), meaningSize * s, (colW - gapX - 19) * s), meaningSize * s, sub));
     });
   } else if (mode === 'square') {
-    // 方形：两列词格，只保留单词与释义（字号随卡片缩放）
+    // 方形：稳定的 2×3 连续词槽，英文、音标、中文都有独立基线。
     const cols = 2, rows = Math.max(1, Math.ceil(n / 2));
     const gapX = 8 * scale, gapY = 7 * scale;
     const colW = (waW - gapX) / cols;
     const rowH = waH / rows;
+    const cellScale = Math.min(scale, Math.max(.82, rowH / 92));
     shown.forEach((wd, i) => {
       const c = i % cols, r = Math.floor(i / cols);
       const x = waX + c * (colW + gapX);
       const cellTop = waY + r * rowH;
-      const mid = cellTop + rowH / 2;
-      parts.push(tile(x * s, (cellTop + gapY / 2) * s, colW * s, (rowH - gapY) * s, 13 * s * scale));
-      const ix = x + 10 * scale;
-      parts.push(txt(ix * s, (mid - 7 * scale) * s + Math.round(3 * s * scale), wd.word, 14 * s * scale, dark, 800));
-      parts.push(txt((x + 9 * scale) * s, (mid + 12 * scale) * s, truncate(meaning(wd), 9.5 * s * scale, (colW - 16 * scale) * s), 9.5 * s * scale, theme.sub));
+      const cardTop = cellTop + gapY / 2, cardH = rowH - gapY;
+      const ix = x + 10 * cellScale, right = x + colW - 10 * cellScale;
+      parts.push(tile(x * s, cardTop * s, colW * s, cardH * s, 12 * s * cellScale));
+      const phoneticSize = Math.max(9, 8.5 * cellScale);
+      const meaningSize = Math.max(9.3, 9.4 * cellScale);
+      parts.push(txt(ix * s, (cardTop + Math.max(21, cardH * .31)) * s, truncate(wd.word, 14.5 * s * cellScale, (colW - 18 * cellScale) * s), 14.5 * s * cellScale, ink, 700));
+      if (wd.phonetic) parts.push(rtxt(right * s, (cardTop + Math.max(37, cardH * .54)) * s, truncate(wd.phonetic, phoneticSize * s, (colW - 18 * cellScale) * s), phoneticSize * s, phonetic));
+      parts.push(txt(ix * s, (cardTop + Math.min(cardH - 8, Math.max(51, cardH * .78))) * s, truncate(meaning(wd), meaningSize * s, (colW - 18 * cellScale) * s), meaningSize * s, sub));
     });
   } else {
-    // 竖版窄条：逐行词格（词 + 音标 + 释义，字号随卡片缩放）
+    // 竖版窄条：逐行词格，音标右对齐，中文始终保留。
     const rowH = waH / n;
     const tilePad = 2.5 * scale;                       // 贴纸上下留白
+    const cellScale = Math.min(scale, Math.max(.8, rowH / 64));
     shown.forEach((wd, i) => {
       const rowTop = waY + i * rowH;
       const mid = rowTop + rowH / 2;
       parts.push(tile(waX * s, (rowTop + tilePad) * s, waW * s, (rowH - tilePad * 2) * s, 12 * s * scale));
-      const ix = waX + 12 * scale;
-      parts.push(txt(ix * s, (mid - 5 * scale) * s, wd.word, 16 * s * scale, dark, 800));
-      if (wd.phonetic) {
-        const ww = Math.round(estW(wd.word, 16 * s * scale));
-        parts.push(txt((ix + ww + 7 * scale) * s, (mid - 5 * scale) * s, wd.phonetic, 10.5 * s * scale, theme.sub));
-      }
-      parts.push(txt(ix * s, (mid + 11 * scale) * s, truncate(meaning(wd), 11 * s * scale, maxW - 30 * s * scale), 11 * s * scale, theme.sub));
+      const ix = waX + 12 * cellScale, right = waX + waW - 11 * cellScale;
+      const phoneticSize = Math.max(9, 9 * cellScale);
+      const meaningSize = Math.max(9.5, 10.2 * cellScale);
+      parts.push(txt(ix * s, (mid - 5 * cellScale) * s, truncate(wd.word, 15 * s * cellScale, waW * .62 * s), 15 * s * cellScale, ink, 700));
+      if (wd.phonetic) parts.push(rtxt(right * s, (mid - 5 * cellScale) * s, truncate(wd.phonetic, phoneticSize * s, waW * .33 * s), phoneticSize * s, phonetic));
+      parts.push(txt(ix * s, (mid + 13 * cellScale) * s, truncate(meaning(wd), meaningSize * s, (waW - 22 * cellScale) * s), meaningSize * s, sub));
     });
   }
   // 提醒（横版太矮放不下，只竖版/方形画；且单词区下方确有空间才画，避免压到按钮栏）
   if (reminders && reminders.length && mode !== 'wide') {
     let ry = waY + (mode === 'square' ? Math.ceil(n / 2) * (waH / Math.max(1, Math.ceil(n / 2))) : n * (waH / n)) + 4 * scale;
     if (ry < footerTop - 16 * scale) {           // 标签本身放得下才画
-      parts.push(txt(padX * s, ry * s, '今日提醒', 12 * s * scale, theme.accent, 700));
+      parts.push(txt(padX * s, ry * s, '今日提醒', 12 * s * scale, gold, 700));
       ry += 18 * scale;
       reminders.slice(0, 5).forEach(r => {
         if (ry > footerTop - 14 * scale) return;   // 不压到按钮栏
-        parts.push(`<circle cx="${(padX + 5 * scale) * s}" cy="${(ry - 3.5 * scale) * s}" r="${4.5 * s * scale}" fill="none" stroke="${acc}" stroke-width="${1.4 * s}"/>`);
-        parts.push(txt(padX * s + 16 * s * scale, ry * s, truncate(r.text + (r.time ? ' · ' + r.time : ''), 11 * s * scale, maxW - 16 * s * scale), 11 * s * scale, theme.ink));
+        parts.push(`<circle cx="${(padX + 5 * scale) * s}" cy="${(ry - 3.5 * scale) * s}" r="${4.5 * s * scale}" fill="none" stroke="${rust}" stroke-width="${1.4 * s}"/>`);
+        parts.push(txt(padX * s + 16 * s * scale, ry * s, truncate(r.text + (r.time ? ' · ' + r.time : ''), 11 * s * scale, maxW - 16 * s * scale), 11 * s * scale, skin.reminder));
         ry += 16 * scale;
       });
     }
   }
-  // ---- 底部提示行（标注，降低使用门槛）----
-  parts.push(ctxt(w / 2, (H - footerH + 16) * s, '单击换词 · Shift＋单击回退 · ↘ 拖拽缩放', 10 * s, theme.sub));
-  // ---- 底部可视化按钮：◀ 回退 / 前进 ▶（窄窗口自动变窄，避开右下拉伸手柄）----
-  const btn = PET_BTN;
-  const btnW = Math.min(btn.w, Math.floor((W - 3 * padX - btn.gap - PET_RESIZE.size) / 2));
-  const btnTop = (H - btn.h - btn.bottomPad);
-  const btnX0 = Math.round((W - (2 * btnW + btn.gap)) / 2);
-  const btnX1 = btnX0 + btnW + btn.gap;
-  const btnC = (x0, label) =>
-    `<rect x="${x0 * s}" y="${(btnTop + 2.5) * s}" width="${btnW * s}" height="${btn.h * s}" rx="${btn.h * s / 2}" fill="${acc}" opacity="0.30"/>` +
-    `<rect x="${x0 * s}" y="${btnTop * s}" width="${btnW * s}" height="${btn.h * s}" rx="${btn.h * s / 2}" fill="#ffffff" stroke="${acc}" stroke-width="${1.6 * s}"/>` +
-    `<text x="${(x0 + btnW / 2) * s}" y="${(btnTop + btn.h / 2) * s + Math.round(4.5 * s)}" text-anchor="middle" font-family="${fam}" font-size="${13 * s}" font-weight="700" fill="${dark}">${esc(label)}</text>`;
-  parts.push(btnC(btnX0, '◀ 复习'));
-  parts.push(btnC(btnX1, '换词 ▶'));
-  // ---- 右下角拉伸手柄（三条斜线，明显的"可拖拽调大小"提示）----
+  parts.push(`<path d="M ${14 * s} ${(footerTop + 1) * s} H ${(W - 14) * s}" stroke="${shellLine}" stroke-width="${.7 * s}" opacity=".7"/>`);
+  parts.push(ctxt(w / 2, (footerTop + 15) * s, '点词记首轮 · 记忆本完成周期巩固', 8.7 * s, skin.footerSub, 500));
+  const btn = PET_BTN, actionW = W - 2 * padX - PET_RESIZE.size - 8;
+  const btnW = Math.min(btn.w, Math.floor((actionW - btn.gap * (btn.count - 1)) / btn.count));
+  const actionUsedW = btnW * btn.count + btn.gap * (btn.count - 1);
+  const btnY = H - btn.bottomPad - btn.h;
+  const btnX0 = padX + Math.max(0, (actionW - actionUsedW) / 2);
+  const btnX1 = btnX0 + btnW + btn.gap, btnX2 = btnX1 + btnW + btn.gap;
+  const petBtn = (x, label, tone) => {
+    const prefix = tone === 'next' ? 'next' : tone === 'memory' ? 'memory' : 'prev';
+    return `<rect x="${x * s}" y="${(btnY + 2) * s}" width="${btnW * s}" height="${btn.h * s}" rx="${12 * s}" fill="${skin.cardShadow}" opacity="${skin.liquid ? .08 : .2}"/>` +
+      `<rect x="${x * s}" y="${btnY * s}" width="${btnW * s}" height="${btn.h * s}" rx="${12 * s}" fill="${skin[`${prefix}Fill`]}" fill-opacity="${skin.liquid && tone !== 'next' ? .7 : 1}" stroke="${skin[`${prefix}Stroke`]}" stroke-width="${.9 * s}"/>` +
+      `<text x="${(x + btnW / 2) * s}" y="${(btnY + 22) * s}" text-anchor="middle" font-family="${fam}" font-size="${10.5 * s}" font-weight="700" fill="${skin[`${prefix}Ink`]}">${esc(label)}</text>`;
+  };
+  parts.push(petBtn(btnX0, '← 上一页', 'prev'));
+  parts.push(petBtn(btnX1, '记忆本', 'memory'));
+  parts.push(petBtn(btnX2, '下一页 →', 'next'));
+  // ---- 右下角圆形拉伸把手：小而明确，不再使用生硬的三角形。----
   const rs = PET_RESIZE;
-  const gx = (W - rs.pad - rs.size) * s, gy = (H - rs.pad - rs.size) * s, gs = rs.size * s;
-  for (let i = 0; i < 3; i++) {
-    const o = i * 8 * s;
-    parts.push(`<line x1="${gx + gs - 4 - o}" y1="${gy + 10 + o}" x2="${gx + gs - 12 - o}" y2="${gy + 18 + o}" stroke="${theme.sub}" stroke-width="${2 * s}" stroke-linecap="round" opacity="0.55"/>`);
-  }
+  const gcx = (W - rs.pad - rs.size / 2) * s, gcy = (H - rs.pad - rs.size / 2) * s, gr = (rs.size / 2) * s;
+  parts.push(`<circle cx="${gcx}" cy="${gcy + 2 * s}" r="${gr}" fill="${skin.cardShadow}" opacity="${skin.liquid ? .1 : .26}"/>`);
+  parts.push(`<circle cx="${gcx}" cy="${gcy}" r="${gr}" fill="${skin.handleFill}" fill-opacity="${skin.liquid ? .74 : 1}" stroke="${skin.handleStroke}" stroke-width="${.9 * s}"/>`);
+  parts.push(`<path d="M ${gcx - 6 * s} ${gcy + 6 * s} L ${gcx + 6 * s} ${gcy - 6 * s} M ${gcx + 2 * s} ${gcy - 6 * s} H ${gcx + 6 * s} V ${gcy - 2 * s} M ${gcx - 2 * s} ${gcy + 6 * s} H ${gcx - 6 * s} V ${gcy + 2 * s}" stroke="${skin.handleInk}" stroke-width="${1.45 * s}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
 }
 /* crude width estimate + truncate with ellipsis (SVG text doesn't wrap). */
@@ -498,19 +750,21 @@ function truncate(str, fs, maxW) {
 }
 
 function buildPetJXA(W, H) {
-  const meta = JSON.stringify({ btn: PET_BTN, rsz: PET_RESIZE, minW: MIN_PET_W, minH: MIN_PET_H, max: MAX_PET, port: CFG.port, advance: CFG.advanceByClick !== false });
+  const meta = JSON.stringify({ btn: PET_BTN, frame: PET_FRAME, footerH: PET_FOOTER_H, rsz: PET_RESIZE, minW: MIN_PET_W, minH: MIN_PET_H, max: MAX_PET, port: CFG.port, count: petWords.length, wordKeys: petWords.map(petWordKey) });
+  const memoryTarget = localWebOrigin(CFG.webOrigin) || `http://localhost:${CFG.port}`;
   return `
 ObjC.import('Cocoa');
 function run(argv){
   var pngPath = argv[0], corner = argv[1], posFile = argv[2], savedPos = argv[3], closeFile = argv[4], W = ${W}, H = ${H};
   var META = ${meta};
-  var BTN = META.btn, RSZ = META.rsz, MINW = META.minW, MINH = META.minH, MAXS = META.max, PORT = META.port, clickEnabled = META.advance;
-  var nextUrl = 'http://127.0.0.1:' + PORT + '/next.php';
-  var prevUrl = 'http://127.0.0.1:' + PORT + '/prev.php';
+  var BTN = META.btn, FRAME = META.frame, FOOTERH = META.footerH, RSZ = META.rsz, MINW = META.minW, MINH = META.minH, MAXS = META.max, PORT = META.port, COUNT = META.count, KEYS = META.wordKeys;
+  var rememberUrl = 'http://127.0.0.1:' + PORT + '/remember.php?i=';
+  var pageUrl = 'http://127.0.0.1:' + PORT + '/pet-page.php?dir=';
+  var memoryUrl = ${JSON.stringify(memoryTarget + '/?openMemory=1')};
   var sizeUrl = 'http://127.0.0.1:' + PORT + '/pet-size.php';
   var renderUrl = 'http://127.0.0.1:' + PORT + '/pet-render.php';
   var img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
-  var startX = 0, startY = 0, oX = 0, oY = 0, dragging = false, moved = false, downTime = 0;
+  var startX = 0, startY = 0, oX = 0, oY = 0, dragging = false, moved = false, downTime = 0, wordIndex = -1;
   var resizing = false, rStartX = 0, rStartY = 0, rW0 = 0, rH0 = 0, lastRenderAt = 0;
   function postUrl(u){
     var req = $.NSMutableURLRequest.alloc.initWithURL($.NSURL.URLWithString(u));
@@ -521,15 +775,56 @@ function run(argv){
   function layout(){
     var fs = win.frame.size;
     var W2 = fs.width, H2 = fs.height;
-    var bw = Math.min(BTN.w, Math.floor((W2 - 45 - BTN.gap - RSZ.size) / 2));
-    var bx0 = Math.round((W2 - (2 * bw + BTN.gap)) / 2);
+    var actionW = W2 - 2 * FRAME.padX - RSZ.size - 8;
+    var bw = Math.min(BTN.w, Math.floor((actionW - BTN.gap * (BTN.count - 1)) / BTN.count));
+    var usedW = bw * BTN.count + BTN.gap * (BTN.count - 1);
+    var bx0 = FRAME.padX + Math.max(0, (actionW - usedW) / 2);
     return {
       W: W2, H: H2,
-      closeX: W2 - 38, closeY: H2 - 38,
+      closeX: W2 - FRAME.padX - 28, closeY: H2 - FRAME.padY - 28,
       rszX: W2 - RSZ.pad - RSZ.size, rszY0: RSZ.pad, rszY1: RSZ.pad + RSZ.size,
-      btnY0: BTN.bottomPad, btnY1: BTN.bottomPad + BTN.h,
-      btnX0: bx0, btnX1: bx0 + bw + BTN.gap, btnW: bw
+      btnX0: bx0, btnX1: bx0 + bw + BTN.gap, btnX2: bx0 + (bw + BTN.gap) * 2, btnW: bw
     };
+  }
+  // NSView 在不同 macOS/屏幕缩放组合下可能给出翻转的局部 y 坐标；
+  // 为右下角圆形缩放把手同时保留两套命中坐标，避免视觉和热区错位。
+  function inResizeY(p, L){ return (p.y >= L.rszY0 && p.y <= L.rszY1) || (p.y >= L.H - L.rszY1 && p.y <= L.H - L.rszY0); }
+  function footerAction(p, L){
+    // 三个按钮间距只有 8pt，因此命中区使用精确边界，杜绝翻页与记忆本互相抢事件。
+    if (p.y < BTN.bottomPad - 3 || p.y > BTN.bottomPad + BTN.h + 3) return '';
+    if (p.x >= L.btnX0 && p.x <= L.btnX0 + L.btnW) return 'prev';
+    if (p.x >= L.btnX1 && p.x <= L.btnX1 + L.btnW) return 'memory';
+    if (p.x >= L.btnX2 && p.x <= L.btnX2 + L.btnW) return 'next';
+    return '';
+  }
+  // 与 SVG 的三种布局对应：只命中词泡泡，空白仍可自由拖动窗口。
+  function wordAt(p){
+    var fs = win.frame.size, W2 = fs.width, H2 = fs.height, qx = p.x, qy = H2 - p.y;
+    if (COUNT < 1) return -1;
+    var scale = Math.max(.74, Math.min(1.65, Math.sqrt((W2 / 320) * (H2 / 428))));
+    var padX = FRAME.padX, padY = FRAME.padY, headerH = FRAME.headerH, footerH = FOOTERH;
+    var waX = padX, waY = padY + headerH, waW = W2 - 2 * padX, waH = H2 - footerH - waY - FRAME.bodyBottomGap, n = COUNT;
+    if (qx < waX || qx > waX + waW || qy < waY || qy > waY + waH) return -1;
+    var ratio = W2 / H2;
+    if (ratio >= 1.32) {
+      var cols = Math.max(1, Math.min(n, 3, Math.floor(waW / (125 * scale)) || 1));
+      var rows = Math.ceil(n / cols), colW = waW / cols, rowH = waH / rows;
+      var gapX = 8 * scale, gapY = 7 * scale, lx = (qx - waX) % colW, ly = (qy - waY) % rowH;
+      if (lx < gapX / 2 || lx > colW - gapX / 2 || ly < gapY / 2 || ly > rowH - gapY / 2) return -1;
+      var c = Math.floor((qx - waX) / colW), r = Math.floor((qy - waY) / rowH), i = r * cols + c;
+      return i < n ? i : -1;
+    }
+    if (ratio <= .72) {
+      var rowH = waH / n, tilePad = 2.5 * scale, localY = (qy - waY) % rowH;
+      if (localY < tilePad || localY > rowH - tilePad) return -1;
+      var ri = Math.floor((qy - waY) / rowH); return ri < n ? ri : -1;
+    }
+    var squareGapX = 8 * scale, squareGapY = 7 * scale, cw = (waW - squareGapX) / 2;
+    var rowH = waH / Math.ceil(n / 2), localY = (qy - waY) % rowH;
+    if (localY < squareGapY / 2 || localY > rowH - squareGapY / 2) return -1;
+    var dx = qx - waX, col = dx <= cw ? 0 : (dx >= cw + squareGapX ? 1 : -1);
+    if (col < 0) return -1;
+    var row = Math.floor((qy - waY) / rowH), si = row * 2 + col; return si < n ? si : -1;
   }
   // 拖动中实时重渲：用异步请求（不阻塞主线程），窗口全程跟手；
   // 渲染在服务端 ~50ms 完成，回到主线程后刷新成清晰图（token 保证只应用最新一次）
@@ -552,7 +847,7 @@ function run(argv){
       grip.setNeedsDisplay(true);
     });
   }
-  var spawnedAt = Date.now();   // 新窗口预热期：spawn 后 1.5s 内忽略鼠标事件，挡幽灵事件
+  var spawnedAt = Date.now();   // 只短暂过滤 spawn 幽灵事件，不能让用户刚召唤就无法调大小
   ObjC.registerSubclass({ name: 'DWGrip', superclass: 'NSView', methods: {
     'mouseDownCanMoveWindow': function () { return false; },
     'drawRect:': function (rect) {
@@ -568,8 +863,8 @@ function run(argv){
         $.NSApplication.sharedApplication.terminate($());   // 彻底退出，窗口消失
         return;
       }
-      if (Date.now() - spawnedAt < 1500) return;   // 预热期：不响应幽灵按下
-      if (p.x >= L.rszX && p.y >= L.rszY0 && p.y <= L.rszY1) {   // 右下角拉伸手柄
+      if (Date.now() - spawnedAt < 350) return;   // 预热期：不响应幽灵按下
+      if (p.x >= L.rszX && inResizeY(p, L)) {   // 右下角拉伸手柄
         var rm = $.NSEvent.mouseLocation;
         rStartX = rm.x; rStartY = rm.y;
         var rf = win.frame;
@@ -577,10 +872,18 @@ function run(argv){
         resizing = true; moved = true;
         return;
       }
-      if (p.y >= L.btnY0 && p.y <= L.btnY1) {   // 底部可视化按钮（优先于拖动）
-        if (p.x >= L.btnX0 && p.x <= L.btnX0 + L.btnW) { postUrl(prevUrl); return; }
-        if (p.x >= L.btnX1 && p.x <= L.btnX1 + L.btnW) { postUrl(nextUrl); return; }
+      var action = footerAction(p, L);
+      if (action) {
+        // A footer mouseUp must never reuse the preceding word-card click state.
+        dragging = false; wordIndex = -1; downTime = 0; moved = false;
       }
+      if (action === 'prev') { postUrl(pageUrl + '-1'); return; }
+      if (action === 'next') { postUrl(pageUrl + '1'); return; }
+      if (action === 'memory') {
+        $.NSWorkspace.sharedWorkspace.openURL($.NSURL.URLWithString(memoryUrl));
+        return;
+      }
+      wordIndex = wordAt(p);
       var m = $.NSEvent.mouseLocation;
       startX = m.x; startY = m.y;
       moved = false; downTime = Date.now();
@@ -618,13 +921,9 @@ function run(argv){
         return;
       }
       dragging = false;
-      if (Date.now() - spawnedAt < 1500 || downTime === 0) return;   // 预热期 / 没有真实按下
-      // 单击＝前进；Shift+单击＝回退。按钮点击在 mouseDown 已 POST，且 downTime 未
-      // 设置（=0）→ Date.now()-0 远超 400ms，不会在这里重复触发。
-      if (clickEnabled && !moved && Date.now() - downTime < 400) {
-        var back = (e.modifierFlags & ${FLAG_SHIFT}) ? true : false;
-        postUrl(back ? prevUrl : nextUrl);
-      }
+      if (Date.now() - spawnedAt < 350 || downTime === 0) return;   // 预热期 / 没有真实按下
+      // 单击词泡泡＝记住该词；不会再跳到下一组。拖动空白处只移动小词灵。
+      if (!moved && wordIndex >= 0 && Date.now() - downTime < 400) postUrl(rememberUrl + wordIndex + '&key=' + encodeURIComponent(KEYS[wordIndex] || ''));
     }
   }});
   // 轮询 PNG 变化：外部重渲（网页换形状 / 定时刷新 / 拉伸重渲）自动重载，不用重启窗口
@@ -648,18 +947,17 @@ function run(argv){
     } catch (e) {}
   });
   var screen = $.NSScreen.mainScreen.frame;
-  var screen = $.NSScreen.mainScreen.frame;
   var pad = 18;
   var x, y;
   if (savedPos) {
     var p = JSON.parse(savedPos);
     x = p.x; y = p.y;
-    x = Math.max(10, Math.min(x, screen.size.width - W - 10));
-    y = Math.max(10, Math.min(y, screen.size.height - H - 10));
+    x = Math.max(screen.origin.x + 10, Math.min(x, screen.origin.x + screen.size.width - W - 10));
+    y = Math.max(screen.origin.y + 10, Math.min(y, screen.origin.y + screen.size.height - H - 10));
   } else {
-    x = /left/.test(corner) ? pad : screen.size.width - W - pad;
+    x = /left/.test(corner) ? screen.origin.x + pad : screen.origin.x + screen.size.width - W - pad;
     var top = /top/.test(corner) ? pad + 22 : screen.size.height - H - pad - 12;
-    y = screen.size.height - top - H;  // Cocoa y is from bottom
+    y = screen.origin.y + screen.size.height - top - H;  // Cocoa y is from bottom
   }
   var win = $.NSWindow.alloc.initWithContentRectStyleMaskBackingDefer($.NSMakeRect(x, y, W, H), $.NSWindowStyleMaskBorderless, $.NSBackingStoreBuffered, false);
   win.opaque = false; win.backgroundColor = $.NSColor.clearColor;
@@ -668,7 +966,28 @@ function run(argv){
   win.hasShadow = true;
   var grip = $.DWGrip.alloc.initWithFrame($.NSMakeRect(0, 0, W, H));
   grip.autoresizingMask = $.NSViewWidthSizable | $.NSViewHeightSizable;
-  win.contentView.addSubview(grip);
+  // macOS 26+ 直接使用系统 Liquid Glass；旧系统回退到原生视觉材质。
+  // 三套皮肤都复用该承载层，非 Liquid 的高不透明 SVG 会自然遮住材质。
+  var GlassClass = $.NSClassFromString('NSGlassEffectView');
+  if (GlassClass) {
+    var glassHost = GlassClass.alloc.initWithFrame($.NSMakeRect(0, 0, W, H));
+    glassHost.autoresizingMask = $.NSViewWidthSizable | $.NSViewHeightSizable;
+    glassHost.cornerRadius = 22;
+    glassHost.style = 0;
+    glassHost.contentView = grip;
+    win.contentView.addSubview(glassHost);
+  } else {
+    var visualHost = $.NSVisualEffectView.alloc.initWithFrame($.NSMakeRect(0, 0, W, H));
+    visualHost.autoresizingMask = $.NSViewWidthSizable | $.NSViewHeightSizable;
+    visualHost.material = 12;
+    visualHost.blendingMode = 0;
+    visualHost.state = 1;
+    visualHost.wantsLayer = true;
+    visualHost.layer.cornerRadius = 22;
+    visualHost.layer.masksToBounds = true;
+    win.contentView.addSubview(visualHost);
+    win.contentView.addSubview(grip);
+  }
   win.orderFrontRegardless;
   // 每 3 秒存一次当前位置，下次重启小窗留在你放的地方
   function savePos(){
@@ -684,6 +1003,7 @@ function run(argv){
 
 let petChild = null;
 let petVisible = false;   // whether the floating pet window is currently shown
+let petWords = [];        // 当前小词灵实际展示的词，供点击命中和记忆事件使用
 function stopPet() {
   petVisible = false;
   if (petChild) { try { petChild.kill(); } catch {} petChild = null; }
@@ -775,10 +1095,9 @@ function renderPetPng(W, H, cb) {
   }
   petRenderBusy = true;
   const doOne = (w, h, cbs) => {
-    const words = loadWords(CFG.library);
-    const picked = pickForDate(words, CFG.wordsPerGroup || 6, todaySeed(), 'random');
-    const theme = THEMES[CFG.theme] || THEMES.cream;
-    const svg = buildPetSVG(picked, CFG.reminders || [], theme, w, h);
+    const picked = petFirstPassWords();
+    petWords = picked;
+    const svg = buildPetSVG(picked, CFG.reminders || [], CFG.uiTheme, w, h);
     const pngPath = path.join(os.tmpdir(), 'dw_pet.png');
     rasterizeSVG(svg, pngPath, w * 2, h * 2, (err) => {
       for (const c of cbs) { try { c(err); } catch {} }
@@ -793,18 +1112,26 @@ function renderPetPng(W, H, cb) {
   doOne(W, H, cb ? [cb] : []);
 }
 
+function resolvePetSize() {
+  const saved = state.petSize;
+  const defH = Math.min(MAX_PET, 90 + petSlotCount() * 46 + (CFG.reminders && CFG.reminders.length ? 90 : 0) + PET_FOOTER_H);
+  const oversized = saved && (saved.w > MAX_PET || saved.h > MAX_PET);
+  const w = oversized ? 360 : ((saved && saved.w) ? Math.max(MIN_PET_W, Math.min(MAX_PET, saved.w)) : 320);
+  const h = oversized ? Math.min(MAX_PET, defH) : ((saved && saved.h) ? Math.max(MIN_PET_H, Math.min(MAX_PET, saved.h)) : defH);
+  if (oversized) { state.petSize = { w, h }; saveState(); }
+  return { w, h };
+}
+
 function startPet() {
   stopPet();
   if (!isMac || !CFG.petEnabled) return;
-  const closeFile = path.join(ROOT, 'pet-closed');
+  const closeFile = PET_CLOSED_PATH;
   if (fs.existsSync(closeFile)) { console.log('[companion] 小窗已被关闭（点 ✕），重启伴侣后恢复'); return; }
-  // 用上次拉伸保存的尺寸；没有就用默认（竖版卡片）
-  const saved = state.petSize;
-  const W = (saved && saved.w) ? Math.max(MIN_PET_W, Math.min(MAX_PET, saved.w)) : 320;
-  const defH = Math.min(560, 90 + (CFG.wordsPerGroup || 6) * 46 + (CFG.reminders && CFG.reminders.length ? 90 : 0) + PET_FOOTER_H);
-  const H = (saved && saved.h) ? Math.max(MIN_PET_H, Math.min(MAX_PET, saved.h)) : defH;
+  // 用上次拉伸保存的尺寸；没有就用默认（紧凑卡片）。旧版本允许
+  // 900×900 的巨型面板，自动迁移回舒服的桌面尺寸，用户仍可再手动放大。
+  const { w: W, h: H } = resolvePetSize();
   // remember where the user last dragged the pet window
-  const posFile = path.join(ROOT, 'pet-position.json');
+  const posFile = PET_POSITION_PATH;
   let savedPos = '';
   try {
     const p = JSON.parse(fs.readFileSync(posFile, 'utf8'));
@@ -818,10 +1145,16 @@ function startPet() {
     fs.writeFileSync(scriptPath, jxa);
     const { spawn } = require('child_process');
     petVisible = true;
-    petChild = spawn('osascript', ['-l', 'JavaScript', scriptPath, pngPath, CFG.petCorner || 'top-right', posFile, savedPos, closeFile], { stdio: 'ignore' });
-    petChild.on('error', () => { petChild = null; petVisible = false; });
+    const child = petChild = spawn('osascript', ['-l', 'JavaScript', scriptPath, pngPath, CFG.petCorner || 'top-right', posFile, savedPos, closeFile], { stdio: ['ignore', 'ignore', 'pipe'] });
+    child.stderr.on('data', data => console.error('[companion] pet window:', String(data).trim()));
+    child.on('error', () => { if (petChild === child) { petChild = null; petVisible = false; } });
+    child.on('exit', (code, signal) => {
+      if (petChild !== child) return;
+      petChild = null; petVisible = false;
+      if (code && !fs.existsSync(closeFile)) console.error(`[companion] pet window exited (${code}${signal ? ', ' + signal : ''})`);
+    });
     petChild.unref();
-    console.log(`[companion] 桌面宠物已显示（底部按钮可切换；单击卡片＝前进，Shift+单击＝回退；按住可拖动，拖右下角 ⤡ 可调大小；右上角 ✕ 关闭；每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
+    console.log(`[companion] 桌面小词灵已显示（词卡展示中文；点击词卡＝记住；按住空白处可拖动，右下角圆形把手可调大小；每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
   });
 }
 
@@ -865,12 +1198,12 @@ function freshWallpaperFile(prefix) {
   const d = new Date();
   const pad = n => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-  return path.join(ROOT, `${prefix}-${stamp}.png`);
+  return path.join(RUNTIME_ROOT, `${prefix}-${stamp}.png`);
 }
 function cleanupOldWallpapers(prefix, keep) {
   try {
-    const files = fs.readdirSync(ROOT).filter(f => f.startsWith(prefix + '-') && f.endsWith('.png')).sort();
-    files.slice(0, Math.max(0, files.length - keep)).forEach(f => { try { fs.unlinkSync(path.join(ROOT, f)); } catch {} });
+    const files = fs.readdirSync(RUNTIME_ROOT).filter(f => f.startsWith(prefix + '-') && f.endsWith('.png')).sort();
+    files.slice(0, Math.max(0, files.length - keep)).forEach(f => { try { fs.unlinkSync(path.join(RUNTIME_ROOT, f)); } catch {} });
   } catch {}
 }
 function rotationBucket() {
@@ -930,13 +1263,27 @@ function run(argv){
 const MIME = { '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.csv': 'text/csv' };
 
 function serveStatic(req, res, pathname) {
-  let p = pathname === '/' ? '/index.html' : pathname;
-  const file = path.join(ROOT, p);
+  if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405); res.end('Method Not Allowed'); return; }
+  let decoded;
+  try { decoded = decodeURIComponent(pathname); } catch { res.writeHead(404); res.end('Not Found'); return; }
+  if (decoded.includes('\0') || decoded.includes('\\')) { res.writeHead(404); res.end('Not Found'); return; }
+  if (decoded === '/') decoded = '/index.html';
+  const segments = decoded.split('/').filter(Boolean);
+  const direct = segments.length === 1 && segments[0] === 'index.html';
+  const allowed = segments.length >= 2 && ['css', 'js', 'data'].includes(segments[0])
+    && !segments.some(segment => segment === '.' || segment === '..' || segment.startsWith('.'));
+  if (!direct && !allowed) { res.writeHead(404); res.end('Not Found'); return; }
+  const file = path.resolve(ROOT, '.' + decoded);
+  const allowedRoot = direct ? ROOT : path.resolve(ROOT, segments[0]);
+  if (file !== path.join(ROOT, 'index.html') && !file.startsWith(allowedRoot + path.sep)) { res.writeHead(404); res.end('Not Found'); return; }
   const ext = path.extname(file).toLowerCase();
+  const allowedExt = segments[0] === 'css' ? ['.css', '.woff', '.woff2', '.png', '.svg']
+    : segments[0] === 'js' ? ['.js'] : segments[0] === 'data' ? ['.json'] : ['.html'];
+  if (!allowedExt.includes(ext)) { res.writeHead(404); res.end('Not Found'); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not Found'); return; }
     res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-    res.end(data);
+    if (req.method === 'HEAD') res.end(); else res.end(data);
   });
 }
 
@@ -944,6 +1291,19 @@ function readBody(req, cb) {
   const chunks = [];
   req.on('data', c => chunks.push(c));
   req.on('end', () => cb(Buffer.concat(chunks)));
+}
+function trustedLocalMutation(req) {
+  const source = req.headers.origin || req.headers.referer || '';
+  if (!source) return true; // 原生 JXA 与本机 server.js 代理不带 Origin
+  try { return ['localhost', '127.0.0.1', '::1'].includes(new URL(source).hostname); }
+  catch { return false; }
+}
+function localWebOrigin(value) {
+  try {
+    const parsed = new URL(String(value || ''));
+    if (parsed.protocol !== 'http:' || !['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)) return '';
+    return parsed.origin;
+  } catch { return ''; }
 }
 
 /* Same one-click-enable + standalone-zip endpoints as server.js, so the desktop
@@ -1020,7 +1380,111 @@ const server = http.createServer((req, res) => {
     });
   }
 
-  // one-key switch: pet click / hotkey POST /next.php (+1) or /prev.php (-1)
+  // 网页把当前词库、每组数量和初筛结果同步给伴侣；各词库自己的页历史互不覆盖。
+  if (url === '/pet-sync.php') {
+    if (req.method !== 'POST') { res.writeHead(405); return res.end(); }
+    if (!trustedLocalMutation(req)) { res.writeHead(403); return res.end(); }
+    return readBody(req, body => {
+      let payload;
+      try { payload = JSON.parse(body.toString('utf8') || '{}'); } catch { res.writeHead(400); return res.end(JSON.stringify({ ok: false, error: 'invalid json' })); }
+      const library = String(payload.library || '');
+      if (!library) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ ok: false, skipped: true, reason: 'unknown-library' }));
+      }
+      if (library === 'custom') {
+        if (!saveCustomWords(payload.customWords)) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ ok: false, error: 'custom-library-write-failed' }));
+        }
+      } else if (!loadWords(library).length) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ ok: false, skipped: true, reason: 'unknown-library' }));
+      }
+      const oldDeck = state.petDecksByLibrary[library];
+      const oldPage = oldDeck && oldDeck.pages && oldDeck.pages[oldDeck.index];
+      const beforeKeys = (oldPage && oldPage.words || []).map(petWordKey);
+      const changedLibrary = CFG.library !== library;
+      CFG.library = library;
+      const webOrigin = localWebOrigin(payload.webOrigin);
+      const changedWebOrigin = Boolean(webOrigin && webOrigin !== CFG.webOrigin);
+      if (webOrigin) CFG.webOrigin = webOrigin;
+      const requestedUITheme = String(payload.uiTheme || '');
+      const changedUITheme = PET_UI_THEMES.has(requestedUITheme) && requestedUITheme !== CFG.uiTheme;
+      if (PET_UI_THEMES.has(requestedUITheme)) CFG.uiTheme = requestedUITheme;
+      const requestedWallpaperTheme = String(payload.wallpaperTheme || '');
+      const changedWallpaperTheme = Object.prototype.hasOwnProperty.call(THEMES, requestedWallpaperTheme) && requestedWallpaperTheme !== CFG.theme;
+      if (Object.prototype.hasOwnProperty.call(THEMES, requestedWallpaperTheme)) CFG.theme = requestedWallpaperTheme;
+      const requestedPattern = String(payload.bgPattern || '');
+      const allowedPatterns = new Set(['none', 'soft', 'dots', 'grid', 'diag', 'waves', 'blobs']);
+      const changedPattern = allowedPatterns.has(requestedPattern) && requestedPattern !== CFG.bgPattern;
+      if (allowedPatterns.has(requestedPattern)) CFG.bgPattern = requestedPattern;
+      CFG.wordsPerGroup = Math.max(1, Math.min(36, Number(payload.wordsPerGroup) || CFG.wordsPerGroup || 6));
+      state.petKnownByLibrary[library] = Array.isArray(payload.knownWords) ? payload.knownWords.map(String).slice(0, 10000) : [];
+      const deck = ensurePetDeck(library);
+      refillPetPage(library, deck, deck.pages[deck.index]);
+      const afterKeys = (deck.pages[deck.index].words || []).map(petWordKey);
+      const changedPageKeys = beforeKeys.length !== afterKeys.length || beforeKeys.some((key, index) => key !== afterKeys[index]);
+      saveConfig(); saveState();
+      const result = { ok: true, library, uiTheme: CFG.uiTheme, page: deck.index + 1, words: deck.pages[deck.index].words.length };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+      if (petVisible && (changedLibrary || changedWebOrigin || changedPageKeys || payload.refresh === true)) startPet();
+      else if (petVisible && changedUITheme) {
+        const size = resolvePetSize();
+        renderPetPng(size.w, size.h);
+      }
+      if ((changedWallpaperTheme || changedPattern) && CFG.autoSetWallpaper) pushWallpaper();
+    });
+  }
+
+  // 小词灵点击词卡：登记首轮、立即补入一个新词；分组更新与同步事件一次原子保存。
+  if (url === '/remember.php') {
+    if (req.method !== 'POST') { res.writeHead(405); return res.end(); }
+    if (!trustedLocalMutation(req)) { res.writeHead(403); return res.end(); }
+    let index = -1, expectedKey = '';
+    try { const q = new URL(req.url, 'http://localhost').searchParams; index = parseInt(q.get('i') || '-1', 10); expectedKey = q.get('key') || ''; } catch {}
+    const word = petWords[index];
+    if (!word) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: false, error: 'word not found' })); }
+    if (!expectedKey || expectedKey !== petWordKey(word)) { res.writeHead(409, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: false, stale: true, error: 'word changed' })); }
+    const firstPass = completePetFirstPass(word);
+    if (firstPass.duplicate) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, duplicate: true }));
+    }
+    const event = firstPass.event;
+    const size = state.petSize || { w: 320, h: 360 };
+    const respond = () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, event, page: firstPass.deck.index + 1, visibleWords: firstPass.page.words.length, refilled: event.refilled }));
+    };
+    // 词格数量变了，原生窗口的命中网格也要随之更新；重启这一扇透明小窗
+    // 比沿用旧的静态命中数更可靠，用户不会点到已经消失的卡片。
+    if (petVisible) { startPet(); respond(); return; }
+    return renderPetPng(size.w, size.h, respond);
+  }
+  if (url === '/pet-page.php') {
+    if (req.method !== 'POST') { res.writeHead(405); return res.end(); }
+    if (!trustedLocalMutation(req)) { res.writeHead(403); return res.end(); }
+    let direction = 1;
+    try { direction = Number(new URL(req.url, 'http://localhost').searchParams.get('dir')) < 0 ? -1 : 1; } catch {}
+    const result = navigatePetPage(direction);
+    const respond = () => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, ...result })); };
+    if (petVisible) { startPet(); respond(); return; }
+    const size = state.petSize || { w: 320, h: 360 };
+    return renderPetPng(size.w, size.h, respond);
+  }
+  if (url === '/pet-memory-events.json') {
+    let after = 0, stream = '';
+    try { const q = new URL(req.url, 'http://localhost').searchParams; after = Math.max(0, parseInt(q.get('after') || '0', 10) || 0); stream = q.get('stream') || ''; } catch {}
+    const firstId = state.petMemoryEvents.length ? state.petMemoryEvents[0].id : (state.petMemorySeq || 0) + 1;
+    const lastId = state.petMemorySeq || 0;
+    const reset = stream !== state.petMemoryStreamId || after > lastId || (after > 0 && after < firstId - 1);
+    const events = reset ? [] : state.petMemoryEvents.filter(event => event.id > after);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({ streamId: state.petMemoryStreamId, firstId, lastId, reset, events, snapshot: reset ? learnedSnapshot() : undefined }));
+  }
+  // 快捷键保留为手动换壁纸的独立能力；小词灵界面不再暴露这组重复按钮。
   const handleAdvance = (req, res, dir) => {
     if (req.method === 'HEAD') { res.writeHead(isMac ? 200 : 404); return res.end(); }
     const now = Date.now();
@@ -1044,12 +1508,12 @@ const server = http.createServer((req, res) => {
     try { action = new URL(req.url, 'http://localhost').searchParams.get('action') || 'status'; } catch {}
     res.writeHead(200, { 'Content-Type': 'application/json' });
     if (action === 'open') {
-      try { fs.unlinkSync(path.join(ROOT, 'pet-closed')); } catch {}   // ✕ 关闭只对本次有效，召唤时清掉标记
+      try { fs.unlinkSync(PET_CLOSED_PATH); } catch {}   // ✕ 关闭只对本次有效，召唤时清掉标记
       startPet();
       return res.end(JSON.stringify({ ok: true, pet: true }));
     }
     if (action === 'close') {
-      try { fs.writeFileSync(path.join(ROOT, 'pet-closed'), '1'); } catch {}
+      try { fs.writeFileSync(PET_CLOSED_PATH, '1'); } catch {}
       stopPet();
       return res.end(JSON.stringify({ ok: true, pet: false }));
     }
@@ -1090,8 +1554,8 @@ const server = http.createServer((req, res) => {
     };
     if (w > 0 && h > 0) {
       state.petSize = { w, h };
-      try { fs.writeFileSync(STATE_PATH, JSON.stringify(state)); } catch {}
-      try { fs.unlinkSync(path.join(ROOT, 'pet-closed')); } catch {}   // 换形状时把宠物叫回来
+      saveState();
+      try { fs.unlinkSync(PET_CLOSED_PATH); } catch {}   // 换形状时把宠物叫回来
       return renderPetPng(w, h, done);
     }
     return done();
@@ -1128,11 +1592,11 @@ server.listen(CFG.port, '127.0.0.1', () => {
   console.log('  ────────────────────────────────');
   console.log(`  网站 + OCR：   http://localhost:${CFG.port}`);
   console.log(`  桌面壁纸自动换：${CFG.autoSetWallpaper ? '开（每 ' + CFG.intervalMinutes + ' 分钟）' : '关'}`);
-  console.log(`  配置：         companion-config.json`);
+  console.log(`  配置：         ${CONFIG_PATH}`);
   console.log('');
   if (isMac) {
     // open the site in the default browser
-    exec(`open http://localhost:${CFG.port}`, () => {});
+    if (process.env.WORDPAPER_TEST_MODE !== '1') execFile('open', [CFG.webOrigin || `http://localhost:${CFG.port}`], () => {});
     // push the first wallpaper now, then on the interval
     if (CFG.autoSetWallpaper) {
       pushWallpaper();
@@ -1140,7 +1604,7 @@ server.listen(CFG.port, '127.0.0.1', () => {
     }
     // floating always-on-top pet window, refreshed on a timer
     if (CFG.petEnabled) {
-      try { fs.unlinkSync(path.join(ROOT, 'pet-closed')); } catch {} // ✕ 关闭只对本次运行有效，重启伴侣恢复
+      try { fs.unlinkSync(PET_CLOSED_PATH); } catch {} // ✕ 关闭只对本次运行有效，重启伴侣恢复
       startPet();
       setInterval(startPet, Math.max(5, CFG.intervalMinutes) * 60000);
     }
