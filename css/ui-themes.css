@@ -715,7 +715,9 @@
     0 1px 2px rgba(0,0,0,.055),
     0 10px 30px rgba(0,0,0,.08);
   transition: box-shadow .28s ease, border-color .24s ease;
-  will-change: transform, backdrop-filter;
+  /* 只提示 transform:backdrop-filter 交给浏览器按需合成。常驻提示 backdrop-filter
+   * 会让这块玻璃每帧都强制进合成层重采样(尤其大面板),是滚动/倾斜卡顿的主因。 */
+  will-change: transform;
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic="thick"] { --optic-blur: 22px; }
 :root[data-ui-theme="liquid"] [data-liquid-optic].liquid-refraction-ready {

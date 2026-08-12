@@ -401,9 +401,27 @@ def main():
               x: e.style.getPropertyValue('--glass-x'),
               tilt: e.style.getPropertyValue('--glass-tilt-y')
             })""")
-            check("Liquid 跟随光与轻微视差可用", stage_motion["lit"] is True
-                  and stage_motion["x"] != ""
-                  and stage_motion["tilt"] not in ("", "0deg", "0.000deg"))
+            # 大面板(.stage)静态高光+不倾斜:只点亮(不闪),不跟手高光/倾斜——这是
+            # 为消除大面积 backdrop 每帧重采样的性能取舍。
+            check("Liquid 大面板点亮且静态高光(性能优化)", stage_motion["lit"] is True)
+
+            # 跟随光与轻微视差保留在小控件上(工具条),那里面积小、代价可忽略。
+            page.eval_on_selector(".meta-actions", """e => {
+              const r = e.getBoundingClientRect();
+              e.dispatchEvent(new PointerEvent('pointerover', {bubbles:true, pointerType:'mouse'}));
+              e.dispatchEvent(new PointerEvent('pointermove', {
+                bubbles:true, pointerType:'mouse', clientX:r.left+r.width*.7, clientY:r.top+r.height*.4
+              }));
+            }""")
+            page.wait_for_timeout(180)
+            toolbar_motion = page.eval_on_selector(".meta-actions", """e => ({
+              lit: e.classList.contains('liquid-illuminated'),
+              x: e.style.getPropertyValue('--glass-x'),
+              tilt: e.style.getPropertyValue('--glass-tilt-y')
+            })""")
+            check("Liquid 小控件跟随光与轻微视差可用", toolbar_motion["lit"] is True
+                  and toolbar_motion["x"] != ""
+                  and toolbar_motion["tilt"] not in ("", "0deg", "0.000deg"))
 
             refresh_button = page.locator("#btn-refresh2")
             refresh_button.dispatch_event("pointerdown", {"pointerType": "mouse", "button": 0})

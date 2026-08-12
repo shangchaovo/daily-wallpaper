@@ -338,11 +338,17 @@
       let state = motionState.get(surface);
       if (state) return state;
       const rect = surface.getBoundingClientRect();
+      // 大面板静态高光:光标不驱动 --glass-x/y(否则每帧重绘整块大玻璃背景,卡顿),
+      // 只在小控件上跟手。大面板仍点亮(illuminated),但高光位置固定。
+      const staticSheen = surface.matches('.stage, .modal-card');
       state = {
         x: rect.width / 2, y: rect.height / 2,
         targetX: rect.width / 2, targetY: rect.height / 2,
         tiltX: 0, tiltY: 0, targetTiltX: 0, targetTiltY: 0,
-        tiltStrength: surface.matches('.stage') ? .16 : surface.matches('.modal-card') ? .28 : .72,
+        // 大面板(.stage/.modal-card)不倾斜:倾斜每帧改变 backdrop 内容,触发整面
+        // 玻璃的折射+模糊重采样,是大屏卡顿主因。小控件面积小,保留倾斜代价可忽略。
+        tiltStrength: staticSheen ? 0 : .72,
+        staticSheen,
         active: false,
       };
       motionState.set(surface, state);
@@ -360,8 +366,10 @@
         state.y += (state.targetY - state.y) * ease;
         state.tiltX += (state.targetTiltX - state.tiltX) * ease;
         state.tiltY += (state.targetTiltY - state.tiltY) * ease;
-        surface.style.setProperty('--glass-x', `${state.x.toFixed(1)}px`);
-        surface.style.setProperty('--glass-y', `${state.y.toFixed(1)}px`);
+        if (!state.staticSheen) {
+          surface.style.setProperty('--glass-x', `${state.x.toFixed(1)}px`);
+          surface.style.setProperty('--glass-y', `${state.y.toFixed(1)}px`);
+        }
         surface.style.setProperty('--glass-tilt-x', motionAllowed ? `${state.tiltX.toFixed(3)}deg` : '0deg');
         surface.style.setProperty('--glass-tilt-y', motionAllowed ? `${state.tiltY.toFixed(3)}deg` : '0deg');
         const delta = Math.abs(state.targetX - state.x) + Math.abs(state.targetY - state.y)
@@ -409,23 +417,28 @@
     }, { passive: true });
     document.addEventListener('pointermove', event => {
       if (document.documentElement.dataset.uiTheme !== 'liquid' || reducedMotion.matches || event.pointerType === 'touch' || !(event.target instanceof Element)) return;
+      const surface = event.target.closest(opticalSelector);
+      if (!surface) return;
+      // 环境光偏移只在确实有目标面板时更新(原先在任何 move 上都写文档级变量并触发
+      // 全面板 scheduleMotion + getBoundingClientRect,空挥鼠标也跑一整轮,纯属浪费)。
       const ambientX = ((event.clientX / Math.max(1, window.innerWidth)) - .5) * 18;
       const ambientY = ((event.clientY / Math.max(1, window.innerHeight)) - .5) * 14;
       document.documentElement.style.setProperty('--liquid-ambient-x', `${ambientX.toFixed(2)}px`);
       document.documentElement.style.setProperty('--liquid-ambient-y', `${ambientY.toFixed(2)}px`);
-      const surface = event.target.closest(opticalSelector);
-      if (!surface) return;
       const rect = surface.getBoundingClientRect();
       const state = getMotion(surface);
-      const localX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
-      const localY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
-      const nx = rect.width ? localX / rect.width - .5 : 0;
-      const ny = rect.height ? localY / rect.height - .5 : 0;
       state.active = true;
-      state.targetX = localX;
-      state.targetY = localY;
-      state.targetTiltX = -ny * state.tiltStrength;
-      state.targetTiltY = nx * state.tiltStrength * 1.15;
+      // 大面板静态高光/不倾斜:不更新 targetX/Y/tilt,只点亮,避免每帧背景重绘。
+      if (!state.staticSheen) {
+        const localX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+        const localY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+        const nx = rect.width ? localX / rect.width - .5 : 0;
+        const ny = rect.height ? localY / rect.height - .5 : 0;
+        state.targetX = localX;
+        state.targetY = localY;
+        state.targetTiltX = -ny * state.tiltStrength;
+        state.targetTiltY = nx * state.tiltStrength * 1.15;
+      }
       surface.classList.add('liquid-illuminated');
       const control = event.target.closest(interactiveSelector);
       if (control && surface.contains(control)) {
