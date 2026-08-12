@@ -1506,9 +1506,11 @@ const server = http.createServer((req, res) => {
       const allowedPatterns = new Set(['none', 'soft', 'dots', 'grid', 'diag', 'waves', 'blobs']);
       const changedPattern = allowedPatterns.has(requestedPattern) && requestedPattern !== CFG.bgPattern;
       if (allowedPatterns.has(requestedPattern)) CFG.bgPattern = requestedPattern;
-      // 换词特效:网页下拉选择,pet-sync 同步过来;下次换词时新特效生效(值嵌在 JXA 里)。
+      // 换词特效:网页下拉选择,pet-sync 同步过来。特效值嵌在小窗 JXA 里,变了必须重建
+      // 窗口才生效(否则窗口还按创建时的旧特效跑 → 用户感觉“切换没生效”)。
       const allowedTransitions = new Set(['dissolve', 'pop', 'dissolve-pop', 'none']);
       const requestedTransition = String(payload.petTransition || '');
+      const changedTransition = allowedTransitions.has(requestedTransition) && requestedTransition !== CFG.petTransition;
       if (allowedTransitions.has(requestedTransition)) CFG.petTransition = requestedTransition;
       CFG.wordsPerGroup = Math.max(1, Math.min(36, Number(payload.wordsPerGroup) || CFG.wordsPerGroup || 6));
       state.petKnownByLibrary[library] = Array.isArray(payload.knownWords) ? payload.knownWords.map(String).slice(0, 10000) : [];
@@ -1520,7 +1522,7 @@ const server = http.createServer((req, res) => {
       const result = { ok: true, library, uiTheme: CFG.uiTheme, page: deck.index + 1, words: deck.pages[deck.index].words.length };
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
-      if (petVisible && (changedLibrary || changedWebOrigin || changedPageKeys || payload.refresh === true)) startPet();
+      if (petVisible && (changedLibrary || changedWebOrigin || changedPageKeys || changedTransition || payload.refresh === true)) startPet();
       else if (petVisible && changedUITheme) {
         const size = resolvePetSize();
         renderPetPng(size.w, size.h);
