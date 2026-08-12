@@ -88,8 +88,16 @@ def main():
             check("页面标题", "WordPaper" in page.title())
             check("换一组按钮", page.locator("#btn-refresh2").count() == 1)
 
-            # library cards (v3) — 8 exam libraries + 我的词库 (custom, last)
-            check("词库卡片渲染(9张)", page.locator("#library-cards .lib-card").count() == 9)
+            # library cards (v3) — 10 built-in libraries (2 日语 + 初/高中 + 四六/研/雅/托/GRE) + 我的词库
+            check("词库卡片渲染(11张)", page.locator("#library-cards .lib-card").count() == 11)
+            # 词书搜索:输入关键词过滤卡片,清空恢复。
+            page.fill("#library-filter", "雅思")
+            page.wait_for_timeout(200)
+            check("词书搜索过滤(雅思)", page.locator("#library-cards .lib-card").count() == 1
+                  and "雅思" in page.inner_text("#library-cards"))
+            page.fill("#library-filter", "")
+            page.wait_for_timeout(200)
+            check("清空搜索恢复全部词书", page.locator("#library-cards .lib-card").count() == 11)
             # default canvas size phone 1080x2400
             dims = page.evaluate("() => { const c=document.querySelector('#preview-canvas'); return {w:c.width,h:c.height}; }")
             check("默认手机画布 1080×2400", dims["w"] == 1080 and dims["h"] == 2400)

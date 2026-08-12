@@ -26,8 +26,10 @@
   };
 
   const LIBRARIES = [
-    { id: 'jlpt_n5', icon: 'あ', name: '日语 JLPT N5', desc: '入门核心词（718）', file: 'words_jlpt_n5.json', source: 'JLPT N5 分级 · 开放词表整理' },
-    { id: 'jlpt_n4', icon: '日', name: '日语 JLPT N4', desc: '初级进阶词（668）', file: 'words_jlpt_n4.json', source: 'JLPT N4 分级 · 开放词表整理' },
+    { id: 'jlpt_n5', icon: 'あ', name: '日语 JLPT N5', desc: '入门核心词', file: 'words_jlpt_n5.json', source: 'JLPT N5 分级 · 开放词表整理' },
+    { id: 'jlpt_n4', icon: '日', name: '日语 JLPT N4', desc: '初级进阶词', file: 'words_jlpt_n4.json', source: 'JLPT N4 分级 · 开放词表整理' },
+    { id: 'chuzhong', icon: '初', name: '初中', desc: '中考核心词', file: 'words_chuzhong.json', source: 'ECDICT 中考核心' },
+    { id: 'gaozhong', icon: '高', name: '高中', desc: '高考核心词', file: 'words_gaozhong.json', source: 'ECDICT 高考核心' },
     { id: 'cet4', icon: '四', name: '四级', desc: 'CET4 核心词', file: 'words_cet4.json' },
     { id: 'cet6', icon: '六', name: '六级', desc: 'CET6 核心词', file: 'words_cet6.json' },
     { id: 'kaoyan', icon: '研', name: '考研', desc: '考研核心词', file: 'words_kaoyan.json' },
@@ -78,9 +80,7 @@
     settings = window.Store.getSettings();
     settings.uiTheme = UI_THEMES.has(settings.uiTheme) ? settings.uiTheme : 'editorial';
     document.documentElement.dataset.uiTheme = settings.uiTheme;
-    // Existing users keep a valid library after 初中/高中词书升级为 JLPT 词书。
-    if (settings.library === 'chuzhong') settings.library = 'jlpt_n5';
-    if (settings.library === 'gaozhong') settings.library = 'jlpt_n4';
+    // 初中/高中词书已恢复为独立 ECDICT 词库,无需再映射到 JLPT。
   }
   function saveSettings() { window.Store.saveSettings(settings); }
 
@@ -609,6 +609,9 @@
     }
     const companionTop = $('#btn-companion-top');
     if (companionTop) companionTop.addEventListener('click', enableCompanion);
+    // 词书搜索框:输入即过滤词库卡片。
+    const libFilter = $('#library-filter');
+    if (libFilter) libFilter.addEventListener('input', renderLibraryCards);
     const petBtn = $('#btn-pet-toggle');
     if (petBtn) petBtn.addEventListener('click', togglePet);
     const dl = $('#btn-companion-dl');
@@ -744,7 +747,18 @@
     const selected = LIBRARIES.find(lib => lib.id === settings.library) || LIBRARIES[0];
     const selectedLabel = $('#selected-library-label');
     if (selectedLabel && selected) selectedLabel.textContent = '已选：' + selected.name;
-    LIBRARIES.forEach(lib => {
+    // 词书搜索:按名称/描述/来源模糊过滤(中/英/拼音首字母皆可)。
+    const query = ($('#library-filter') && $('#library-filter').value || '').trim().toLowerCase();
+    const visible = LIBRARIES.filter(lib => {
+      if (!query) return true;
+      const hay = `${lib.name} ${lib.desc} ${lib.source || ''} ${lib.id}`.toLowerCase();
+      return query.split(/\s+/).every(term => hay.includes(term));
+    });
+    if (!visible.length) {
+      box.innerHTML = '<div class="lib-empty">没有匹配「' + escapeHTML(query) + '」的词书；试试别的关键词。</div>';
+      return;
+    }
+    visible.forEach(lib => {
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'lib-card' + (lib.id === settings.library ? ' on' : '');

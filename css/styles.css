@@ -267,6 +267,11 @@ details.card[open] > summary { border-bottom: 2px solid var(--line); margin-bott
 /* ---------- library cards (2 列贴纸网格，卡通 + 不截断) ---------- */
 /* 300px 侧栏放三列会触发卡片最小内容宽度，产生横向滚动并截掉第三列。
    两列让词库名称、数量和按钮都能完整可点。 */
+.lib-search { margin-bottom: 8px; }
+.lib-search input { width: 100%; box-sizing: border-box; padding: 8px 11px; border-radius: 11px; border: 1px solid rgba(150,110,70,.28); background: rgba(255,255,255,.82); color: var(--ink); font: 600 12.5px/1.3 var(--font); outline: none; transition: border-color .16s ease, box-shadow .16s ease; }
+.lib-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(179,64,42,.10); }
+.lib-search input::placeholder { color: var(--sub); opacity: .7; font-weight: 500; }
+.lib-empty { grid-column: 1 / -1; padding: 18px 12px; text-align: center; color: var(--sub); font-size: 12px; background: rgba(255,255,255,.5); border: 1px dashed rgba(150,110,70,.3); border-radius: 12px; }
 .lib-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-bottom: 6px; }
 .lib-card {
   display: flex; align-items: center; gap: 6px; text-align: left; width: 100%;

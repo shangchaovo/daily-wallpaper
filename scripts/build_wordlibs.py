@@ -32,15 +32,17 @@ DATA = os.path.join(HERE, "..", "data")
 DAILYSTUDY = os.path.expanduser("~/.openclaw/workspace/dailystudy")
 
 # How many core words to keep per exam library.
+# ECDICT 各考试 tagged 词量: zk1603 gk3677 cet4 3849 cet6 5407 ky4801 toefl6974 ielts5040 gre7504
+# 上限取「tagged 量的核心高频部分」,既保证涵盖核心内容,又不灌入生僻词。
 CAPS = {
-    "chuzhong": 1500,   # 初中 (zk)
-    "gaozhong": 2000,   # 高中 (gk)
-    "cet4": 2500,
-    "cet6": 2500,
-    "kaoyan": 2800,     # 考研 (ky)
-    "ielts": 3000,
-    "toefl": 3000,
-    "gre": 2500,
+    "chuzhong": 1500,   # 初中 (zk) — ECDICT zk 仅 1603,已接近全覆盖
+    "gaozhong": 3500,   # 高中 (gk 3677)
+    "cet4": 3800,       # cet4 3849
+    "cet6": 5000,       # cet6 5407
+    "kaoyan": 4500,     # 考研 (ky 4801)
+    "ielts": 4500,      # ielts 5040
+    "toefl": 5000,      # toefl 6974
+    "gre": 5000,        # gre 7504
 }
 # ECDICT tag -> our library id
 TAG_TO_ID = {
@@ -176,7 +178,9 @@ def score(row):
 def load_ecdict(path):
     """Return {tag: [entry,...]} filtered + ranked per exam tag."""
     by_tag = {t: [] for t in TAG_TO_ID}
-    seen_word = set()
+    # 按标签内去重(而非全局):同一词可能同属多个考试(如 gk 和 cet4),全局去重会让
+    # 高等级库丢掉这些共享核心词。每个标签独立保留自己的核心词,保证各库都拿满。
+    seen_per_tag = {t: set() for t in TAG_TO_ID}
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -186,8 +190,6 @@ def load_ecdict(path):
             if not re.match(r"^[A-Za-z][A-Za-z'-]*[A-Za-z]$", word):
                 continue
             lw = word.lower()
-            if lw in seen_word:
-                continue
             tag = (row.get("tag") or "").lower()
             if not tag:
                 continue
@@ -198,9 +200,9 @@ def load_ecdict(path):
             entry = {"word": word, "phonetic": phonetic, "pos": pos, "meaning": meaning}
             s = score(row)
             for t in tag.split():
-                if t in by_tag:
+                if t in by_tag and lw not in seen_per_tag[t]:
+                    seen_per_tag[t].add(lw)
                     by_tag[t].append((s, entry))
-            seen_word.add(lw)
     # rank + cap
     out = {}
     for t, items in by_tag.items():
@@ -279,6 +281,19 @@ def main():
             "emoji": meta["emoji"], "count": len(entries),
         })
         print(f"wrote {path}  ({len(entries)} words)")
+
+    # jlpt 词库独立维护(build 脚本不从 ECDICT 生成日语);保留其 manifest 条目避免被覆盖。
+    jlpt_meta = [
+        {"id": "jlpt_n5", "name": "日语 JLPT N5", "desc": "入门核心词（分级整理）", "emoji": "あ"},
+        {"id": "jlpt_n4", "name": "日语 JLPT N4", "desc": "初级进阶词（分级整理）", "emoji": "日"},
+    ]
+    for meta in jlpt_meta:
+        jlpt_path = os.path.join(DATA, f"words_{meta['id']}.json")
+        if os.path.exists(jlpt_path):
+            with open(jlpt_path, encoding="utf-8") as f:
+                count = len(json.load(f))
+            manifest.insert(0, {**meta, "count": count})
+            print(f"kept {jlpt_path}  ({count} words, 独立维护)")
 
     with open(os.path.join(DATA, "libraries.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
