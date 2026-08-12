@@ -769,7 +769,13 @@ function run(argv){
   function postUrl(u){
     var req = $.NSMutableURLRequest.alloc.initWithURL($.NSURL.URLWithString(u));
     req.setHTTPMethod('POST');
-    $.NSURLConnection.sendSynchronousRequestReturningResponseError(req, $(), $());
+    var data = $.NSURLConnection.sendSynchronousRequestReturningResponseError(req, $(), $());
+    try { return $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js; } catch (e) { return ''; }
+  }
+  // 点词/翻页成功后,服务端在响应里回传最新命中 key 表;原位换图不重开窗口,必须
+  // 同步更新窗口自己的 KEYS,否则下一次点击 key 对不上 → stale 拒判 → “点不动”。
+  function applyKeys(body){
+    try { var d = JSON.parse(body || '{}'); if (d && d.ok && Object.prototype.toString.call(d.keys) === '[object Array]') KEYS = d.keys; } catch (e) {}
   }
   // 原地换图：服务端已把新 PNG 写到同一路径（同步 POST 返回时渲染已完成），
   // 立刻重读并标记重绘——新词直接顶替旧词，不轮询、不重启窗口，零闪屏。
@@ -884,8 +890,8 @@ function run(argv){
         // A footer mouseUp must never reuse the preceding word-card click state.
         dragging = false; wordIndex = -1; downTime = 0; moved = false;
       }
-      if (action === 'prev') { postUrl(pageUrl + '-1'); reloadImg(); return; }
-      if (action === 'next') { postUrl(pageUrl + '1'); reloadImg(); return; }
+      if (action === 'prev') { applyKeys(postUrl(pageUrl + '-1')); reloadImg(); return; }
+      if (action === 'next') { applyKeys(postUrl(pageUrl + '1')); reloadImg(); return; }
       if (action === 'memory') {
         $.NSWorkspace.sharedWorkspace.openURL($.NSURL.URLWithString(memoryUrl));
         return;
@@ -930,8 +936,9 @@ function run(argv){
       dragging = false;
       if (Date.now() - spawnedAt < 350 || downTime === 0) return;   // 预热期 / 没有真实按下
       // 单击词泡泡＝记住该词；不会再跳到下一组。拖动空白处只移动小词灵。
-      // 同步 POST 返回时新 PNG 已写好，立即原地换图：新词顶替旧词，不闪。
-      if (!moved && wordIndex >= 0 && Date.now() - downTime < 400) { postUrl(rememberUrl + wordIndex + '&key=' + encodeURIComponent(KEYS[wordIndex] || '')); reloadImg(); }
+      // 同步 POST 返回时新 PNG 已写好:立即原地换图(新词顶替旧词不闪),并用响应里
+      // 的最新 key 表更新窗口 KEYS,保证下一次点击命中不 stale。
+      if (!moved && wordIndex >= 0 && Date.now() - downTime < 400) { applyKeys(postUrl(rememberUrl + wordIndex + '&key=' + encodeURIComponent(KEYS[wordIndex] || ''))); reloadImg(); }
     }
   }});
   // 轮询 PNG 变化：外部重渲（网页换形状 / 定时刷新 / 拉伸重渲）自动重载，不用重启窗口
@@ -1182,6 +1189,11 @@ function refreshPetInPlace(prevCount, nextCount, done) {
   }
   renderPetPng(w, h, done);
 }
+
+/* 当前小词灵可见词的命中 key 表(与 PNG 同源 petFirstPassWords)。原位换图后窗口
+ * 不重开,但窗口里的 KEYS 是创建时写死的静态表;必须随响应回传最新表,让 JXA 更新
+ * 自己的 KEYS,否则第二次点击 key 对不上 → stale 拒判 → “点不动”。 */
+function currentPetKeys() { return petFirstPassWords().map(petWordKey); }
 
 /* ---------------- set the REAL macOS desktop wallpaper ---------------- */
 function setMacWallpaper(pngPath, cb) {
@@ -1481,7 +1493,7 @@ const server = http.createServer((req, res) => {
     const event = firstPass.event;
     const respond = () => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true, event, page: firstPass.deck.index + 1, visibleWords: firstPass.page.words.length, refilled: event.refilled }));
+      res.end(JSON.stringify({ ok: true, event, page: firstPass.deck.index + 1, visibleWords: firstPass.page.words.length, refilled: event.refilled, keys: currentPetKeys() }));
     };
     // 丝滑刷新：原位重渲 PNG，窗口原地换图不闪不动；仅词数变化时才重启窗口。
     return refreshPetInPlace(prevCount, firstPass.page.words.length, respond);
@@ -1493,7 +1505,7 @@ const server = http.createServer((req, res) => {
     try { direction = Number(new URL(req.url, 'http://localhost').searchParams.get('dir')) < 0 ? -1 : 1; } catch {}
     const prevCount = petFirstPassWords().length;   // 翻页前的可见词数
     const result = navigatePetPage(direction);
-    const respond = () => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, ...result })); };
+    const respond = () => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, ...result, keys: currentPetKeys() })); };
     // 翻页同样丝滑：原位换图，仅当新页词数不同（如最后一页没补满）才重启窗口。
     return refreshPetInPlace(prevCount, result.words, respond);
   }
