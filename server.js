@@ -622,7 +622,9 @@ function serveStatic(req, res, pathname) {
     const isDocument = extension === '.html';
     res.writeHead(200, {
       'Content-Type': MIME_TYPES[extension] || 'application/octet-stream',
-      'Cache-Control': isDocument ? 'no-cache' : 'public, max-age=3600',
+      // 文档与 js/css 都每次重验证(no-cache):源文件带 ?v= 版本号,改动即换 URL,无需
+      // 长缓存;no-cache 保证浏览器总能拿到最新,避免“改了不生效、要手动强刷”的困扰。
+      'Cache-Control': (isDocument || extension === '.js' || extension === '.css') ? 'no-cache' : 'public, max-age=3600',
     });
     if (req.method === 'HEAD') res.end(); else res.end(data);
   });

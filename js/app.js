@@ -1728,6 +1728,8 @@
         const topBtn = $('#btn-companion-top');
         if (topBtn) { topBtn.textContent = '桌面宠物已开启'; topBtn.disabled = true; }
         syncPetControls(j);
+        // 伴侣在线即把当前特效同步过去:特效值变了 companion 会重建小窗,无需手动刷新。
+        syncCompanionLearningContext();
       } else {
         petOn = false;
         if (btn) { btn.textContent = '一键启用桌面伴侣'; btn.disabled = false; }
