@@ -493,8 +493,8 @@
   border: 1px solid rgba(123,123,123,.24);
   border-radius: 10px;
   color: var(--ink);
-  background: rgba(255,255,255,.78);
-  box-shadow: inset 0 1px 2px rgba(0,0,0,.04), 0 1px 0 rgba(255,255,255,.8);
+  background: rgba(255,255,255,.88);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.03), 0 1px 0 rgba(255,255,255,.9);
 }
 :root[data-ui-theme="liquid"] .count-field { border: 0; background: transparent; box-shadow: none; }
 :root[data-ui-theme="liquid"] :is(select, textarea, input):focus { border-color: rgba(123,123,123,.62); box-shadow: 0 0 0 3px rgba(123,123,123,.13); }
@@ -589,8 +589,8 @@
 :root[data-ui-theme="liquid"] .srs-record {
   border: 1px solid rgba(62,62,62,.09);
   border-radius: 12px;
-  background: rgba(255,255,255,.6);
-  box-shadow: 0 1px 2px rgba(0,0,0,.035);
+  background: rgba(255,255,255,.72);
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
 }
 :root[data-ui-theme="liquid"] .lib-card:hover,
 :root[data-ui-theme="liquid"] .library-word:hover { transform: translateY(-1px); border-color: rgba(123,123,123,.24); background: rgba(255,255,255,.88); box-shadow: 0 5px 13px rgba(0,0,0,.055); }
@@ -719,8 +719,8 @@
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic="thick"] { --optic-blur: 22px; }
 :root[data-ui-theme="liquid"] [data-liquid-optic].liquid-refraction-ready {
-  -webkit-backdrop-filter: var(--liquid-refraction) blur(var(--optic-blur)) saturate(1.06) brightness(1.22) contrast(0.995);
-  backdrop-filter: var(--liquid-refraction) blur(var(--optic-blur)) saturate(1.06) brightness(1.22) contrast(0.995);
+  -webkit-backdrop-filter: var(--liquid-refraction) blur(var(--optic-blur)) saturate(1.05) brightness(1.25) contrast(0.99);
+  backdrop-filter: var(--liquid-refraction) blur(var(--optic-blur)) saturate(1.05) brightness(1.25) contrast(0.99);
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic].liquid-illuminated {
   border-top-color: #fff;
@@ -787,21 +787,21 @@
 :root[data-ui-theme="liquid"] {
   --liquid-ambient-x: 0px;
   --liquid-ambient-y: 0px;
-  --liquid-sky: rgba(224,224,228,.36);
-  --liquid-pearl: rgba(246,246,249,.34);
-  --liquid-mint: rgba(236,236,240,.26);
+  --liquid-sky: rgba(228,228,232,.36);
+  --liquid-pearl: rgba(248,248,250,.34);
+  --liquid-mint: rgba(238,238,242,.26);
   --liquid-shell:
-    linear-gradient(150deg, rgba(255,255,255,.82), rgba(255,255,255,.44) 42%, rgba(254,254,255,.50) 72%, rgba(255,255,255,.72));
+    linear-gradient(150deg, rgba(255,255,255,.92), rgba(255,255,255,.60) 42%, rgba(254,254,255,.66) 72%, rgba(255,255,255,.84));
   --liquid-shell-thick:
-    linear-gradient(150deg, rgba(255,255,255,.92), rgba(255,255,255,.58) 46%, rgba(252,252,254,.58) 76%, rgba(255,255,255,.80));
+    linear-gradient(150deg, rgba(255,255,255,.96), rgba(255,255,255,.72) 46%, rgba(253,253,255,.72) 76%, rgba(255,255,255,.88));
 }
 :root[data-ui-theme="liquid"] body {
   background:
     radial-gradient(ellipse at 9% 6%, rgba(255,255,255,1), transparent 32%),
-    radial-gradient(ellipse at 88% 11%, rgba(248,248,250,.38), transparent 31%),
-    radial-gradient(ellipse at 18% 91%, rgba(250,250,252,.42), transparent 35%),
-    radial-gradient(ellipse at 84% 86%, rgba(247,247,249,.33), transparent 34%),
-    linear-gradient(145deg, #ffffff 0%, #fbfbfd 48%, #f7f7fa 100%);
+    radial-gradient(ellipse at 88% 11%, rgba(251,251,253,.38), transparent 31%),
+    radial-gradient(ellipse at 18% 91%, rgba(252,252,253,.42), transparent 35%),
+    radial-gradient(ellipse at 84% 86%, rgba(250,250,251,.33), transparent 34%),
+    linear-gradient(145deg, #ffffff 0%, #fdfdfe 48%, #fafafc 100%);
 }
 :root[data-ui-theme="liquid"] body::before {
   inset: -20%;
@@ -824,22 +824,22 @@
 }
 
 :root[data-ui-theme="liquid"] :where(.top-actions.layout-actions, .meta-actions, .panel-col, .pet-dock, .stage, .word-inspector, .modal-card) {
-  border-color: rgba(255,255,255,.72);
+  border-color: rgba(255,255,255,.8);
   background: var(--liquid-shell);
   box-shadow:
-    inset 0 1.2px 0 rgba(255,255,255,.98),
-    inset 0 -1px 0 rgba(83,83,83,.07),
-    inset 1px 0 0 rgba(255,255,255,.5),
-    0 1px 2px rgba(43,43,43,.05),
-    0 12px 34px rgba(49,49,49,.08),
-    0 30px 70px rgba(52,52,52,.05);
-  -webkit-backdrop-filter: blur(20px) saturate(1.06) brightness(1.22);
-  backdrop-filter: blur(20px) saturate(1.06) brightness(1.22);
+    inset 0 1.2px 0 rgba(255,255,255,1),
+    inset 0 -1px 0 rgba(83,83,83,.05),
+    inset 1px 0 0 rgba(255,255,255,.6),
+    0 1px 2px rgba(43,43,43,.04),
+    0 8px 24px rgba(49,49,49,.06),
+    0 20px 48px rgba(52,52,52,.04);
+  -webkit-backdrop-filter: blur(20px) saturate(1.05) brightness(1.26);
+  backdrop-filter: blur(20px) saturate(1.05) brightness(1.26);
 }
 :root[data-ui-theme="liquid"] :where(.panel-col, .stage, .modal-card) {
   background: var(--liquid-shell-thick);
-  -webkit-backdrop-filter: blur(28px) saturate(1.08) brightness(1.23);
-  backdrop-filter: blur(28px) saturate(1.08) brightness(1.23);
+  -webkit-backdrop-filter: blur(28px) saturate(1.06) brightness(1.27);
+  backdrop-filter: blur(28px) saturate(1.06) brightness(1.27);
 }
 :root[data-ui-theme="liquid"] .panel-col {
   border-radius: 25px;
@@ -850,10 +850,10 @@
 :root[data-ui-theme="liquid"] .panel-col > .card,
 :root[data-ui-theme="liquid"] .card,
 :root[data-ui-theme="liquid"] details.card {
-  background: rgba(255,255,255,.22);
+  background: rgba(255,255,255,.34);
 }
 :root[data-ui-theme="liquid"] .panel-col > .card:hover {
-  background: rgba(255,255,255,.34);
+  background: rgba(255,255,255,.5);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
 }
 :root[data-ui-theme="liquid"] .stage {
@@ -890,8 +890,8 @@
 :root[data-ui-theme="liquid"] [data-liquid-optic="thick"] { --optic-blur: 28px; }
 :root[data-ui-theme="liquid"] [data-liquid-optic="deep"] { --optic-blur: 36px; }
 :root[data-ui-theme="liquid"] [data-liquid-optic].liquid-refraction-ready {
-  -webkit-backdrop-filter: var(--liquid-refraction) blur(var(--optic-blur)) saturate(1.07) brightness(1.22) contrast(1.0);
-  backdrop-filter: var(--liquid-refraction) blur(var(--optic-blur)) saturate(1.07) brightness(1.22) contrast(1.0);
+  -webkit-backdrop-filter: var(--liquid-refraction) blur(var(--optic-blur)) saturate(1.06) brightness(1.25) contrast(0.995);
+  backdrop-filter: var(--liquid-refraction) blur(var(--optic-blur)) saturate(1.06) brightness(1.25) contrast(0.995);
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic].liquid-illuminated {
   border-top-color: #fff;
