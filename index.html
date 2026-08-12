@@ -17,7 +17,7 @@ try {
   try { localStorage.setItem('wp:uiTheme', JSON.stringify(saved)); } catch (_) {}
 } catch (_) {}
 </script>
-<link rel="stylesheet" href="css/styles.css?v=20260812b">
+<link rel="stylesheet" href="css/styles.css?v=20260812c">
 <link rel="stylesheet" href="css/ui-themes.css?v=20260812m">
 </head>
 <body>
@@ -158,6 +158,17 @@ try {
           </svg>
         </span>
         <div class="pet-dock-copy"><b>桌面小词灵</b><span id="pet-dock-status" aria-live="polite">正在检查这台 Mac 上的小词灵…</span></div>
+        <label class="pet-dock-fx" title="小词灵点词换词时的过渡动画">
+          <span>换词特效</span>
+          <select id="sel-pet-transition" aria-label="换词特效">
+            <option value="dissolve-pop">溶解+Q弹</option>
+            <option value="dissolve">溶解</option>
+            <option value="pop">Q弹</option>
+            <option value="slide">滑动</option>
+            <option value="flip">翻转</option>
+            <option value="none">无动画</option>
+          </select>
+        </label>
         <div class="pet-dock-actions">
           <button id="btn-pet-memory" class="btn pet-memory-shortcut" type="button">记忆本 <span id="pet-memory-badge" hidden>0</span></button>
           <button id="btn-pet-dock" class="btn pet-dock-main" type="button">召唤小词灵 ↗</button>
@@ -404,6 +415,6 @@ try {
 <script src="js/review.js?v=20260810j"></script>
 <script src="js/render.js?v=20260812i"></script>
 <script src="js/engine.js?v=20260810f"></script>
-<script src="js/app.js?v=20260812m"></script>
+<script src="js/app.js?v=20260812n"></script>
 </body>
 </html>

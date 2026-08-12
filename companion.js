@@ -64,6 +64,7 @@ function loadConfig() {
     petEnabled: true,
     petCorner: 'top-right',       // 'top-right'|'top-left'|'bottom-right'|'bottom-left'
     petWordsPerPage: 6,           // 小词灵连续词槽；与壁纸每组数量相互独立
+    petTransition: 'dissolve-pop', // 换词特效: dissolve(溶解)|pop(Q弹)|dissolve-pop|slide|flip|none
     reminders: [],                // optional: hard-code reminders for wallpaper
     // 换壁纸快捷键仍可选；小词灵本身点击词卡只记录记忆，不再换词。
     advanceByClick: true,
@@ -763,6 +764,7 @@ ObjC.import('Cocoa');
 ObjC.import('QuartzCore');
 function run(argv){
   var pngPath = argv[0], corner = argv[1], posFile = argv[2], savedPos = argv[3], closeFile = argv[4], W = ${W}, H = ${H};
+  var TRANSITION = ${JSON.stringify(CFG.petTransition || 'dissolve-pop')};
   var META = ${meta};
   var BTN = META.btn, FRAME = META.frame, FOOTERH = META.footerH, RSZ = META.rsz, MINW = META.minW, MINH = META.minH, MAXS = META.max, PORT = META.port, COUNT = META.count, KEYS = META.wordKeys;
   var rememberUrl = 'http://127.0.0.1:' + PORT + '/remember.php?i=';
@@ -789,16 +791,17 @@ function run(argv){
   // 关键:不用叠层视图——叠层 NSImageView 会拦截鼠标事件导致 grip 收不到点击(“点不动”
   // 的根因)。改用一个 ~60fps NSTimer 驱动 setNeedsDisplay,drawRect 里按进度混绘,
   // 期间 grip 的 mouseDown/拖动/缩放完全不受影响。失败自动退化瞬时替换。
-  var fade = { active: false, oldImg: null, newImg: null, start: 0 };
+  var fade = { active: false, oldImg: null, newImg: null, start: 0, mode: 'dissolve-pop' };
   function reloadImg(){
     lastMtime = Date.now() / 1000;   // 抬高轮询基线，避免 0.6s 轮询再覆盖一次
     var newImg = $.NSImage.alloc.initWithContentsOfFile(pngPath);
+    if (TRANSITION === 'none') { img = newImg; grip.setNeedsDisplay(true); return; }   // 无动画
     try {
-      fade.oldImg = img; fade.newImg = newImg; fade.start = Date.now(); fade.active = true;
+      fade.oldImg = img; fade.newImg = newImg; fade.start = Date.now(); fade.active = true; fade.mode = TRANSITION;
       var frames = 0;
       $.NSTimer.scheduledTimerWithTimeIntervalRepeatsBlock(0.016, true, function(timer){
         frames++;
-        if (!fade.active || frames > 20) { fade.active = false; fade.newImg = null; img = newImg; timer.invalidate; }
+        if (!fade.active || frames > 22) { fade.active = false; fade.newImg = null; img = newImg; timer.invalidate; }
         grip.setNeedsDisplay(true);
       });
     } catch (e) {   // 动画不可用 → 瞬时替换
@@ -886,17 +889,42 @@ function run(argv){
     'mouseDownCanMoveWindow': function () { return false; },
     'drawRect:': function (rect) {
       var fs = win.frame.size, R = $.NSMakeRect(0, 0, fs.width, fs.height);
-      // 换词过渡期间:旧图(淡出)与新图(淡入+弹性放大)在同一视图里混合绘制——真正的
-      // 交叉溶解,且 grip 照常接收点击(不像叠层 NSImageView 会拦鼠标导致“点不动”)。
+      // 换词过渡:在 grip 自己 drawRect 里按帧混绘旧/新图——不叠加子视图,点击不受影响。
       if (fade.active && fade.newImg) {
-        var t = (Date.now() - fade.start) / 260;
+        var t = (Date.now() - fade.start) / 280;
         if (t >= 1) { img = fade.newImg; fade.active = false; fade.newImg = null; img.drawInRectFromRectOperationFraction(R, $.NSZeroRect, $.NSCompositeSourceOver, 1); return; }
         if (t < 0) t = 0;
         var ease = 1 - Math.pow(1 - t, 3);                 // easeOutCubic
-        fade.oldImg.drawInRectFromRectOperationFraction(R, $.NSZeroRect, $.NSCompositeSourceOver, 1 - ease);
-        var s = 0.92 + 0.08 * ease;                        // 弹性脉冲:0.92 → 1.0
-        var nw = fs.width * s, nh = fs.height * s;
-        fade.newImg.drawInRectFromRectOperationFraction($.NSMakeRect((fs.width - nw) / 2, (fs.height - nh) / 2, nw, nh), $.NSZeroRect, $.NSCompositeSourceOver, ease);
+        var back = 1 + 2.7 * Math.pow(t - 1, 3) + 1.7 * Math.pow(t - 1, 2);  // easeOutBack(Q弹)
+        var mode = fade.mode || 'dissolve-pop';
+        if (mode === 'dissolve' || mode === 'dissolve-pop') {
+          fade.oldImg.drawInRectFromRectOperationFraction(R, $.NSZeroRect, $.NSCompositeSourceOver, 1 - ease);
+          var sc = mode === 'dissolve-pop' ? (0.90 + 0.10 * back) : 1;   // Q弹:0.90→1.0带回弹
+          var nw = fs.width * sc, nh = fs.height * sc;
+          fade.newImg.drawInRectFromRectOperationFraction($.NSMakeRect((fs.width - nw) / 2, (fs.height - nh) / 2, nw, nh), $.NSZeroRect, $.NSCompositeSourceOver, ease);
+          return;
+        }
+        if (mode === 'pop') {
+          fade.oldImg.drawInRectFromRectOperationFraction(R, $.NSZeroRect, $.NSCompositeSourceOver, 1);
+          var ps = 0.86 + 0.14 * back, pw = fs.width * ps, ph = fs.height * ps;
+          fade.newImg.drawInRectFromRectOperationFraction($.NSMakeRect((fs.width - pw) / 2, (fs.height - ph) / 2, pw, ph), $.NSZeroRect, $.NSCompositeSourceOver, ease);
+          return;
+        }
+        if (mode === 'slide') {
+          fade.oldImg.drawInRectFromRectOperationFraction($.NSMakeRect(-fs.width * ease, 0, fs.width, fs.height), $.NSZeroRect, $.NSCompositeSourceOver, 1);
+          fade.newImg.drawInRectFromRectOperationFraction($.NSMakeRect(fs.width * (1 - ease), 0, fs.width, fs.height), $.NSZeroRect, $.NSCompositeSourceOver, 1);
+          return;
+        }
+        if (mode === 'flip') {   // 前半旧图压扁,后半新图展开(模拟翻面)
+          var sx = t < 0.5 ? Math.max(0.04, Math.cos(t * Math.PI)) : Math.max(0.04, Math.cos((1 - t) * Math.PI));
+          var src = t < 0.5 ? fade.oldImg : fade.newImg, fw = fs.width * sx;
+          fade.oldImg.drawInRectFromRectOperationFraction(R, $.NSZeroRect, $.NSCompositeSourceOver, t < 0.5 ? 1 : 0);
+          src.drawInRectFromRectOperationFraction($.NSMakeRect((fs.width - fw) / 2, 0, fw, fs.height), $.NSZeroRect, $.NSCompositeSourceOver, 1);
+          return;
+        }
+        // none:直接画新图
+        img = fade.newImg; fade.active = false; fade.newImg = null;
+        img.drawInRectFromRectOperationFraction(R, $.NSZeroRect, $.NSCompositeSourceOver, 1);
         return;
       }
       img.drawInRectFromRectOperationFraction(R, $.NSZeroRect, $.NSCompositeSourceOver, 1);
@@ -1490,6 +1518,10 @@ const server = http.createServer((req, res) => {
       const allowedPatterns = new Set(['none', 'soft', 'dots', 'grid', 'diag', 'waves', 'blobs']);
       const changedPattern = allowedPatterns.has(requestedPattern) && requestedPattern !== CFG.bgPattern;
       if (allowedPatterns.has(requestedPattern)) CFG.bgPattern = requestedPattern;
+      // 换词特效:网页下拉选择,pet-sync 同步过来;下次换词时新特效生效(值嵌在 JXA 里)。
+      const allowedTransitions = new Set(['dissolve', 'pop', 'dissolve-pop', 'slide', 'flip', 'none']);
+      const requestedTransition = String(payload.petTransition || '');
+      if (allowedTransitions.has(requestedTransition)) CFG.petTransition = requestedTransition;
       CFG.wordsPerGroup = Math.max(1, Math.min(36, Number(payload.wordsPerGroup) || CFG.wordsPerGroup || 6));
       state.petKnownByLibrary[library] = Array.isArray(payload.knownWords) ? payload.knownWords.map(String).slice(0, 10000) : [];
       const deck = ensurePetDeck(library);

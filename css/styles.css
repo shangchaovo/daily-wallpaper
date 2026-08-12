@@ -465,6 +465,9 @@ textarea { width: 100%; resize: vertical; margin-bottom: 8px; }
 .pet-dock-face::before { left:3px; clip-path:polygon(0 0,100% 100%,0 100%); }.pet-dock-face::after { right:3px; clip-path:polygon(100% 0,100% 100%,0 100%); }
 .pet-dock-copy { display:flex; flex:1; min-width:0; flex-direction:column; gap:2px; position:relative; z-index:1; }.pet-dock-copy b { font-size:13px; letter-spacing:.02em; }.pet-dock-copy span { color:#cce6f8; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .pet-dock-actions { display:flex; gap:7px; flex:0 0 auto; position:relative; z-index:1; }.pet-dock-main { background:#fff6e8; border-color:transparent; color:#284866; box-shadow:0 5px 13px rgba(9,30,52,.18); }.pet-dock-main:hover { background:#fffdf8; }
+.pet-dock-fx { display:flex; align-items:center; gap:5px; flex:0 0 auto; position:relative; z-index:1; font-size:11px; color:#dbe9f7; }
+.pet-dock-fx select { font:inherit; color:#f4f9ff; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.34); border-radius:8px; padding:3px 6px; outline:none; cursor:pointer; }
+.pet-dock-fx select option { color:#284866; background:#fff; }
 .pet-dock[data-state="checking"] .pet-dock-face { animation: pet-dock-breathe 1.2s ease-in-out infinite; }
 .pet-dock[data-state="unavailable"] .pet-dock-face { filter: grayscale(.32); opacity: .82; }
 .pet-dock[data-state="active"] .pet-dock-face { box-shadow: 0 0 0 3px rgba(82,121,96,.16), 0 2px 8px rgba(31,45,53,.14); }

@@ -597,6 +597,16 @@
       if (memoryModal && !memoryModal.hidden) closeMemoryNotebook();
     });
     $('#btn-companion').addEventListener('click', handleCompanionAction);
+    // 换词特效下拉:选中即存 localStorage 并触发 pet-sync,下次换词生效。
+    const petFx = $('#sel-pet-transition');
+    if (petFx) {
+      petFx.value = window.Store.read('petTransition', 'dissolve-pop');
+      petFx.addEventListener('change', () => {
+        window.Store.write('petTransition', petFx.value);
+        syncCompanionLearningContext();
+        toast('换词特效：' + petFx.options[petFx.selectedIndex].text);
+      });
+    }
     const companionTop = $('#btn-companion-top');
     if (companionTop) companionTop.addEventListener('click', enableCompanion);
     const petBtn = $('#btn-pet-toggle');
@@ -1589,6 +1599,7 @@
             uiTheme: settings.uiTheme,
             wallpaperTheme: settings.theme,
             bgPattern: settings.bgPattern,
+            petTransition: window.Store.read('petTransition', 'dissolve-pop'),
             webOrigin: window.location.origin,
             knownWords: Array.from(window.Store.getKnownWords(settings.library)),
             customWords: settings.library === 'custom' ? window.Store.getCustomWords() : undefined,
