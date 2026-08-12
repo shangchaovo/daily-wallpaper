@@ -785,25 +785,43 @@ function run(argv){
     try { var d = JSON.parse(body || '{}'); if (d && d.ok && Object.prototype.toString.call(d.keys) === '[object Array]') KEYS = d.keys; } catch (e) {}
   }
   // 原地换图：服务端已把新 PNG 写到同一路径（同步 POST 返回时渲染已完成）。
-  // 丝滑过渡:先把视图淡出,NSTimer 0.15s 后换入新图再淡入——旧词淡出、新词淡入。
-  // 全程只用 NSView.animator + NSTimer(本文件已验证可用的 API),避开 JXA 对 GCD /
-  // block 回调支持不稳的坑;动画失败自动退化为瞬时替换,绝不影响功能。
+  // 丝滑过渡 = 交叉溶解(新图叠在旧图上同时 0→1 / 旧 1→0,无中间空帧) + 弹性缩放
+  // 脉冲(新图从 0.92 弹回 1.0,easeOutBack 的 Q 弹感,贴合卡通 UI)。两者都在整窗视图
+  // 层做,避开逐卡图层管理的高风险。缩放必须用 CATransform3D(CGAffine 对 layer 无效)。
+  // 全程 animator + NSTimer(本文件已验证可用);任何一步失败自动退化瞬时替换,绝不影响功能。
   function reloadImg(){
     lastMtime = Date.now() / 1000;   // 抬高轮询基线，避免 0.6s 轮询再覆盖一次
     var newImg = $.NSImage.alloc.initWithContentsOfFile(pngPath);
-    var swap = function(){          // 换入新图并淡入
-      img = newImg;
-      grip.setNeedsDisplay(true);
-      try { grip.animator.alphaValue = 1; } catch (e) { grip.alphaValue = 1; }
-    };
     try {
-      grip.wantsLayer = true;
+      var fs = win.frame.size;
+      // 新图叠在旧图(grip)之上,初始透明 + 略缩小
+      var overlay = $.NSImageView.alloc.initWithFrame($.NSMakeRect(0, 0, fs.width, fs.height));
+      overlay.imageScaling = $.NSImageScaleProportionallyUpOrDown;
+      overlay.image = newImg;
+      overlay.wantsLayer = true;
+      overlay.alphaValue = 0;
+      grip.addSubview(overlay);
+      if (overlay.layer) overlay.layer.transform = $.CATransform3DMakeScale(0.92, 0.92, 1);
+      // 同时:旧图(grip)淡出 + 新图(overlay)淡入并弹回原尺寸
       $.NSAnimationContext.beginGrouping;
-      $.NSAnimationContext.currentContext.duration = 0.14;
-      grip.animator.alphaValue = 0;        // 旧图淡出
+      $.NSAnimationContext.currentContext.duration = 0.30;
+      $.NSAnimationContext.currentContext.timingFunction = $.CAMediaTimingFunction.functionWithName($.kCAMediaTimingFunctionEaseOut);
+      overlay.animator.alphaValue = 1;
+      if (overlay.layer) overlay.animator.layer.transform = $.CATransform3DIdentity;
+      grip.animator.alphaValue = 0;
       $.NSAnimationContext.endGrouping;
-      $.NSTimer.scheduledTimerWithTimeIntervalRepeatsBlock(0.15, false, function(){ swap(); });
-    } catch (e) { swap(); }
+      // 动画结束后:新图交给 grip 底层绘制,移除临时叠层,恢复不透明
+      $.NSTimer.scheduledTimerWithTimeIntervalRepeatsBlock(0.32, false, function(){
+        img = newImg;
+        try { overlay.removeFromSuperview; } catch (e) {}
+        grip.alphaValue = 1;
+        grip.setNeedsDisplay(true);
+      });
+    } catch (e) {   // 任何动画不可用 → 退化为瞬时替换
+      img = newImg;
+      grip.alphaValue = 1;
+      grip.setNeedsDisplay(true);
+    }
   }
   // 动态布局：所有命中区都按“当前窗口尺寸”算，拉伸后无需重启窗口
   function layout(){
@@ -1002,6 +1020,7 @@ function run(argv){
   win.hasShadow = true;
   var grip = $.DWGrip.alloc.initWithFrame($.NSMakeRect(0, 0, W, H));
   grip.autoresizingMask = $.NSViewWidthSizable | $.NSViewHeightSizable;
+  grip.wantsLayer = true;   // 换词的溶解/缩放动画需要 layer 承载 transform
   // macOS 26+ 直接使用系统 Liquid Glass；旧系统回退到原生视觉材质。
   // 三套皮肤都复用该承载层，非 Liquid 的高不透明 SVG 会自然遮住材质。
   var GlassClass = $.NSClassFromString('NSGlassEffectView');
