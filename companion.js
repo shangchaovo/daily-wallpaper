@@ -771,6 +771,13 @@ function run(argv){
     req.setHTTPMethod('POST');
     $.NSURLConnection.sendSynchronousRequestReturningResponseError(req, $(), $());
   }
+  // 原地换图：服务端已把新 PNG 写到同一路径（同步 POST 返回时渲染已完成），
+  // 立刻重读并标记重绘——新词直接顶替旧词，不轮询、不重启窗口，零闪屏。
+  function reloadImg(){
+    lastMtime = Date.now() / 1000;   // 抬高轮询基线，避免 0.6s 轮询再覆盖一次
+    img = $.NSImage.alloc.initWithContentsOfFile(pngPath);
+    grip.setNeedsDisplay(true);
+  }
   // 动态布局：所有命中区都按“当前窗口尺寸”算，拉伸后无需重启窗口
   function layout(){
     var fs = win.frame.size;
@@ -877,8 +884,8 @@ function run(argv){
         // A footer mouseUp must never reuse the preceding word-card click state.
         dragging = false; wordIndex = -1; downTime = 0; moved = false;
       }
-      if (action === 'prev') { postUrl(pageUrl + '-1'); return; }
-      if (action === 'next') { postUrl(pageUrl + '1'); return; }
+      if (action === 'prev') { postUrl(pageUrl + '-1'); reloadImg(); return; }
+      if (action === 'next') { postUrl(pageUrl + '1'); reloadImg(); return; }
       if (action === 'memory') {
         $.NSWorkspace.sharedWorkspace.openURL($.NSURL.URLWithString(memoryUrl));
         return;
@@ -923,7 +930,8 @@ function run(argv){
       dragging = false;
       if (Date.now() - spawnedAt < 350 || downTime === 0) return;   // 预热期 / 没有真实按下
       // 单击词泡泡＝记住该词；不会再跳到下一组。拖动空白处只移动小词灵。
-      if (!moved && wordIndex >= 0 && Date.now() - downTime < 400) postUrl(rememberUrl + wordIndex + '&key=' + encodeURIComponent(KEYS[wordIndex] || ''));
+      // 同步 POST 返回时新 PNG 已写好，立即原地换图：新词顶替旧词，不闪。
+      if (!moved && wordIndex >= 0 && Date.now() - downTime < 400) { postUrl(rememberUrl + wordIndex + '&key=' + encodeURIComponent(KEYS[wordIndex] || '')); reloadImg(); }
     }
   }});
   // 轮询 PNG 变化：外部重渲（网页换形状 / 定时刷新 / 拉伸重渲）自动重载，不用重启窗口
@@ -1156,6 +1164,23 @@ function startPet() {
     petChild.unref();
     console.log(`[companion] 桌面小词灵已显示（词卡展示中文；点击词卡＝记住；按住空白处可拖动，右下角圆形把手可调大小；每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
   });
+}
+
+/* 词卡点击 / 翻页后刷新小词灵，但**不重启窗口**：只在原位重渲 PNG，窗口自带的
+ * mtime 轮询（buildPetJXA 里 0.6s 定时器）发现文件变了就原地换图。这样点击
+ * 标熟时新词直接顶替旧词、窗口纹丝不动——没有 kill+重开带来的闪屏和位置跳动。
+ * 仅当可见词数真的变化（词库见底补不满、翻页词数不同）时才重启窗口，因为原生
+ * 命中网格的词数 COUNT 是写死的，词数变了不重启就会点到已消失的卡片。 */
+function refreshPetInPlace(prevCount, nextCount, done) {
+  const { w, h } = resolvePetSize();
+  if (!petVisible || !petChild) return renderPetPng(w, h, done);
+  if (typeof nextCount === 'number' && nextCount !== prevCount) {
+    // 词数变了 → 命中网格要按新词数重建，这一扇必须重开。
+    startPet();
+    if (done) done();
+    return;
+  }
+  renderPetPng(w, h, done);
 }
 
 /* ---------------- set the REAL macOS desktop wallpaper ---------------- */
@@ -1447,32 +1472,30 @@ const server = http.createServer((req, res) => {
     const word = petWords[index];
     if (!word) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: false, error: 'word not found' })); }
     if (!expectedKey || expectedKey !== petWordKey(word)) { res.writeHead(409, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: false, stale: true, error: 'word changed' })); }
+    const prevCount = petFirstPassWords().length;   // 点击前的可见词数（补位前）
     const firstPass = completePetFirstPass(word);
     if (firstPass.duplicate) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, duplicate: true }));
     }
     const event = firstPass.event;
-    const size = state.petSize || { w: 320, h: 360 };
     const respond = () => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, event, page: firstPass.deck.index + 1, visibleWords: firstPass.page.words.length, refilled: event.refilled }));
     };
-    // 词格数量变了，原生窗口的命中网格也要随之更新；重启这一扇透明小窗
-    // 比沿用旧的静态命中数更可靠，用户不会点到已经消失的卡片。
-    if (petVisible) { startPet(); respond(); return; }
-    return renderPetPng(size.w, size.h, respond);
+    // 丝滑刷新：原位重渲 PNG，窗口原地换图不闪不动；仅词数变化时才重启窗口。
+    return refreshPetInPlace(prevCount, firstPass.page.words.length, respond);
   }
   if (url === '/pet-page.php') {
     if (req.method !== 'POST') { res.writeHead(405); return res.end(); }
     if (!trustedLocalMutation(req)) { res.writeHead(403); return res.end(); }
     let direction = 1;
     try { direction = Number(new URL(req.url, 'http://localhost').searchParams.get('dir')) < 0 ? -1 : 1; } catch {}
+    const prevCount = petFirstPassWords().length;   // 翻页前的可见词数
     const result = navigatePetPage(direction);
     const respond = () => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, ...result })); };
-    if (petVisible) { startPet(); respond(); return; }
-    const size = state.petSize || { w: 320, h: 360 };
-    return renderPetPng(size.w, size.h, respond);
+    // 翻页同样丝滑：原位换图，仅当新页词数不同（如最后一页没补满）才重启窗口。
+    return refreshPetInPlace(prevCount, result.words, respond);
   }
   if (url === '/pet-memory-events.json') {
     let after = 0, stream = '';
