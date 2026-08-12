@@ -64,7 +64,7 @@ function loadConfig() {
     petEnabled: true,
     petCorner: 'top-right',       // 'top-right'|'top-left'|'bottom-right'|'bottom-left'
     petWordsPerPage: 6,           // 小词灵连续词槽；与壁纸每组数量相互独立
-    petTransition: 'dissolve-pop', // 换词特效: dissolve(溶解)|pop(Q弹)|dissolve-pop|slide|flip|none
+    petTransition: 'dissolve-pop', // 换词特效: dissolve(溶解)|pop(Q弹)|dissolve-pop|none
     reminders: [],                // optional: hard-code reminders for wallpaper
     // 换壁纸快捷键仍可选；小词灵本身点击词卡只记录记忆，不再换词。
     advanceByClick: true,
@@ -910,18 +910,6 @@ function run(argv){
           fade.newImg.drawInRectFromRectOperationFraction($.NSMakeRect((fs.width - pw) / 2, (fs.height - ph) / 2, pw, ph), $.NSZeroRect, $.NSCompositeSourceOver, ease);
           return;
         }
-        if (mode === 'slide') {
-          fade.oldImg.drawInRectFromRectOperationFraction($.NSMakeRect(-fs.width * ease, 0, fs.width, fs.height), $.NSZeroRect, $.NSCompositeSourceOver, 1);
-          fade.newImg.drawInRectFromRectOperationFraction($.NSMakeRect(fs.width * (1 - ease), 0, fs.width, fs.height), $.NSZeroRect, $.NSCompositeSourceOver, 1);
-          return;
-        }
-        if (mode === 'flip') {   // 前半旧图压扁,后半新图展开(模拟翻面)
-          var sx = t < 0.5 ? Math.max(0.04, Math.cos(t * Math.PI)) : Math.max(0.04, Math.cos((1 - t) * Math.PI));
-          var src = t < 0.5 ? fade.oldImg : fade.newImg, fw = fs.width * sx;
-          fade.oldImg.drawInRectFromRectOperationFraction(R, $.NSZeroRect, $.NSCompositeSourceOver, t < 0.5 ? 1 : 0);
-          src.drawInRectFromRectOperationFraction($.NSMakeRect((fs.width - fw) / 2, 0, fw, fs.height), $.NSZeroRect, $.NSCompositeSourceOver, 1);
-          return;
-        }
         // none:直接画新图
         img = fade.newImg; fade.active = false; fade.newImg = null;
         img.drawInRectFromRectOperationFraction(R, $.NSZeroRect, $.NSCompositeSourceOver, 1);
@@ -1519,7 +1507,7 @@ const server = http.createServer((req, res) => {
       const changedPattern = allowedPatterns.has(requestedPattern) && requestedPattern !== CFG.bgPattern;
       if (allowedPatterns.has(requestedPattern)) CFG.bgPattern = requestedPattern;
       // 换词特效:网页下拉选择,pet-sync 同步过来;下次换词时新特效生效(值嵌在 JXA 里)。
-      const allowedTransitions = new Set(['dissolve', 'pop', 'dissolve-pop', 'slide', 'flip', 'none']);
+      const allowedTransitions = new Set(['dissolve', 'pop', 'dissolve-pop', 'none']);
       const requestedTransition = String(payload.petTransition || '');
       if (allowedTransitions.has(requestedTransition)) CFG.petTransition = requestedTransition;
       CFG.wordsPerGroup = Math.max(1, Math.min(36, Number(payload.wordsPerGroup) || CFG.wordsPerGroup || 6));
