@@ -173,6 +173,14 @@
 :root[data-ui-theme="anime"] .layout-editing .module-card { outline-color: rgba(154,117,232,.52); }
 :root[data-ui-theme="anime"] .panel-col.layout-drop-target { box-shadow: inset 0 0 0 2px rgba(118,217,191,.58); background: rgba(220,255,247,.42); }
 :root[data-ui-theme="anime"] .layout-slot.active { background: linear-gradient(90deg,transparent,rgba(255,130,178,.48),transparent); }
+:root[data-ui-theme="anime"] .support-nav { color: #a34777; border-color: #f4a4c2; background: #fff7fb; }
+:root[data-ui-theme="anime"] .support-nav.on { color: #fff; border-color: #f47cae; background: linear-gradient(135deg, #ff82b2, #9a75e8); }
+:root[data-ui-theme="anime"] .support-hero { background: linear-gradient(125deg, #fff1f7, #edf9ff 52%, #fffbdc); }
+:root[data-ui-theme="anime"] .support-hero::before { color: #b28ae8; opacity: .35; }
+:root[data-ui-theme="anime"] .support-kicker { color: #ad4c76; background: #fff; }
+:root[data-ui-theme="anime"] .support-sparkle { background: linear-gradient(135deg, #ff9dbd, #ad96ff 60%, #73ccf3); }
+:root[data-ui-theme="anime"] .support-card { background: rgba(255,253,255,.86); }
+
 
 /* ---------- Apple-inspired Liquid Glass ----------
  * Apple HIG: glass is a quiet functional layer above content, not a blue skin
@@ -375,6 +383,16 @@
 :root[data-ui-theme="liquid"] .account-link { color: rgba(62,62,62,.7); }
 :root[data-ui-theme="liquid"] .account-link:hover { color: var(--accent-2); }
 :root[data-ui-theme="liquid"] .legacy-import { color: var(--sub); }
+:root[data-ui-theme="liquid"] .support-nav { min-height: 34px; padding: 7px 12px; border-color: rgba(255,255,255,.76); color: rgba(37,37,37,.72); background: rgba(255,255,255,.34); box-shadow: inset 0 1px 0 rgba(255,255,255,.94), 0 3px 11px rgba(0,0,0,.05); }
+:root[data-ui-theme="liquid"] .support-nav.on { color: #fff; border-color: transparent; background: linear-gradient(145deg, #21a9ff, #087cf4); box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 5px 15px rgba(8,124,244,.24); }
+:root[data-ui-theme="liquid"] .support-hero,
+:root[data-ui-theme="liquid"] .support-card { border-color: rgba(255,255,255,.78); background: var(--glass-regular); box-shadow: var(--glass-shadow); -webkit-backdrop-filter: blur(15px) saturate(1.08); backdrop-filter: blur(15px) saturate(1.08); }
+:root[data-ui-theme="liquid"] .support-hero { background: linear-gradient(135deg, rgba(255,255,255,.62), rgba(244,249,255,.38) 50%, rgba(255,250,250,.38)); }
+:root[data-ui-theme="liquid"] .support-hero::before { color: #a9b6c4; }
+:root[data-ui-theme="liquid"] .support-kicker { border-color: rgba(255,255,255,.8); color: #5f6d79; background: rgba(255,255,255,.6); }
+:root[data-ui-theme="liquid"] .support-sparkle,
+:root[data-ui-theme="liquid"] .support-primary { color: #fff; background: linear-gradient(145deg, #21a9ff, #087cf4); box-shadow: 0 9px 22px rgba(8,124,244,.22); }
+:root[data-ui-theme="liquid"] .support-icon { background: rgba(219,237,255,.75); }
 
 /* Dense settings live on a stable standard material. They do not receive the
  * moving lens used by the sparse floating controls. */

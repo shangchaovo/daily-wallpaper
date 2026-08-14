@@ -17,8 +17,8 @@ try {
   try { localStorage.setItem('wp:uiTheme', JSON.stringify(saved)); } catch (_) {}
 } catch (_) {}
 </script>
-<link rel="stylesheet" href="css/styles.css?v=20260812d">
-<link rel="stylesheet" href="css/ui-themes.css?v=20260812m">
+<link rel="stylesheet" href="css/styles.css?v=20260814a">
+<link rel="stylesheet" href="css/ui-themes.css?v=20260814a">
 </head>
 <body>
 
@@ -46,6 +46,7 @@ try {
         <button class="ui-theme-option" type="button" aria-label="校样工作室主题" title="校样工作室" aria-pressed="true" data-ui-theme="editorial"><i class="theme-orb editorial" aria-hidden="true"></i>校样</button>
         <button class="ui-theme-option" type="button" aria-label="Liquid Glass 主题" title="Liquid Glass" aria-pressed="false" data-ui-theme="liquid"><i class="theme-orb liquid" aria-hidden="true"></i>Liquid</button>
       </div>
+      <button id="btn-open-support" class="btn support-nav" type="button">♡ 支持与反馈</button>
       <button id="btn-layout-edit" class="btn soft small" type="button">↕ 整理模块</button>
       <button id="btn-layout-reset" class="btn ghost small" type="button" hidden>恢复默认</button>
       <div class="account-tools" aria-label="账号与同步状态">
@@ -58,7 +59,7 @@ try {
     </div>
   </header>
 
-  <main class="workbench">
+  <main id="workspace-view" class="workbench">
     <!-- ============ left panel: 内容（词库 + 提醒） ============ -->
     <aside class="panel panel-left">
       <div class="panel-col">
@@ -313,6 +314,37 @@ try {
       </div>
     </aside>
   </main>
+
+  <main id="support-view" class="support-view" hidden aria-labelledby="support-title">
+    <button id="btn-close-support" class="support-back" type="button">← 回到壁纸工坊</button>
+    <section class="support-hero">
+      <span class="support-kicker">♡ THANK YOU FOR KEEPING THE MAGIC GOING</span>
+      <h2 id="support-title">让每一张学习壁纸，继续陪你变得更好。</h2>
+      <p>如果 WordPaper 帮你把学习留在每天的桌面上，欢迎请我喝杯咖啡；也欢迎把想法、问题和期待告诉我。</p>
+      <span class="support-sparkle" aria-hidden="true">✦</span>
+    </section>
+    <section class="support-grid" aria-label="支持与反馈方式">
+      <article class="support-card">
+        <span class="support-icon" aria-hidden="true">☕</span>
+        <h3>请我喝杯咖啡</h3>
+        <p>你的支持会变成更好的词库、版式和小小的学习惊喜。</p>
+        <div class="support-actions">
+          <a id="support-bmc-link" class="btn support-primary" href="https://buymeacoffee.com/chasetse" target="_blank" rel="noopener">前往支持页面 ↗</a>
+          <button class="btn ghost support-copy" type="button" data-copy="https://buymeacoffee.com/chasetse" data-copy-label="支持链接已复制">复制链接</button>
+        </div>
+      </article>
+      <article class="support-card">
+        <span class="support-icon" aria-hidden="true">💌</span>
+        <h3>意见与反馈</h3>
+        <p>发现问题、有功能灵感，或只是想说声嗨，都可以写信给我。</p>
+        <div class="support-actions">
+          <a id="support-email-link" class="btn support-primary" href="mailto:shangchaoxie888@gmail.com?subject=WordPaper%20反馈">写封邮件 ↗</a>
+          <button class="btn ghost support-copy" type="button" data-copy="shangchaoxie888@gmail.com" data-copy-label="邮箱已复制">复制邮箱</button>
+        </div>
+      </article>
+    </section>
+    <p class="support-note">谢谢你让 WordPaper 有机会长成更温柔、更有用的学习角落。✦</p>
+  </main>
 </div>
 
 <!-- ============ Ebbinghaus memory notebook ============ -->
@@ -417,5 +449,6 @@ try {
 <script src="js/render.js?v=20260812i"></script>
 <script src="js/engine.js?v=20260810f"></script>
 <script src="js/app.js?v=20260812r"></script>
+<script src="js/support.js?v=20260814a"></script>
 </body>
 </html>

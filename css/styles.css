@@ -609,6 +609,29 @@ body.live .app { display: none; }
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 
+/* ---------- support & feedback ---------- */
+.support-nav { color: var(--accent); border-color: var(--accent); background: var(--paper); }
+.support-nav.on { color: var(--accent-ink); background: var(--accent); }
+.support-view { width: min(1040px, calc(100% - 40px)); margin: 28px auto 54px; }
+.support-back { margin: 0 0 15px; padding: 0; border: 0; color: var(--sub); background: transparent; font: 800 13px/1.4 var(--font); cursor: pointer; }
+.support-back:hover { color: var(--accent); }
+.support-hero { position: relative; overflow: hidden; padding: 43px 54px 35px; border: 1px solid var(--line); border-radius: calc(var(--radius) + 4px); background: linear-gradient(120deg, var(--paper), var(--accent-soft) 55%, var(--paper)); box-shadow: var(--shadow); }
+.support-hero::before { content: "✦  ✧  ♥  ✦"; position: absolute; top: -4px; right: 38px; color: var(--accent); opacity: .2; font-size: 54px; letter-spacing: 13px; transform: rotate(8deg); }
+.support-kicker { position: relative; display: inline-flex; padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--accent); background: var(--paper); font: 800 10px/1.2 var(--font); letter-spacing: .04em; }
+.support-hero h2 { position: relative; max-width: 610px; margin: 16px 0 10px; color: var(--ink); font: 800 36px/1.25 var(--font); letter-spacing: -.045em; }
+.support-hero p { position: relative; max-width: 610px; margin: 0; color: var(--sub); font-size: 14px; font-weight: 600; line-height: 1.8; }
+.support-sparkle { position: absolute; right: 83px; bottom: 26px; display: grid; width: 112px; height: 112px; place-items: center; border-radius: 48% 44% 52% 45%; color: var(--accent-ink); background: linear-gradient(145deg, var(--accent), var(--accent-2)); box-shadow: 0 15px 30px color-mix(in srgb, var(--accent) 25%, transparent); font-size: 52px; transform: rotate(-9deg); }
+.support-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.support-card { min-height: 255px; padding: 26px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow-sm); }
+.support-icon { display: grid; width: 47px; height: 47px; margin-bottom: 16px; place-items: center; border-radius: var(--radius-sm); background: var(--accent-soft); font-size: 23px; }
+.support-card:nth-child(2) .support-icon { filter: hue-rotate(120deg); }
+.support-card h3 { margin: 0 0 8px; color: var(--ink); font-size: 20px; }
+.support-card p { min-height: 46px; margin: 0 0 19px; color: var(--sub); font-size: 13px; font-weight: 600; line-height: 1.65; }
+.support-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.support-primary { display: inline-flex; align-items: center; min-height: 42px; color: var(--accent-ink); border-color: transparent; background: linear-gradient(145deg, var(--accent), var(--accent-2)); text-decoration: none; box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 22%, transparent); }
+.support-copy { min-height: 42px; padding: 8px 13px; }
+.support-note { margin: 16px 3px 0; color: var(--sub); font-size: 12px; font-weight: 600; text-align: center; }
+
 /* ---------- responsive ---------- */
 @media (max-width: 1420px) {
   .workbench { grid-template-columns: 300px minmax(0, 1fr) 300px; }
@@ -629,6 +652,11 @@ body.live .app { display: none; }
   .panel-left { grid-column: 1; grid-row: 2; }
   .panel-right { grid-column: 1; grid-row: 3; }
   .stage { min-height: 300px; }
+  .support-view { width: min(100% - 24px, 1040px); margin-top: 17px; }
+  .support-hero { padding: 31px 24px 28px; }
+  .support-hero h2 { font-size: 28px; }
+  .support-sparkle { position: relative; right: auto; bottom: auto; width: 62px; height: 62px; margin: 19px 0 0 auto; font-size: 31px; }
+  .support-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
   .lib-cards { grid-template-columns: 1fr; }
@@ -1122,3 +1150,18 @@ input[type="range"]::-webkit-slider-thumb { margin-top: -5px; }
     transition-duration: .01ms !important;
   }
 }
+
+/* 校样主题使用后置的通用按钮规则；支持页主操作需明确保留印泥红底与白字，
+   避免在暖白纸面上失去对比。标识字母也始终压在校样角标上方。 */
+:root[data-ui-theme="editorial"] .logo { background: #304b5d; }
+:root[data-ui-theme="editorial"] .logo::before { z-index: 1; }
+:root[data-ui-theme="editorial"] .logo span { z-index: 2; color: #fffdf6; }
+:root[data-ui-theme="editorial"] .support-hero { background: linear-gradient(118deg, #fffdf7, #f3eadc 58%, #fbf2e5); }
+:root[data-ui-theme="editorial"] .support-hero h2,
+:root[data-ui-theme="editorial"] .support-card h3 { color: #332a22; }
+:root[data-ui-theme="editorial"] .support-hero p,
+:root[data-ui-theme="editorial"] .support-card p,
+:root[data-ui-theme="editorial"] .support-note { color: #625448; }
+:root[data-ui-theme="editorial"] .support-primary.btn { color: #fffdf8; border-color: #bb4936; background: #d9563d; box-shadow: 0 6px 12px rgba(174,65,44,.18); }
+:root[data-ui-theme="editorial"] .support-primary.btn:hover { color: #fff; border-color: #b6402d; background: #c84a34; }
+:root[data-ui-theme="editorial"] .support-copy.btn { color: #4b4035; border-color: #cbb9a6; background: #fffdf8; }
