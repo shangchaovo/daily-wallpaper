@@ -236,19 +236,11 @@
     radial-gradient(circle at 15% 90%, rgba(239,239,239,.27), transparent 34%),
     radial-gradient(circle at 86% 82%, rgba(230,230,230,.24), transparent 34%),
     linear-gradient(145deg, #fdfdfe 0%, #f5f5f7 46%, #ececef 100%);
-  background-attachment: fixed;
+  /* 不用 background-attachment:fixed:固定背景滚动时强制整页重绘,是桌面滚动卡顿主因。 */
+  background-attachment: scroll;
 }
-:root[data-ui-theme="liquid"] body::before {
-  inset: -16%;
-  opacity: .72;
-  background:
-    radial-gradient(ellipse at 18% 44%, rgba(255,255,255,.9), transparent 30%),
-    radial-gradient(ellipse at 78% 18%, rgba(233,233,233,.3), transparent 25%),
-    radial-gradient(ellipse at 70% 80%, rgba(235,235,235,.28), transparent 28%),
-    radial-gradient(ellipse at 28% 88%, rgba(237,237,237,.3), transparent 26%);
-  filter: blur(24px) saturate(.82);
-  animation: liquid-ambient-drift 26s cubic-bezier(.45,0,.55,1) infinite alternate;
-}
+/* 注意:这里原先有一份过时的 body::before 全屏模糊层(blur 24px + 26s 位移),与下方
+ * 808 行的当前版本重复定义且 filter 会残留透出。已删除,统一由 808 行的呼吸光晕负责。 */
 :root[data-ui-theme="liquid"] body::after {
   content: "";
   position: fixed;
@@ -281,11 +273,11 @@
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.88);
   border-radius: 14px;
-  color: #202024;
+  color: #fff;
   background:
-    radial-gradient(circle at 24% 12%, rgba(255,255,255,.96), transparent 36%),
-    linear-gradient(145deg, rgba(255,255,255,.66), rgba(255,255,255,.2));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.96), inset 0 -1px 0 rgba(62,62,62,.08), 0 8px 22px rgba(0,0,0,.11);
+    radial-gradient(circle at 24% 12%, rgba(255,255,255,.42), transparent 36%),
+    linear-gradient(145deg, #21a9ff, #087cf4);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), inset 0 -1px 0 rgba(0,76,181,.2), 0 8px 22px rgba(8,124,244,.24);
   -webkit-backdrop-filter: blur(11px) saturate(1.18);
   backdrop-filter: blur(11px) saturate(1.18);
   transform: none;
@@ -751,8 +743,11 @@
     0 14px 36px rgba(0,0,0,.095);
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic].liquid-pressed {
-  --glass-scale: .985;
-  --glass-lift: 1px;
+  /* 面板按压不做 transform 缩放:带 backdrop-filter 的面板一旦 scale/lift,浏览器要重算
+   * 整面模糊背景,实测让点击响应从 25ms 拖到 55ms。按压反馈由按钮自身 :active 承担
+   * (按钮无 backdrop,便宜),面板保持静止。 */
+  --glass-scale: 1;
+  --glass-lift: 0px;
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic]::before {
   content: "";
@@ -831,9 +826,12 @@
     radial-gradient(ellipse at 82% 20%, var(--liquid-sky) 0 10%, transparent 32%),
     radial-gradient(ellipse at 70% 82%, var(--liquid-mint) 0 9%, transparent 30%),
     radial-gradient(ellipse at 28% 88%, var(--liquid-pearl) 0 9%, transparent 31%);
-  filter: blur(30px) saturate(1.05);
-  animation: liquid-ambient-drift 18s cubic-bezier(.45,0,.55,1) infinite alternate;
-  will-change: transform;
+  /* 实测(Playwright rAF 采样):liquid 滚动掉帧的唯一来源就是这个全屏 fixed 光晕层的
+   * 持续动画——关掉它滚动立刻 0 掉帧,后续再关 backdrop/高光都无额外收益。全屏 fixed 层
+   * 只要带持续动画(无论位移还是透明度呼吸),滚动时浏览器每帧都要重新合成它。
+   * 取舍:光晕视觉保留,但完全静止(无动画/无模糊)。静态 fixed 层只合成一次,滚动流畅。 */
+  animation: none;
+  filter: none;
 }
 :root[data-ui-theme="liquid"] body::after {
   opacity: .82;
@@ -853,13 +851,16 @@
     0 1px 2px rgba(43,43,43,.04),
     0 8px 24px rgba(49,49,49,.06),
     0 20px 48px rgba(52,52,52,.04);
+}
+/* 玻璃 backdrop blur 只给小控件(按钮/工具条/pet-dock)。大面板底下基本是纯白背景,
+ * 常驻 16px 全屏模糊每帧重采样却几乎看不出效果,是滚动卡顿主因——大面板去掉 blur,
+ * 用 shell 渐变自身的半透明白即可,视觉差别微乎其微但流畅度大幅提升。 */
+:root[data-ui-theme="liquid"] :where(.top-actions.layout-actions, .meta-actions, .pet-dock, .word-inspector) {
   -webkit-backdrop-filter: blur(12px) saturate(1.05) brightness(1.26);
   backdrop-filter: blur(12px) saturate(1.05) brightness(1.26);
 }
 :root[data-ui-theme="liquid"] :where(.panel-col, .stage, .modal-card) {
   background: var(--liquid-shell-thick);
-  -webkit-backdrop-filter: blur(16px) saturate(1.06) brightness(1.27);
-  backdrop-filter: blur(16px) saturate(1.06) brightness(1.27);
 }
 :root[data-ui-theme="liquid"] .panel-col {
   border-radius: 25px;
@@ -924,8 +925,9 @@
     0 44px 96px rgba(56,56,56,.10);
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic].liquid-pressed {
-  --glass-scale: .998;
-  --glass-lift: .5px;
+  /* 同上:面板按压不做 transform,避免整面 backdrop 模糊重算拖慢点击。 */
+  --glass-scale: 1;
+  --glass-lift: 0px;
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic]::before {
   inset: 1px;
@@ -937,12 +939,12 @@
     linear-gradient(178deg, rgba(255,255,255,.30), transparent 38% 70%, rgba(153,153,153,.06));
   mix-blend-mode: screen;
   opacity: .62;
-  filter: saturate(1.08);
-  transition: opacity .32s ease, filter .32s ease;
+  /* 只过渡 opacity(纯合成)。原先还过渡 filter:点亮/hover 时 filter 在 0.32s 内对整面
+   * 高光位图逐帧重绘,是点击/悬停不跟手的主因。点亮效果用 opacity 表达,视觉几乎一致。 */
+  transition: opacity .22s ease;
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic].liquid-illuminated::before {
   opacity: .96;
-  filter: brightness(1.12) saturate(1.18);
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic]::after {
   inset: 0;
@@ -965,11 +967,11 @@
   mask-composite: exclude;
   opacity: .90;
   filter: drop-shadow(0 1px 0 rgba(255,255,255,.55));
-  transition: opacity .32s ease, filter .32s ease;
+  /* 同 ::before:只过渡 opacity,不过渡 filter(drop-shadow/brightness 逐帧重绘很贵)。 */
+  transition: opacity .22s ease;
 }
 :root[data-ui-theme="liquid"] [data-liquid-optic].liquid-illuminated::after {
   opacity: 1;
-  filter: brightness(1.13) saturate(1.18) drop-shadow(0 1px 0 rgba(255,255,255,.7));
 }
 
 /* Tinted controls behave like small liquid lenses instead of flat blue pills. */
@@ -1007,7 +1009,14 @@
   border-radius: 16px;
   box-shadow: inset 0 2px 6px rgba(59,59,59,.16), inset 0 1px 0 rgba(255,255,255,.72), 0 1px 2px rgba(51,51,51,.06);
 }
-:root[data-ui-theme="liquid"] .btn.primary,
+:root[data-ui-theme="liquid"] .btn.primary {
+  color: #fff;
+  border-color: rgba(8,124,244,.72);
+  background:
+    radial-gradient(100px circle at var(--liquid-control-x, 34%) var(--liquid-control-y, 20%), rgba(255,255,255,.35), transparent 58%),
+    linear-gradient(155deg, #21a9ff, #087cf4);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(0,76,181,.2), 0 9px 24px rgba(8,124,244,.25), 0 2px 6px rgba(8,124,244,.14);
+}
 :root[data-ui-theme="liquid"] .pet-dock-main {
   color: #2c2c2e;
   border-color: rgba(255,255,255,.9);
@@ -1016,7 +1025,13 @@
     linear-gradient(155deg, rgba(255,255,255,.88), rgba(240,240,245,.78));
   box-shadow: inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(60,60,67,.08), 0 9px 24px rgba(45,45,55,.16), 0 2px 6px rgba(45,45,55,.08);
 }
-:root[data-ui-theme="liquid"] .btn.primary:hover,
+:root[data-ui-theme="liquid"] .btn.primary:hover {
+  color: #fff;
+  background:
+    radial-gradient(110px circle at var(--liquid-control-x, 34%) var(--liquid-control-y, 20%), rgba(255,255,255,.42), transparent 60%),
+    linear-gradient(155deg, #31b1ff, #087cf4);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.52), inset 0 -1px 0 rgba(0,76,181,.2), 0 14px 32px rgba(8,124,244,.3), 0 3px 8px rgba(8,124,244,.18);
+}
 :root[data-ui-theme="liquid"] .pet-dock-main:hover {
   color: #111317;
   background:
@@ -1032,9 +1047,17 @@
   animation: liquid-shell-materialize .52s cubic-bezier(.22,1,.36,1);
 }
 
+@keyframes liquid-ambient-breathe {
+  /* 只动 opacity:纯合成动画,不触发模糊/重排,滚动时零额外开销。光晕微微呼吸即可。 */
+  from { opacity: .82; }
+  to { opacity: .97; }
+}
 @keyframes liquid-ambient-drift {
-  from { transform: translate3d(calc(var(--liquid-ambient-x) - 1.3%),calc(var(--liquid-ambient-y) - .7%),0) scale(1); }
-  to { transform: translate3d(calc(var(--liquid-ambient-x) + 1.3%),calc(var(--liquid-ambient-y) + .9%),0) scale(1.035); }
+  /* 纯时间驱动的缓慢漂移,不读 --liquid-ambient-x/y。原先 transform 依赖这两个鼠标实时
+   * 变量,导致鼠标每动一下全屏模糊层就重算,是卡顿核心链路;解耦后环境层依旧缓缓漂移,
+   * 但鼠标移动只影响小控件高光(--glass-x/y),不再牵动全屏模糊。 */
+  from { transform: translate3d(-1.3%, -.7%, 0) scale(1); }
+  to { transform: translate3d(1.3%, .9%, 0) scale(1.035); }
 }
 @keyframes liquid-content-in { from { opacity: 0; transform: translateY(4px); filter: blur(2px); } }
 @keyframes liquid-modal-in { from { opacity: .72; transform: translateY(8px) scale(.982); filter: blur(5px); box-shadow: 0 10px 30px rgba(0,0,0,.1); } }

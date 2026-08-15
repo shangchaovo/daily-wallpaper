@@ -293,6 +293,10 @@
       const existing = opticalState.get(surface);
       if (existing) { rebuildOptic(surface, existing); return; }
       if (!supportsSvgBackdrop) return;
+      // 大面板(.stage/.modal-card,deep)不建 SVG 折射滤镜:它们面积占屏最大,折射+backdrop
+      // blur 每帧对背景重采样是卡顿主因。按设计意图(折射只给小控件,大面板光学稳定),
+      // 大面板只用 shell 渐变+静态高光,外观几乎无差但流畅度天差地别。
+      if (surface.dataset.liquidOptic === 'deep') return;
 
       const id = `wp-liquid-refraction-${++opticalSeq}`;
       const filter = svgNode('filter', {
@@ -366,12 +370,17 @@
         state.y += (state.targetY - state.y) * ease;
         state.tiltX += (state.targetTiltX - state.tiltX) * ease;
         state.tiltY += (state.targetTiltY - state.tiltY) * ease;
+        // 只有值实质变化才写 DOM。CSS 变量写入会让依赖它的玻璃背景/折射样式失效重算,
+        // 原先每帧无条件写 4 个变量(连 staticSheen 大面板的 0deg tilt 也写),是纯浪费。
         if (!state.staticSheen) {
-          surface.style.setProperty('--glass-x', `${state.x.toFixed(1)}px`);
-          surface.style.setProperty('--glass-y', `${state.y.toFixed(1)}px`);
+          const gx = `${state.x.toFixed(1)}px`, gy = `${state.y.toFixed(1)}px`;
+          if (gx !== state._gx) { surface.style.setProperty('--glass-x', gx); state._gx = gx; }
+          if (gy !== state._gy) { surface.style.setProperty('--glass-y', gy); state._gy = gy; }
         }
-        surface.style.setProperty('--glass-tilt-x', motionAllowed ? `${state.tiltX.toFixed(3)}deg` : '0deg');
-        surface.style.setProperty('--glass-tilt-y', motionAllowed ? `${state.tiltY.toFixed(3)}deg` : '0deg');
+        const tx = motionAllowed ? `${state.tiltX.toFixed(3)}deg` : '0deg';
+        const ty = motionAllowed ? `${state.tiltY.toFixed(3)}deg` : '0deg';
+        if (tx !== state._tx) { surface.style.setProperty('--glass-tilt-x', tx); state._tx = tx; }
+        if (ty !== state._ty) { surface.style.setProperty('--glass-tilt-y', ty); state._ty = ty; }
         const delta = Math.abs(state.targetX - state.x) + Math.abs(state.targetY - state.y)
           + Math.abs(state.targetTiltX - state.tiltX) * 8 + Math.abs(state.targetTiltY - state.tiltY) * 8;
         if (delta > .08) needsFrame = true;
@@ -415,16 +424,14 @@
       if (!surface || (event.relatedTarget instanceof Node && surface.contains(event.relatedTarget))) return;
       resetSurface(surface);
     }, { passive: true });
-    document.addEventListener('pointermove', event => {
-      if (document.documentElement.dataset.uiTheme !== 'liquid' || reducedMotion.matches || event.pointerType === 'touch' || !(event.target instanceof Element)) return;
+    // pointermove 触发极密(每帧多次)。原先每个事件都 getBoundingClientRect(强制同步
+    // 布局)。这里:rAF 合帧到每帧最多处理一次、只更新命中小控件的高光/倾斜,功能不变
+    // 但主线程压力大减。(--liquid-ambient-x/y 已无消费者,全屏环境层改为纯时间漂移。)
+    let moveScheduled = false;
+    let lastMoveEvent = null;
+    function processMove(event) {
       const surface = event.target.closest(opticalSelector);
-      if (!surface) return;
-      // 环境光偏移只在确实有目标面板时更新(原先在任何 move 上都写文档级变量并触发
-      // 全面板 scheduleMotion + getBoundingClientRect,空挥鼠标也跑一整轮,纯属浪费)。
-      const ambientX = ((event.clientX / Math.max(1, window.innerWidth)) - .5) * 18;
-      const ambientY = ((event.clientY / Math.max(1, window.innerHeight)) - .5) * 14;
-      document.documentElement.style.setProperty('--liquid-ambient-x', `${ambientX.toFixed(2)}px`);
-      document.documentElement.style.setProperty('--liquid-ambient-y', `${ambientY.toFixed(2)}px`);
+      if (!surface) return;   // 未命中面板:不点亮,空挥鼠标零开销
       const rect = surface.getBoundingClientRect();
       const state = getMotion(surface);
       state.active = true;
@@ -447,6 +454,13 @@
         control.style.setProperty('--liquid-control-y', `${Math.max(0, Math.min(controlRect.height, event.clientY - controlRect.top)).toFixed(1)}px`);
       }
       scheduleMotion();
+    }
+    document.addEventListener('pointermove', event => {
+      if (document.documentElement.dataset.uiTheme !== 'liquid' || reducedMotion.matches || event.pointerType === 'touch' || !(event.target instanceof Element)) return;
+      lastMoveEvent = event;
+      if (moveScheduled) return;
+      moveScheduled = true;
+      requestAnimationFrame(() => { moveScheduled = false; if (lastMoveEvent) processMove(lastMoveEvent); });
     }, { passive: true });
     document.addEventListener('pointerdown', event => {
       if (document.documentElement.dataset.uiTheme !== 'liquid' || reducedMotion.matches || !(event.target instanceof Element)) return;
@@ -605,6 +619,20 @@
         window.Store.write('petTransition', petFx.value);
         syncCompanionLearningContext();
         toast('换词特效：' + petFx.options[petFx.selectedIndex].text);
+      });
+    }
+    // 壁纸/预览同步总闸:默认开。关掉后壁纸/预览回退各自独立随机,不再跟随小词灵。
+    const petSyncToggle = $('#chk-pet-sync');
+    if (petSyncToggle) {
+      petSyncToggle.checked = settings.petWallpaperSync !== false;
+      petSyncToggle.addEventListener('change', () => {
+        settings.petWallpaperSync = petSyncToggle.checked;
+        saveSettings();
+        if (!petSyncToggle.checked) petSyncedSel = null;   // 关掉立即脱离小词灵词
+        syncCompanionLearningContext();   // 推给 companion（决定壁纸词源）
+        if (petSyncToggle.checked) syncPetCurrent();      // 打开立即对齐一次
+        else refresh(false);                              // 关闭后按本地逻辑重绘
+        toast(petSyncToggle.checked ? '已开启：壁纸/预览跟随小词灵' : '已关闭：壁纸/预览独立随机');
       });
     }
     const companionTop = $('#btn-companion-top');
@@ -1357,7 +1385,18 @@
   }
 
   async function refresh(manual, page) {
-    const sel = manual ? await window.Engine.reshuffle(settings) : await window.Engine.current(settings);
+    let sel;
+    if (manual && petSyncActive() && companionReachable()) {
+      // 「换一组」= 推动小词灵翻页（闭环：小词灵翻页→epoch 变→轮询拉回新词→预览+壁纸同步）。
+      // 立即翻页并同步拉取当前页词本地渲染，不等 15s 轮询。
+      const advanced = await drivePetNextPage();
+      if (advanced) sel = petSelectionFromSync(advanced);
+      if (!sel) sel = await window.Engine.reshuffle(settings); // 翻页失败兜底
+    } else if (!manual && petSyncActive() && petSyncedSel && petSyncedSel.library === settings.library) {
+      sel = petSyncedSel;   // 同步开启且已拉到小词灵当前页：预览以小词灵为准
+    } else {
+      sel = manual ? await window.Engine.reshuffle(settings) : await window.Engine.current(settings);
+    }
     sel.words = mixReviews(sel);
     paintSelection(sel, page || 'words', '#preview-canvas');
     if (liveActive) paintLive(page || cyclePage);
@@ -1365,6 +1404,41 @@
     lastSel = sel;
     syncWordScaleAvailability();
     updateSrsUI();
+  }
+
+  /* 小词灵同步状态：petSyncedSel 缓存最近一次拉到的小词灵当前页选择。 */
+  let petSyncedSel = null;   // {dateStr, words, library, rotated:false}
+  let companionUp = false;   // status.json 探测结果（syncCompanionButton 维护）
+
+  function petSyncActive() { return !!(settings && settings.petWallpaperSync !== false); }
+  function companionReachable() { return companionUp; }
+
+  // 用同步来的小词灵词构造一个 selection（与 Engine.current 返回结构一致）。
+  function petSelectionFromSync(words) {
+    if (!Array.isArray(words) || !words.length) return null;
+    const today = window.Words.dateKey(new Date());
+    return { dateStr: today, words, library: settings.library, rotated: false };
+  }
+
+  // 让「换一组」推动小词灵翻到下一页；成功返回新页词数组，失败返回 null。
+  async function drivePetNextPage() {
+    if (!petCurrentSupported) return null;   // 旧伴侣无当前页端点，直接走本地兜底
+    try {
+      const r = await fetch('pet-page.php?dir=1', { method: 'POST' });
+      if (!r.ok) return null;
+      const j = await r.json();
+      if (!j || j.ok === false) return null;
+      // 翻页后小词灵当前页词经 /pet-current.json 取回（keys 是命中 key 非词对象）。
+      const cur = await fetch('pet-current.json', { cache: 'no-store' });
+      if (cur.status === 404) { petCurrentSupported = false; return null; }
+      if (!cur.ok) return null;
+      const data = await cur.json();
+      if (data && Array.isArray(data.words) && data.library === settings.library) {
+        recordPetSyncCursor(data);
+        return data.words;
+      }
+      return null;
+    } catch (e) { return null; }
   }
 
   /* 正式检测只在记忆本进行；普通壁纸始终展示新词，避免提前泄露到期词的中文答案。 */
@@ -1587,6 +1661,7 @@
       if (newlyDue > 0) refresh(false);
     }, 30000);
     setInterval(syncPetMemoryEvents, 15000);
+    setInterval(syncPetCurrent, 5000);   // 小词灵词代际轮询：点词/翻页后 ≤5s 预览对齐
   }
 
   async function syncPetMemoryEvents() {
@@ -1611,6 +1686,40 @@
     finally { petMemorySyncing = false; }
   }
 
+  /* 记录小词灵同步游标（epoch+library），供轮询比对「小词灵词是否变了」。 */
+  function recordPetSyncCursor(data) {
+    if (!data) return;
+    window.Store.write('petSyncCursor', { epoch: Number(data.wordEpoch) || 0, library: String(data.library || '') });
+  }
+
+  /* 轮询小词灵「当前页词 + 代际」。点词/翻页都会 bump epoch；发现 epoch 变化且词库
+   * 匹配就把预览对齐成小词灵同批词（freeze 持久化 + 立即重绘），实现「小词灵为准」。 */
+  let petCurrentSyncing = false;
+  let petCurrentSupported = true;   // 旧版伴侣没有 /pet-current.json：404 一次后停轮询，避免刷 console
+  async function syncPetCurrent() {
+    if (petCurrentSyncing || !settings || !petSyncActive()) return;
+    if (!companionReachable() || !petCurrentSupported) return;
+    petCurrentSyncing = true;
+    try {
+      const r = await fetch('pet-current.json', { cache: 'no-store' });
+      if (r.status === 404) { petCurrentSupported = false; return; }   // 旧伴侣：放弃同步轮询
+      if (!r.ok) return;
+      const data = await r.json();
+      if (!data || data.ok === false || !Array.isArray(data.words)) return;
+      if (String(data.library || '') !== String(settings.library || '')) return;  // 词库不匹配不套
+      const cursor = window.Store.read('petSyncCursor', { epoch: -1, library: '' });
+      const epoch = Number(data.wordEpoch) || 0;
+      const firstSeen = cursor.library !== data.library;
+      if (!firstSeen && epoch === (Number(cursor.epoch) || 0)) return;  // 无变化
+      recordPetSyncCursor(data);
+      petSyncedSel = petSelectionFromSync(data.words);
+      if (!petSyncedSel) return;
+      window.Engine.freeze(settings.library, petSyncedSel.dateStr, data.words);
+      await refresh(false);   // 用 petSyncedSel 重绘（refresh 内优先吃它）
+    } catch (e) { /* 伴侣未运行时静默跳过 */ }
+    finally { petCurrentSyncing = false; }
+  }
+
   let petContextTimer = null;
   function syncCompanionLearningContext() {
     clearTimeout(petContextTimer);
@@ -1625,6 +1734,7 @@
             wallpaperTheme: settings.theme,
             bgPattern: settings.bgPattern,
             petTransition: window.Store.read('petTransition', 'dissolve-pop'),
+            petWallpaperSync: settings.petWallpaperSync !== false,
             webOrigin: window.location.origin,
             knownWords: Array.from(window.Store.getKnownWords(settings.library)),
             customWords: settings.library === 'custom' ? window.Store.getCustomWords() : undefined,
@@ -1725,6 +1835,8 @@
       const j = await response.json();
       if (j && j.available === false) {
         petOn = false;
+        companionUp = false;
+        petSyncedSel = null;
         const isPublic = j.mode === 'public';
         companionAction = isPublic ? 'download' : 'switch-account';
         if (btn) {
@@ -1747,6 +1859,7 @@
       }
       // 伴侣页（8771）给 config；主 server（8770）探测到伴侣后给 companion:true
       const running = !!(j && (j.config || j.companion));
+      companionUp = running;
       companionAction = running ? 'control' : 'start';
       if (running) {
         if (btn) { btn.textContent = '桌面伴侣运行中'; btn.disabled = true; }
@@ -1755,12 +1868,17 @@
         syncPetControls(j);
         // 伴侣在线即把当前特效同步过去:特效值变了 companion 会重建小窗,无需手动刷新。
         syncCompanionLearningContext();
+        // 立即拉一次小词灵当前页词，让预览/壁纸尽快对齐（不等首个 5s tick）。
+        syncPetCurrent();
       } else {
         petOn = false;
+        petSyncedSel = null;
         if (btn) { btn.textContent = '一键启用桌面伴侣'; btn.disabled = false; }
         setPetDockState('ready', '已整合到工作台，点一下把今日单词带到 Mac 桌面', '启动小词灵 ↗', false);
       }
     } catch (_) {
+      companionUp = false;
+      petSyncedSel = null;
       companionAction = 'start';
       if (btn) { btn.textContent = '一键启用桌面伴侣'; btn.disabled = false; }
       setPetDockState('ready', '暂未连接桌面伴侣，点一下即可重新启动', '启动小词灵 ↗', false);

@@ -65,6 +65,7 @@ function loadConfig() {
     petCorner: 'top-right',       // 'top-right'|'top-left'|'bottom-right'|'bottom-left'
     petWordsPerPage: 6,           // 小词灵连续词槽；与壁纸每组数量相互独立
     petTransition: 'dissolve-pop', // 换词特效: dissolve(溶解)|pop(Q弹)|dissolve-pop|none
+    petWallpaperSync: true,        // 壁纸/预览与小词灵当前页词同步（网页推送为准）
     reminders: [],                // optional: hard-code reminders for wallpaper
     // 换壁纸快捷键仍可选；小词灵本身点击词卡只记录记忆，不再换词。
     advanceByClick: true,
@@ -101,13 +102,14 @@ function saveConfig() {
  * counter, which is mixed into the pick seed so the wallpaper + pet jump to a
  * new word group right away (the auto interval still rotates by bucket). */
 const STATE_PATH = process.env.WORDPAPER_STATE_PATH || migratedRuntimePath('companion-state.json');
-const STATE_DEFAULTS = { bump: 0, petMemoryEvents: [], petMemorySeq: 0, petMemoryStreamId: '', petLearnedByLibrary: {}, petDecksByLibrary: {}, petKnownByLibrary: {} };
+const STATE_DEFAULTS = { bump: 0, petMemoryEvents: [], petMemorySeq: 0, petMemoryStreamId: '', petLearnedByLibrary: {}, petDecksByLibrary: {}, petKnownByLibrary: {}, petWordEpoch: 0 };
 let state = Object.assign({}, STATE_DEFAULTS);
 try { state = Object.assign({}, STATE_DEFAULTS, JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'))); } catch {}
 if (!Array.isArray(state.petMemoryEvents)) state.petMemoryEvents = [];
 if (!state.petLearnedByLibrary || typeof state.petLearnedByLibrary !== 'object') state.petLearnedByLibrary = {};
 if (!state.petDecksByLibrary || typeof state.petDecksByLibrary !== 'object') state.petDecksByLibrary = {};
 if (!state.petKnownByLibrary || typeof state.petKnownByLibrary !== 'object') state.petKnownByLibrary = {};
+state.petWordEpoch = Math.max(0, Number(state.petWordEpoch) || 0);
 function makeStreamId() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 if (!state.petMemoryStreamId) state.petMemoryStreamId = makeStreamId();
 function saveState() {
@@ -215,6 +217,10 @@ function ensurePetDeck(library) {
 }
 function currentPetPage(library) { const deck = ensurePetDeck(library); return deck.pages[deck.index]; }
 function petFirstPassWords() { return currentPetPage(CFG.library).words.slice(); }
+/* 小词灵当前页词的「代际」计数器：点词/翻页/补位导致当前页词变化就 +1。网页按
+ * epoch 轮询比对，发现变化就拉取当前页词对齐预览；这是翻页（不产生记忆事件）
+ * 也能被网页感知的关键。 */
+function bumpPetWordEpoch() { state.petWordEpoch = Math.max(0, Number(state.petWordEpoch) || 0) + 1; }
 function navigatePetPage(direction) {
   const library = CFG.library, deck = ensurePetDeck(library), dir = direction < 0 ? -1 : 1;
   if (dir < 0) deck.index = Math.max(0, deck.index - 1);
@@ -225,6 +231,7 @@ function navigatePetPage(direction) {
     if (deck.pages.length > 24) { deck.pages.shift(); deck.index -= 1; }
   }
   refillPetPage(library, deck, deck.pages[deck.index]);
+  bumpPetWordEpoch();
   saveState();
   return { page: deck.index + 1, words: deck.pages[deck.index].words.length, exhausted: deck.pages[deck.index].exhausted };
 }
@@ -245,6 +252,7 @@ function completePetFirstPass(word) {
   const event = { id: state.petMemorySeq, at: now, library, word, action: 'learn', firstPass: true, page: deck.index + 1, refilled: Boolean(candidate) };
   state.petMemoryEvents.push(event);
   state.petMemoryEvents = state.petMemoryEvents.slice(-160);
+  bumpPetWordEpoch();
   saveState();
   return { page, deck, duplicate: false, event };
 }
@@ -364,7 +372,9 @@ const THEMES = {
   cream: { bg: '#fdf6ec', bg2: '#f7e8d4', ink: '#4a3b2e', sub: '#a08a73', accent: '#e8834a', accentSoft: '#fbe0c8', line: 'rgba(74,59,46,0.12)', patternInk: '#d9b48f' },
   mint: { bg: '#eafaf1', bg2: '#d3f2e0', ink: '#1f4536', sub: '#6f9a87', accent: '#2fae7d', accentSoft: '#c0ecd8', line: 'rgba(31,69,54,0.12)', patternInk: '#9ed9bd' },
   sky: { bg: '#e8f4fd', bg2: '#d3e9fb', ink: '#1e3a52', sub: '#6f8ba3', accent: '#3b8fd9', accentSoft: '#c2e0f7', line: 'rgba(30,58,82,0.12)', patternInk: '#a4cdec' },
+  sakura: { bg: '#fff1f5', bg2: '#fde3ea', ink: '#57222f', sub: '#ae7d8b', accent: '#f1789b', accentSoft: '#fad3de', line: 'rgba(87,34,47,0.10)', patternInk: '#f3b6c7' },
   liquid: { bg: '#f8fbff', bg2: '#dce7f0', ink: '#223242', sub: '#6a7f92', accent: '#7299b8', accentSoft: '#dbe8f2', line: 'rgba(53,79,101,0.12)', patternInk: '#bfd2e0', liquid: true },
+  pearl: { bg: '#ffffff', bg2: '#fafafc', ink: '#2b2b30', sub: '#9a9aa2', accent: '#8e8e93', accentSoft: '#f4f4f6', line: 'rgba(43,43,48,0.10)', patternInk: '#e8e8ec' },
   night: { bg: '#151a2e', bg2: '#1f2745', ink: '#eef1f8', sub: '#8b95b3', accent: '#7aa2f7', accentSoft: '#2a3358', line: 'rgba(238,241,248,0.14)', patternInk: '#3a4670' },
   forest: { bg: '#12211c', bg2: '#1c332a', ink: '#e8f0ea', sub: '#8fae9f', accent: '#5ec99a', accentSoft: '#234534', line: 'rgba(232,240,234,0.12)', patternInk: '#2e5040' },
 };
@@ -1255,10 +1265,17 @@ function setMacWallpaper(pngPath, cb) {
 
 /* push one fresh wallpaper to the desktop */
 function pushWallpaper(cb) {
-  const words = loadWords(CFG.library);
   const today = dateKey(new Date());
-  const count = CFG.layout === 'poster' ? 1 : CFG.wordsPerGroup;
-  const picked = pickForDate(words, count, todaySeed(), 'random');
+  // 同步开启时壁纸 = 小词灵当前页词（单一事实源）；否则回退原有按日期/种子随机。
+  let picked;
+  if (CFG.petWallpaperSync) {
+    picked = petFirstPassWords();
+    if (CFG.layout === 'poster') picked = picked.slice(0, 1);
+  } else {
+    const words = loadWords(CFG.library);
+    const count = CFG.layout === 'poster' ? 1 : CFG.wordsPerGroup;
+    picked = pickForDate(words, count, todaySeed(), 'random');
+  }
   const [W, H] = SIZES[CFG.size] || SIZES['desktop-1920x1080'];
   const svg = buildSVG({
     width: W, height: H, layout: CFG.layout, theme: THEMES[CFG.theme] || THEMES.cream,
@@ -1312,6 +1329,28 @@ function runAdvance(dir) {
     advancing = false;
     if (pendingDir) { const d = pendingDir; pendingDir = 0; runAdvance(d); }
   });
+}
+
+/* 小词灵驱动的壁纸同步：词变了立即换壁纸，但点词可能连击——throttle 到 ≥900ms
+ * 一次，期间只记一个「待渲染」标记，结束后补一帧，避免壁纸狂闪。sips 单线程，
+ * 与 runAdvance 共用同一把串行锁（advancing），防止两个渲染交错抢壁纸。 */
+let petWallpaperTimer = null;
+let petWallpaperPending = false;
+function syncWallpaperToPet() {
+  if (!CFG.petWallpaperSync || !CFG.autoSetWallpaper) return;
+  if (petWallpaperTimer) { petWallpaperPending = true; return; }
+  petWallpaperTimer = setTimeout(() => {
+    petWallpaperTimer = null;
+    const go = () => {
+      advancing = true;
+      pushWallpaper(() => {
+        advancing = false;
+        if (petWallpaperPending) { petWallpaperPending = false; syncWallpaperToPet(); }
+      });
+    };
+    if (advancing) { petWallpaperPending = true; return; }
+    go();
+  }, 900);
 }
 
 /* ---------------- Apple Vision OCR (zero-dep, via JXA) ---------------- */
@@ -1512,14 +1551,17 @@ const server = http.createServer((req, res) => {
       const requestedTransition = String(payload.petTransition || '');
       const changedTransition = allowedTransitions.has(requestedTransition) && requestedTransition !== CFG.petTransition;
       if (allowedTransitions.has(requestedTransition)) CFG.petTransition = requestedTransition;
+      // 壁纸/预览同步总闸：网页推送为准。关→壁纸回退独立随机、预览不跟随。
+      if (typeof payload.petWallpaperSync === 'boolean') CFG.petWallpaperSync = payload.petWallpaperSync;
       CFG.wordsPerGroup = Math.max(1, Math.min(36, Number(payload.wordsPerGroup) || CFG.wordsPerGroup || 6));
       state.petKnownByLibrary[library] = Array.isArray(payload.knownWords) ? payload.knownWords.map(String).slice(0, 10000) : [];
       const deck = ensurePetDeck(library);
       refillPetPage(library, deck, deck.pages[deck.index]);
       const afterKeys = (deck.pages[deck.index].words || []).map(petWordKey);
       const changedPageKeys = beforeKeys.length !== afterKeys.length || beforeKeys.some((key, index) => key !== afterKeys[index]);
+      if (changedPageKeys) bumpPetWordEpoch();
       saveConfig(); saveState();
-      const result = { ok: true, library, uiTheme: CFG.uiTheme, page: deck.index + 1, words: deck.pages[deck.index].words.length };
+      const result = { ok: true, library, uiTheme: CFG.uiTheme, page: deck.index + 1, words: deck.pages[deck.index].words.length, wordEpoch: state.petWordEpoch };
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
       if (petVisible && (changedLibrary || changedWebOrigin || changedPageKeys || changedTransition || payload.refresh === true)) startPet();
@@ -1527,7 +1569,9 @@ const server = http.createServer((req, res) => {
         const size = resolvePetSize();
         renderPetPng(size.w, size.h);
       }
-      if ((changedWallpaperTheme || changedPattern) && CFG.autoSetWallpaper) pushWallpaper();
+      // 页词变了或主题/纹理变了都要重推壁纸（同步开启时页词即壁纸词源）。
+      if (changedPageKeys) syncWallpaperToPet();
+      else if ((changedWallpaperTheme || changedPattern) && CFG.autoSetWallpaper) pushWallpaper();
     });
   }
 
@@ -1549,9 +1593,11 @@ const server = http.createServer((req, res) => {
     const event = firstPass.event;
     const respond = () => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true, event, page: firstPass.deck.index + 1, visibleWords: firstPass.page.words.length, refilled: event.refilled, keys: currentPetKeys() }));
+      res.end(JSON.stringify({ ok: true, event, page: firstPass.deck.index + 1, visibleWords: firstPass.page.words.length, refilled: event.refilled, keys: currentPetKeys(), wordEpoch: state.petWordEpoch }));
     };
     // 丝滑刷新：原位重渲 PNG，窗口原地换图不闪不动；仅词数变化时才重启窗口。
+    // 同步开启时壁纸跟着小词灵换（throttle 防连击狂刷）。
+    syncWallpaperToPet();
     return refreshPetInPlace(prevCount, firstPass.page.words.length, respond);
   }
   if (url === '/pet-page.php') {
@@ -1561,8 +1607,10 @@ const server = http.createServer((req, res) => {
     try { direction = Number(new URL(req.url, 'http://localhost').searchParams.get('dir')) < 0 ? -1 : 1; } catch {}
     const prevCount = petFirstPassWords().length;   // 翻页前的可见词数
     const result = navigatePetPage(direction);
-    const respond = () => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, ...result, keys: currentPetKeys() })); };
+    const respond = () => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, ...result, keys: currentPetKeys(), wordEpoch: state.petWordEpoch })); };
     // 翻页同样丝滑：原位换图，仅当新页词数不同（如最后一页没补满）才重启窗口。
+    // 同步开启时壁纸跟着小词灵换。
+    syncWallpaperToPet();
     return refreshPetInPlace(prevCount, result.words, respond);
   }
   if (url === '/pet-memory-events.json') {
@@ -1574,6 +1622,17 @@ const server = http.createServer((req, res) => {
     const events = reset ? [] : state.petMemoryEvents.filter(event => event.id > after);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ streamId: state.petMemoryStreamId, firstId, lastId, reset, events, snapshot: reset ? learnedSnapshot() : undefined }));
+  }
+  // 网页轮询：小词灵「当前页词」+ 代际。点词/翻页/补位 bump epoch，网页据此对齐预览。
+  if (url === '/pet-current.json') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({
+      ok: true,
+      wordEpoch: state.petWordEpoch,
+      library: CFG.library,
+      sync: CFG.petWallpaperSync !== false,
+      words: petFirstPassWords(),
+    }));
   }
   // 快捷键保留为手动换壁纸的独立能力；小词灵界面不再暴露这组重复按钮。
   const handleAdvance = (req, res, dir) => {

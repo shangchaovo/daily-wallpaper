@@ -389,10 +389,12 @@ def main():
               ready: e.classList.contains('liquid-refraction-ready'),
               filter: getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter
             })""")
-            check("中央展示板使用深层玻璃折射", stage_optics["optic"] == "deep"
-                  and stage_optics["ready"] is True
-                  and "url(" in stage_optics["filter"]
-                  and "blur(20px)" in stage_optics["filter"])
+            # 大面板(.stage)光学稳定:不建 SVG 折射滤镜、不加 backdrop blur(面积占屏最大,
+            # 折射+模糊每帧对背景重采样是卡顿主因)。只用 shell 渐变+静态高光,保留玻璃感
+            # 但消除全屏重采样。optic 仍标记为 deep(供 CSS 区分层级),但不挂 refraction。
+            check("中央展示板光学稳定(大面板免折射,性能优化)", stage_optics["optic"] == "deep"
+                  and stage_optics["ready"] is False
+                  and "url(" not in stage_optics["filter"])
 
             # Pointer light, gentle parallax and liquid press feedback are
             # functional states, rather than a static glass-coloured skin.

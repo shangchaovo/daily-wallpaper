@@ -92,6 +92,7 @@ const COMPANION_METHODS = new Map([
   ['/pet-page.php', new Set(['POST'])],
   ['/pet-sync.php', new Set(['POST'])],
   ['/pet-memory-events.json', new Set(['GET'])],
+  ['/pet-current.json', new Set(['GET'])],
   ['/next.php', new Set(['POST'])],
   ['/prev.php', new Set(['POST'])],
 ]);

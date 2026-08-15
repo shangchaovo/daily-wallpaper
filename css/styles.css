@@ -476,6 +476,8 @@ textarea { width: 100%; resize: vertical; margin-bottom: 8px; }
 .pet-dock-fx { display:flex; align-items:center; gap:5px; flex:0 0 auto; position:relative; z-index:1; font-size:11px; color:#dbe9f7; }
 .pet-dock-fx select { font:inherit; color:#f4f9ff; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.34); border-radius:8px; padding:3px 6px; outline:none; cursor:pointer; }
 .pet-dock-fx select option { color:#284866; background:#fff; }
+.pet-dock-sync { display:flex; align-items:center; gap:5px; flex:0 0 auto; position:relative; z-index:1; font-size:11px; color:#dbe9f7; cursor:pointer; user-select:none; }
+.pet-dock-sync input { accent-color:#c7a56b; width:14px; height:14px; cursor:pointer; margin:0; }
 .pet-dock[data-state="checking"] .pet-dock-face { animation: pet-dock-breathe 1.2s ease-in-out infinite; }
 .pet-dock[data-state="unavailable"] .pet-dock-face { filter: grayscale(.32); opacity: .82; }
 .pet-dock[data-state="active"] .pet-dock-face { box-shadow: 0 0 0 3px rgba(82,121,96,.16), 0 2px 8px rgba(31,45,53,.14); }
