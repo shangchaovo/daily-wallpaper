@@ -194,10 +194,25 @@
   }
 
   async function init() {
-    const sessionResponse = await fetch('/api/session', { cache: 'no-store' });
-    if (!sessionResponse.ok) {
+    // 纯静态托管(无后端)时 /api/session 不存在:静态托管的 SPA 兜底会返回
+    // 200 + text/html 的首页。按 content-type 区分真假后端,非 JSON 即进入
+    // 「本地模式」:只读写 localStorage(wp: 命名空间,与旧版本地数据兼容),
+    // 不做账号同步,不跳转登录页。
+    let sessionResponse = null;
+    try {
+      sessionResponse = await fetch('/api/session', { cache: 'no-store' });
+    } catch (e) {
+      sessionResponse = null;
+    }
+    if (sessionResponse && sessionResponse.status === 401) {
       location.assign('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
       throw new Error('authentication required');
+    }
+    const sessionCT = sessionResponse ? String(sessionResponse.headers.get('content-type') || '') : '';
+    if (!sessionResponse || !sessionResponse.ok || sessionCT.indexOf('application/json') === -1) {
+      userPrefix = NS;
+      cache = legacyState();
+      return null;
     }
     const session = await sessionResponse.json();
     currentUser = session.user;
