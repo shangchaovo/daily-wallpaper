@@ -24,3 +24,6 @@ scripts/每日壁纸伴侣.zip
 
 # OS / editor
 .DS_Store
+scripts/node-dist/
+.wrangler/
+cloudflare-wordpaper.*.log

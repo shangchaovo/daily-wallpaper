@@ -11,9 +11,9 @@ cp index.html "$STAGE/"
 cp -R css js lib data "$STAGE/"
 rm -f "$STAGE/js/auth.js"   # auth 只属于本地伴侣端
 
-# 伴侣独立版打包成静态 companion.zip(供「↓ 下载独立版」按钮)
-python3 scripts/package_companion.py >/dev/null
-cp scripts/每日壁纸伴侣.zip "$STAGE/companion.zip"
+# 伴侣独立版(约 77MB,自带 Node 运行时)超过 CF Pages ~25MiB 单文件上限,
+# 改托管 GitHub Releases;app.js 的下载按钮直接指 latest/download。
+# 如需更新:python3 scripts/package_companion.py && gh release upload ... (见 MEMORY)
 
 npx wrangler pages deploy "$STAGE" --project-name wordpaper --commit-dirty=true
 echo "✅ https://wordpaper.pages.dev/"

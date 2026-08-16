@@ -1770,10 +1770,11 @@
   }
 
   function downloadCompanion() {
-    // fallback for when the site isn't running on the user's own Mac: a zip with
-    // a double-clickable launcher. 解压 → 双击「启动伴侣.command」。
-    toast('正在打包… 解压后双击「启动伴侣.command」就能用');
-    window.location.href = 'companion.zip';
+    // 免安装版 zip 约 77MB(自带 Node 运行时),超过 Cloudflare Pages 单文件上限,
+    // 所以托管在 GitHub Releases;latest/download 永远指向最新资产。
+    // 本机 server.js 的 /companion.zip 仍保留,作为无 GitHub 时的兜底。
+    toast('开始下载桌面伴侣(约 77MB,自带运行环境)… 解压后双击「启动伴侣.command」');
+    window.location.href = 'https://github.com/shangchaovo/daily-wallpaper/releases/latest/download/WordPaper-Companion-Mac.zip';
   }
 
   function setPetDockState(state, status, label, disabled) {
