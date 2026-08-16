@@ -58,6 +58,10 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 **下载独立版**：对外分发走 **WordPaper.app + DMG**(`scripts/package_app.py` 一条命令出三种包)：AppleSilicon/Intel 完整包（自带 Node v24.19.0 运行时，约 44/45MB)+ Slim 国内加速版（1.6MB，首启从 npmmirror 下载运行时，SHA256 与官方 tarball 钉死一致）。启动器运行时解析顺序：包内 → `~/.wordpaper/runtime` 缓存 → 系统 Node(22–24) → 下载；测试钩子 `WORDPAPER_SELFTEST/FORCE_DOWNLOAD/SKIP_COMPANION/RUNTIME_DIR`。图标由 `scripts/make_icon.py`(favicon W 标 → Playwright → iconutil）生成，产物 `assets/icon.icns` 已入库。DMG 托管 GitHub Releases(`companion-v2.0.0`，网站下载弹窗指 `releases/latest/download/`)，因 CF Pages 单文件 ~25MiB 上限不能走静态站。App **未签名**：macOS 15+ 首次需「系统设置 → 隐私与安全性 → 仍要打开」（右键打开已被苹果移除），说明书与下载弹窗都写了指引。本地 `/companion.zip`(`serveCompanionZip` → `scripts/package_companion.py`）保留为兜底。
 
+**主账号镜像(卫星模式)**(`lib/upstream.js`,v2.1.0):另一台 Mac 的独立版可在登录页「连接到主账号」,与主力机共用同一工作区。**pull 模型**:卫星持有上游会话(cookie+csrf 存 app_meta `upstream_pairing`),读=先 flushQueue 再 pull 覆盖本地缓存、写=在线直推上游/断网落本地+排队补推、上游 409 上游赢、上游会话过期转 `reauth`(本机缓存仍可离线)。上游账号映射为本机**影子账号**(口令哈希 `mirror$…` 永不可本地登录,FK 级联供 unpair 整棵删除)。路由:`/api/pair`(可重复调用=重新验证/换绑)、`/api/unpair`、`/api/auth/resume`(回环免密恢复本机会话)——全部仅 local 模式+回环+Origin+限流;配对后 `/api/auth/register|login` 403 让位。`/api/state` GET/PUT 在 `mirroring()` 时走代理;后台 45s 节拍收敛两端。providers 带 `paired/pairingAllowed`,登录页据此渲染「已连接卡片」或配对表单;store.js 把 `session.mirrored+upstream!=='ok'` toast 出来。**坑**:`test_server.js`/`test_oauth.js` 对 `/api/auth/providers` 做 deepEqual,加字段必须同步改断言。上游 URL 仅允许 https(开发可用回环 http)。
+
+**版本与更新提示**:仓库根 `VERSION` 是唯一版本源(`package_app.py` 读它并打进 bundle);server.js 在 local 模式且存在 VERSION 时,每天与 GitHub main 的 VERSION 比对,`/api/session.update.latest` 带给页面 toast「重新下载即可更新」。独立版没有自动更新,内容/代码更新都要出新 DMG。
+
 **两条设计纪律**：
 - 壁纸正文只用本地系统字体栈（PingFang SC / Hiragino / Microsoft YaHei / Noto Sans CJK SC / Songti / Kaiti 等），**不引入网络字体**。
 - 强调色/印泥红 `#B3402A` 只用于「沙·暖」主题 accent 和 `.btn.danger`，别挪作普通按钮强调（普通强调用 `#17503F`）。
