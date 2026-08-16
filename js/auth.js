@@ -123,10 +123,15 @@
     updateEmailRegistrationState();
     const enabled = Boolean(providers.google && providers.google.enabled);
     const state = googleButton.querySelector('[data-provider-state]');
+    // 未配置时(独立版)整条隐藏 Google 入口和分隔线,不显示「管理员尚未配置」
+    // 这种误导文案——独立版本来就是本地账号,没有"管理员"。
+    googleButton.style.display = enabled ? '' : 'none';
+    const divider = document.querySelector('.auth-divider');
+    if (divider) divider.style.display = enabled ? '' : 'none';
     googleButton.disabled = !enabled;
     googleButton.setAttribute('aria-disabled', String(!enabled));
-    state.textContent = enabled ? '首次使用将自动创建账号' : '管理员尚未配置';
-    googleButton.title = enabled ? '' : 'Google 开放平台参数尚未配置';
+    state.textContent = enabled ? '首次使用将自动创建账号' : '';
+    googleButton.title = enabled ? '' : '';
   }
 
   googleButton.addEventListener('click', function () {
