@@ -62,7 +62,7 @@ DMG_BG = os.path.join(ROOT, "assets", "dmg-background.png")
 APP_NAME = "WordPaper.app"
 EXEC_NAME = "WordPaper"
 BUNDLE_ID = "cc.cd.wordpaper.companion"
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 VOLNAME = "WordPaper 每日壁纸"
 
 PAYLOAD_FILES = ["server.js", "companion.js", "package.json", "index.html", "login.html"]
@@ -172,6 +172,11 @@ export WORDPAPER_MODE="${WORDPAPER_MODE:-local}"
 export WORDPAPER_DATA_DIR="${WORDPAPER_DATA_DIR:-$HOME/.wordpaper}"
 export WORDPAPER_COMPANION_ENABLED=1
 export WORDPAPER_WEB_ORIGIN="${WORDPAPER_WEB_ORIGIN:-http://localhost:$PORT}"
+COMP_PORT="${WORDPAPER_COMPANION_PORT:-8771}"
+# 钉死伴侣端口:server.js 的代理/状态探测和 companion.js 的 bind 都以它为准,
+# 不受 companion-config.json 里旧配置影响——否则 launcher 探的口和伴侣绑的口可能不一致。
+export WORDPAPER_COMPANION_PORT="$COMP_PORT"
+export WORDPAPER_PORT="$COMP_PORT"
 
 SERVER_PID=""
 COMP_PID=""
@@ -181,15 +186,27 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-if ! curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+server_up() { curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; }
+companion_up() { curl -fsS "http://127.0.0.1:$COMP_PORT/status.json" >/dev/null 2>&1; }
+
+# ── 已在运行:再次双击 = 回到应用(真·Mac 应用行为)。
+#    没有这一步时,重复双击会让第二个伴侣撞 EADDRINUSE 秒退,
+#    从用户看就是「双击图标毫无反应」。─────────────────────────
+if server_up && companion_up; then
+  open "http://localhost:$PORT"
+  exit 0
+fi
+
+# ── 主服务 ──────────────────────────────────────────────────
+if ! server_up; then
   "$NODE" server.js >>"$LOG_DIR/server.log" 2>&1 &
   SERVER_PID=$!
   for _ in $(seq 1 40); do
-    curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 && break
+    server_up && break
     sleep 0.25
   done
 fi
-if ! curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+if ! server_up; then
   wp_alert "$(printf 'WordPaper 主服务启动失败。\n请把日志文件发给开发者:\n%s/server.log' "$LOG_DIR")"
   exit 1
 fi
@@ -200,8 +217,33 @@ if [ "${WORDPAPER_SKIP_COMPANION:-0}" = "1" ]; then
   exit 0
 fi
 
-"$NODE" companion.js &
+# ── 伴侣端口残留清理。走到这里说明伴侣没在跑或只剩半吊子状态:
+#    上次异常退出(断电/强制退出)留下的旧伴侣占着 8771 不放,
+#    新伴侣会 bind 失败秒退。只清理由 companion.js 占用的进程。───
+STALE="$(lsof -nP -tiTCP:$COMP_PORT -sTCP:LISTEN 2>/dev/null || true)"
+if [ -n "$STALE" ]; then
+  for p in $STALE; do
+    if ps -p "$p" -o command= 2>/dev/null | grep -q "companion.js"; then
+      kill "$p" 2>/dev/null || true
+    else
+      wp_alert "$(printf '端口 %s 被其它程序占用,小词灵无法启动。\n请退出占用该端口的程序后重新打开。' "$COMP_PORT")"
+      exit 1
+    fi
+  done
+  for _ in $(seq 1 20); do
+    [ -z "$(lsof -nP -tiTCP:$COMP_PORT -sTCP:LISTEN 2>/dev/null || true)" ] && break
+    sleep 0.25
+  done
+fi
+
+# ── 桌面伴侣(小词灵 / 自动壁纸 / 热键,并打开网页) ────────────
+"$NODE" companion.js >>"$LOG_DIR/companion.log" 2>&1 &
 COMP_PID=$!
+sleep 1.5
+if ! kill -0 "$COMP_PID" 2>/dev/null; then
+  wp_alert "$(printf '小词灵启动失败。\n请把日志文件发给开发者:\n%s/companion.log' "$LOG_DIR")"
+  exit 1
+fi
 wait "$COMP_PID"
 '''
 
@@ -231,6 +273,8 @@ README_COMMON = """每日壁纸 WordPaper · Mac 桌面伴侣
   • 屏幕角落有常驻的「小词灵」窗,点词卡就是学习。
   • 浏览器会打开 http://localhost:8770 ,首次使用请创建账号。
   • 数据保存在 ~/.wordpaper ,删掉 App 也不会丢。
+  • 已经在运行时再次双击图标,会重新打开浏览器里的页面,
+    不会重复启动——看到「没反应」时先看浏览器是不是已经开着了。
 
 退出:程序坞(Dock)里右键 WordPaper 图标 →「退出」。
 
@@ -289,7 +333,7 @@ def build_app(dest, bundled_arch):
         "CFBundleName": "WordPaper",
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": VERSION,
-        "CFBundleVersion": "3",
+        "CFBundleVersion": "4",
         "LSMinimumSystemVersion": "13.0",
         "NSHighResolutionCapable": True,
     }
