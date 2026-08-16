@@ -25,8 +25,8 @@ SVG = """<svg xmlns='http://www.w3.org/2000/svg' width='660' height='420' viewBo
   <line x1='270' y1='160' x2='385' y2='160'/>
   <path d='M368 141 L402 160 L368 179'/>
 </g>
-<text x='330' y='346' text-anchor='middle' font-family='PingFang SC,Hiragino Sans GB,sans-serif'
-      font-size='14.5' fill='#9b8bb0'>首次打开如被拦截:系统设置 → 隐私与安全性 → 仍要打开(只需一次)</text>
+<text x='330' y='340' text-anchor='middle' font-family='PingFang SC,Hiragino Sans GB,sans-serif'
+      font-size='14.5' fill='#9b8bb0'>首次打开会被拦截:弹窗点「完成」→ 系统设置 → 隐私与安全性(拉到底)→ 仍要打开</text>
 <text x='330' y='370' text-anchor='middle' font-family='PingFang SC,Hiragino Sans GB,sans-serif'
       font-size='12' fill='#b7a9c6'>若提示安装 Rosetta 点「以后」——说明下错了芯片版本,不影响使用</text>
 </svg>"""
