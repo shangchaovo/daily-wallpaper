@@ -17,7 +17,7 @@ try {
   try { localStorage.setItem('wp:uiTheme', JSON.stringify(saved)); } catch (_) {}
 } catch (_) {}
 </script>
-<link rel="stylesheet" href="css/styles.css?v=20260814a">
+<link rel="stylesheet" href="css/styles.css?v=20260816b">
 <link rel="stylesheet" href="css/ui-themes.css?v=20260814a">
 </head>
 <body>
@@ -289,7 +289,7 @@ try {
         <button id="btn-companion" class="btn soft">一键启用桌面伴侣</button>
         <div class="pack-row dl-row">
           <span class="mini-label">没在本机跑本站？</span>
-          <button id="btn-companion-dl" class="chip">↓ 下载独立版</button>
+          <button id="btn-companion-dl" class="chip">↓ 下载桌面伴侣</button>
         </div>
         <div id="pet-controls" style="display:none">
           <div class="pet-group">
@@ -361,6 +361,40 @@ try {
     <div id="memory-summary" class="memory-summary"></div>
     <div id="memory-notebook-list" class="memory-notebook-list" aria-live="polite"></div>
     <button id="btn-enable-srs-notice" class="chip srs-notice" type="button">开启系统复习提醒</button>
+  </div>
+</div>
+
+<!-- ============ companion download chooser ============ -->
+<div id="dl-modal" class="modal-overlay" hidden>
+  <div class="modal-card dl-card" role="dialog" aria-modal="true" aria-labelledby="dl-title">
+    <div class="modal-head">
+      <div><h2 id="dl-title"><span class="h-emoji" data-anime-icon="💻">桌</span>下载 Mac 桌面伴侣</h2><p class="hint">自动换桌面壁纸 + 小词灵窗 + 本地词库站,免安装、自带运行环境。</p></div>
+      <button id="btn-close-dl" class="modal-close" type="button" title="关闭" aria-label="关闭下载窗口">✕</button>
+    </div>
+    <div class="dl-options">
+      <a class="dl-opt" id="dl-arm64" href="https://github.com/shangchaovo/daily-wallpaper/releases/latest/download/WordPaper-macOS-AppleSilicon.dmg">
+        <span class="dl-opt-main"><b>Apple 芯片版</b><small>M1 / M2 / M3 / M4 系列 · 约 44MB · 下载即用</small></span>
+        <span class="dl-badge" hidden>推荐</span>
+      </a>
+      <a class="dl-opt" id="dl-x64" href="https://github.com/shangchaovo/daily-wallpaper/releases/latest/download/WordPaper-macOS-Intel.dmg">
+        <span class="dl-opt-main"><b>Intel 芯片版</b><small>2020 年前后的老款 Mac · 约 45MB · 下载即用</small></span>
+        <span class="dl-badge" hidden>推荐</span>
+      </a>
+      <a class="dl-opt" id="dl-slim" href="https://github.com/shangchaovo/daily-wallpaper/releases/latest/download/WordPaper-macOS-Slim.dmg">
+        <span class="dl-opt-main"><b>国内加速版</b><small>仅 1.6MB · 任何 Mac 通用 · 首次打开自动装运行环境(约 40MB,走国内镜像)</small></span>
+        <span class="dl-badge" hidden>推荐</span>
+      </a>
+    </div>
+    <p class="hint dl-chip-hint">不确定芯片?点屏幕左上角 <b></b> →「关于本机」,看「芯片」一栏。下载后双击 DMG,把 WordPaper 拖进「应用程序」即可。</p>
+    <details class="dl-gate">
+      <summary>首次打开被 macOS 拦截?点这里看解决办法(只需一次)</summary>
+      <ol>
+        <li>弹窗里点「<b>完成</b>」(千万别点「移到废纸篓」)</li>
+        <li>打开「<b>系统设置 → 隐私与安全性</b>」,拉到最下面</li>
+        <li>点「<b>仍要打开</b>」→「打开」(可能要指纹/开机密码)</li>
+      </ol>
+      <p>这是苹果对所有未交签名年费的免费软件的统一提示,不是病毒。做一次以后,双击直接用,永远不再拦。</p>
+    </details>
   </div>
 </div>
 
@@ -452,7 +486,7 @@ try {
 <script src="js/review.js?v=20260812a"></script>
 <script src="js/render.js?v=20260812i"></script>
 <script src="js/engine.js?v=20260810f"></script>
-<script src="js/app.js?v=20260816b"></script>
+<script src="js/app.js?v=20260816c"></script>
 <script src="js/support.js?v=20260814a"></script>
 </body>
 </html>

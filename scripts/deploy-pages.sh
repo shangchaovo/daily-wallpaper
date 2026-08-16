@@ -11,9 +11,9 @@ cp index.html "$STAGE/"
 cp -R css js lib data "$STAGE/"
 rm -f "$STAGE/js/auth.js"   # auth 只属于本地伴侣端
 
-# 伴侣独立版(约 77MB,自带 Node 运行时)超过 CF Pages ~25MiB 单文件上限,
-# 改托管 GitHub Releases;app.js 的下载按钮直接指 latest/download。
-# 如需更新:python3 scripts/package_companion.py && gh release upload ... (见 MEMORY)
+# 桌面伴侣 DMG(App 形态,44MB/45MB/1.6MB)超过 CF Pages ~25MiB 单文件上限,
+# 托管 GitHub Releases;app.js 下载弹窗指 releases/latest/download/<name>。
+# 更新流程:python3 scripts/package_app.py && gh release upload companion-v2.0.0 scripts/dist/*.dmg --clobber
 
 npx wrangler pages deploy "$STAGE" --project-name wordpaper --commit-dirty=true
 echo "✅ https://wordpaper.pages.dev/"

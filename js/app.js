@@ -644,6 +644,10 @@
     if (petBtn) petBtn.addEventListener('click', togglePet);
     const dl = $('#btn-companion-dl');
     if (dl) dl.addEventListener('click', e => { e.preventDefault(); downloadCompanion(); });
+    const dlClose = $('#btn-close-dl');
+    if (dlClose) dlClose.addEventListener('click', closeDlModal);
+    const dlModal = $('#dl-modal');
+    if (dlModal) dlModal.addEventListener('click', e => { if (e.target === dlModal) closeDlModal(); });
     const petDock = $('#btn-pet-dock');
     // 入口始终留在 8770 工作台；根据本机状态分发为启动、召唤/隐藏或下载。
     if (petDock) petDock.addEventListener('click', handleCompanionAction);
@@ -1769,12 +1773,32 @@
     if (resp.ok) toast('已设为 Mac 桌面壁纸 ✓'); else toast('设置失败');
   }
 
+  /* ---------- companion download chooser (DMG, GitHub Releases) ---------- */
+  async function detectMacArch() {
+    // Chrome/Edge 能拿到真实架构;Safari 不支持,返回 null → 推荐通用加速版。
+    try {
+      if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+        const info = await navigator.userAgentData.getHighEntropyValues(['architecture']);
+        if (info.architecture === 'arm') return 'arm64';
+        if (info.architecture === 'x86') return 'x64';
+      }
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+  function openDlModal() {
+    const modal = $('#dl-modal'); if (!modal) return;
+    modal.hidden = false;
+    detectMacArch().then(arch => {
+      const opt = $('#dl-' + (arch || 'slim'));
+      if (!opt) return;
+      opt.classList.add('recommended');
+      const badge = opt.querySelector('.dl-badge');
+      if (badge) badge.hidden = false;
+    });
+  }
+  function closeDlModal() { const modal = $('#dl-modal'); if (modal) modal.hidden = true; }
   function downloadCompanion() {
-    // 免安装版 zip 约 77MB(自带 Node 运行时),超过 Cloudflare Pages 单文件上限,
-    // 所以托管在 GitHub Releases;latest/download 永远指向最新资产。
-    // 本机 server.js 的 /companion.zip 仍保留,作为无 GitHub 时的兜底。
-    toast('开始下载桌面伴侣(约 77MB,自带运行环境)… 解压后双击「启动伴侣.command」');
-    window.location.href = 'https://github.com/shangchaovo/daily-wallpaper/releases/latest/download/WordPaper-Companion-Mac.zip';
+    openDlModal();
   }
 
   function setPetDockState(state, status, label, disabled) {
@@ -1878,11 +1902,14 @@
         setPetDockState('ready', '已整合到工作台，点一下把今日单词带到 Mac 桌面', '启动小词灵 ↗', false);
       }
     } catch (_) {
+      // 静态托管(无后端)时 status.json 拿到的是 SPA 兜底的 HTML,json() 抛错进这里。
+      // 此时桌面上没有可控制的对象,正确动作是引导下载独立 App,而不是"启动"。
+      // 本机 8770 的 status.json 始终返回 JSON,不会走到这个分支。
       companionUp = false;
       petSyncedSel = null;
-      companionAction = 'start';
-      if (btn) { btn.textContent = '一键启用桌面伴侣'; btn.disabled = false; }
-      setPetDockState('ready', '暂未连接桌面伴侣，点一下即可重新启动', '启动小词灵 ↗', false);
+      companionAction = 'download';
+      if (btn) { btn.textContent = '下载 Mac 桌面伴侣'; btn.disabled = false; }
+      setPetDockState('unavailable', '这里是网页演示版;下载 Mac 桌面伴侣后,壁纸自动换、小词灵常驻桌面', '下载 Mac 版 ↓', false);
     }
   }
 

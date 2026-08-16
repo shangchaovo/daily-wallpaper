@@ -27,3 +27,7 @@ scripts/每日壁纸伴侣.zip
 scripts/node-dist/
 .wrangler/
 cloudflare-wordpaper.*.log
+
+# DMG build artifacts (python3 scripts/package_app.py)
+scripts/build/
+scripts/dist/

@@ -1167,3 +1167,26 @@ input[type="range"]::-webkit-slider-thumb { margin-top: -5px; }
 :root[data-ui-theme="editorial"] .support-primary.btn { color: #fffdf8; border-color: #bb4936; background: #d9563d; box-shadow: 0 6px 12px rgba(174,65,44,.18); }
 :root[data-ui-theme="editorial"] .support-primary.btn:hover { color: #fff; border-color: #b6402d; background: #c84a34; }
 :root[data-ui-theme="editorial"] .support-copy.btn { color: #4b4035; border-color: #cbb9a6; background: #fffdf8; }
+
+/* ---------- 下载桌面伴侣弹窗 ---------- */
+.dl-card { max-width: 470px; }
+.dl-options { display: flex; flex-direction: column; gap: 8px; }
+.dl-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 13px; border: 1.5px solid var(--line); border-radius: 14px;
+  background: rgba(255,255,255,.72); text-decoration: none; color: var(--ink);
+  transition: border-color .14s, transform .14s, box-shadow .14s;
+}
+.dl-opt:hover { border-color: var(--accent); transform: translateY(-1px); }
+.dl-opt.recommended { border-color: var(--accent); box-shadow: 0 4px 18px rgba(23,80,63,.12); }
+.dl-opt-main b { display: block; font-size: 14.5px; }
+.dl-opt-main small { display: block; margin-top: 2px; color: var(--sub); font-size: 11.5px; line-height: 1.5; }
+.dl-badge {
+  flex: 0 0 auto; padding: 3px 9px; border-radius: 999px;
+  background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 800;
+}
+.dl-chip-hint { margin: 10px 2px 0; font-size: 11.5px; }
+.dl-gate { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.dl-gate summary { cursor: pointer; color: var(--accent); font-size: 12.5px; font-weight: 700; }
+.dl-gate ol { margin: 8px 0 6px; padding-left: 20px; color: var(--ink); font-size: 12.5px; line-height: 1.9; }
+.dl-gate p { margin: 6px 0 0; color: var(--sub); font-size: 11.5px; line-height: 1.7; }
