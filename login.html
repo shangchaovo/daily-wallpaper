@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>登录 · WordPaper</title>
-  <link rel="stylesheet" href="/css/auth.css?v=20260816a">
+  <link rel="stylesheet" href="/css/auth.css?v=20260817a">
 </head>
 <body>
   <main class="auth-shell">
@@ -85,10 +85,10 @@
       <details id="pair-section" class="pair-section" hidden>
         <summary id="pair-summary">这台是我的另一台电脑？连接到主账号 →</summary>
         <div class="pair-body">
-          <p class="field-hint">输入主账号所在的服务器地址和账号密码。连接后这台电脑实时共用同一个工作区;断网时用本机缓存,恢复后自动同步。</p>
+          <p class="field-hint">输入主账号所在电脑的地址和账号密码。同一 Wi-Fi 用 <code>http://主机名.local:8770</code>,异地用 Tailscale 地址 <code>http://100.x.x.x:8770</code>(私有网络,无需公网)。连接后实时共用同一工作区;断网用本机缓存,恢复后自动同步。</p>
           <label>
             <span>服务器地址</span>
-            <input id="pair-url" type="url" autocomplete="url" placeholder="https://你的主账号地址">
+            <input id="pair-url" type="url" autocomplete="url" placeholder="http://mininn.local:8770">
           </label>
           <label>
             <span>邮箱或用户名</span>
