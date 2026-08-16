@@ -56,7 +56,7 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 **一键启用（仅 local 模式）**：网页 POST `/companion/start` 后，主服务只允许 loopback 请求，并把本地 companion owner 固定为首次使用它的 Web 账号。`public` 模式绝不在云主机 probe/spawn 8771，端点返回 404；公网用户需在自己的 Mac 安装伴侣。主 server 的 companion 端口来自 `WORDPAPER_COMPANION_PORT`，不再与应用端口自动漂移冲突。
 
-**下载独立版（兜底）**：`/companion.zip`（`serveCompanionZip` 即时跑 `scripts/package_companion.py`）——zip 内含 `启动伴侣.command`（bash 启动器，zip 里以 `external_attr` 0o755 落盘可双击）、`companion.js`、`data/words_*.json` ×8、`使用说明.txt`。用户**解压 → 双击启动器**即用，不用敲命令；启动器找不到 node 会给指引并打开 nodejs.org。注意：浏览器下载不会带 `+x`，所以单文件 `.command` 双击会「Permission denied」，独立版必须走 zip（Finder 解压会保留 +x）。
+**下载独立版**：对外分发走 **WordPaper.app + DMG**(`scripts/package_app.py` 一条命令出三种包)：AppleSilicon/Intel 完整包（自带 Node v24.19.0 运行时，约 44/45MB)+ Slim 国内加速版（1.6MB，首启从 npmmirror 下载运行时，SHA256 与官方 tarball 钉死一致）。启动器运行时解析顺序：包内 → `~/.wordpaper/runtime` 缓存 → 系统 Node(22–24) → 下载；测试钩子 `WORDPAPER_SELFTEST/FORCE_DOWNLOAD/SKIP_COMPANION/RUNTIME_DIR`。图标由 `scripts/make_icon.py`(favicon W 标 → Playwright → iconutil）生成，产物 `assets/icon.icns` 已入库。DMG 托管 GitHub Releases(`companion-v2.0.0`，网站下载弹窗指 `releases/latest/download/`)，因 CF Pages 单文件 ~25MiB 上限不能走静态站。App **未签名**：macOS 15+ 首次需「系统设置 → 隐私与安全性 → 仍要打开」（右键打开已被苹果移除），说明书与下载弹窗都写了指引。本地 `/companion.zip`(`serveCompanionZip` → `scripts/package_companion.py`）保留为兜底。
 
 **两条设计纪律**：
 - 壁纸正文只用本地系统字体栈（PingFang SC / Hiragino / Microsoft YaHei / Noto Sans CJK SC / Songti / Kaiti 等），**不引入网络字体**。
