@@ -31,3 +31,4 @@ cloudflare-wordpaper.*.log
 # DMG build artifacts (python3 scripts/package_app.py)
 scripts/build/
 scripts/dist/
+scripts/.venv-build/

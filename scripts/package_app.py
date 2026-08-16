@@ -2,20 +2,33 @@
 """Build WordPaper.app (zero-install Mac companion) and package it as DMGs.
 
 Variants (uploaded to GitHub Releases, linked from the site's download modal):
-  WordPaper-macOS-AppleSilicon.dmg  — bundled node-arm64, ~35MB, offline-ready
-  WordPaper-macOS-Intel.dmg         — bundled node-x64,   ~37MB, offline-ready
-  WordPaper-macOS-Slim.dmg          — no runtime, ~3MB; launcher downloads Node
+  WordPaper-macOS-AppleSilicon.dmg  — bundled node-arm64, ~44MB, offline-ready
+  WordPaper-macOS-Intel.dmg         — bundled node-x64,   ~45MB, offline-ready
+  WordPaper-macOS-Slim.dmg          — no runtime, ~1.6MB; launcher downloads Node
                                       on first launch (npmmirror CDN first,
                                       nodejs.org fallback, SHA256-verified)
 
+CFBundleExecutable is a tiny UNIVERSAL (arm64+x86_64) C stub that execs
+MacOS/launcher.sh — a pure-script executable makes LaunchServices classify the
+bundle as Intel-only and Apple-Silicon Macs without Rosetta get the
+"你需要安装 Rosetta" prompt. The stub kills that prompt for good.
+
+DMG window is dressed like a real installer: assets/dmg-background.png baked
+background (arrow + Gatekeeper hint), icons pinned to fixed positions, custom
+volume icon. Done via the classic UDRW → attach rw → Finder AppleScript layout
+→ detach → convert UDZO pipeline (a Finder window briefly opens on the build
+machine during packaging — that's the layout step, not an error).
+
 Prereqs:
-  - assets/icon.icns                       (python3 scripts/make_icon.py)
+  - assets/icon.icns            (python3 scripts/make_icon.py)
+  - assets/dmg-background.png   (python3 scripts/make_dmg_bg.py)
   - scripts/node-dist/node-arm64|node-x64  (official v24.19.0 bin/node; only
     needed for the full variants — slim builds without them)
+  - clang (Xcode CLT) for the universal stub
 
 Output: scripts/dist/*.dmg
 
-Launcher runtime resolution order (Contents/MacOS/WordPaper):
+Launcher runtime resolution order (Contents/MacOS/launcher.sh):
   1. Resources/bin/node-<arch>          (bundled — full variants)
   2. ~/.wordpaper/runtime/node-<arch>   (cached from a previous slim download)
   3. system Node 22–24 with node:sqlite (dev machines)
@@ -33,8 +46,8 @@ the bundle layout.
 """
 import os
 import plistlib
+import re
 import shutil
-import stat
 import subprocess
 import sys
 
@@ -44,17 +57,39 @@ BUILD = os.path.join(HERE, "build")
 DIST = os.path.join(HERE, "dist")
 NODE_DIST = os.path.join(HERE, "node-dist")
 ICON = os.path.join(ROOT, "assets", "icon.icns")
+DMG_BG = os.path.join(ROOT, "assets", "dmg-background.png")
 
 APP_NAME = "WordPaper.app"
 EXEC_NAME = "WordPaper"
 BUNDLE_ID = "cc.cd.wordpaper.companion"
-VERSION = "2.0.0"
+VERSION = "2.0.1"
+VOLNAME = "WordPaper 每日壁纸"
 
 PAYLOAD_FILES = ["server.js", "companion.js", "package.json", "index.html", "login.html"]
 PAYLOAD_DIRS = ["lib", "css", "js", "data"]
 
+# Universal launcher stub: LaunchServices 只认 Mach-O 的架构;纯脚本可执行文件
+# 会被当成 Intel-only,Apple 芯片机器上弹「需要安装 Rosetta」。stub 找到同目录
+# 的 launcher.sh 并 exec /bin/bash(系统 bash 是 universal,不会触发 Rosetta)。
+STUB_C = r'''#include <libgen.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(int argc, char **argv) {
+    (void)argc;
+    char self[PATH_MAX];
+    if (!realpath(argv[0], self)) return 1;
+    char script[PATH_MAX];
+    snprintf(script, sizeof(script), "%s/launcher.sh", dirname(self));
+    execl("/bin/bash", "bash", script, (char *)NULL);
+    return 1;
+}
+'''
+
 LAUNCHER = r'''#!/bin/bash
-# WordPaper 每日壁纸 · Mac 桌面伴侣启动器(.app 内,双击即跑,无终端窗口)。
+# WordPaper 每日壁纸 · Mac 桌面伴侣启动器(由 Contents/MacOS/WordPaper stub 拉起)。
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RES="$(cd "$HERE/../Resources" && pwd)"
@@ -185,6 +220,11 @@ README_COMMON = """每日壁纸 WordPaper · Mac 桌面伴侣
   3. 再点「打开」(可能要按指纹或输开机密码)。
   这一步只需要做一次,以后双击直接用,永远不再拦。
 
+★ 如果提示「需要安装 Rosetta」:点「以后」就好。
+  那是下错了芯片版本(Intel 版装到了 Apple 芯片电脑上),
+  伴侣会自动换成适合的运行环境,不影响使用;
+  更省事的做法是回下载页改选「Apple 芯片版」。
+
 {extra}
 跑起来之后:
   • 自动把桌面壁纸换成今天的单词,每 30 分钟换一组。
@@ -211,9 +251,22 @@ VARIANTS = [
     ("slim", "WordPaper-macOS-Slim.dmg", None),
 ]
 
+# DMG 窗口排版(逻辑坐标,窗口 660x420):app 左、Applications 右、说明书左下。
+# 背景图里已画好箭头与提示文字,与这些坐标对齐(make_dmg_bg.py)。
+DMG_WINDOW_RECT = ((400, 100), (660, 420))
+DMG_ICON_LOCATIONS = {
+    "WordPaper.app": (170, 160),
+    "Applications": (490, 160),
+    "使用说明.txt": (80, 385),
+}
+
 
 def log(msg):
     print(msg, flush=True)
+
+
+def run(cmd, **kw):
+    return subprocess.run(cmd, check=True, capture_output=True, text=True, **kw)
 
 
 def build_app(dest, bundled_arch):
@@ -236,18 +289,23 @@ def build_app(dest, bundled_arch):
         "CFBundleName": "WordPaper",
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": VERSION,
-        "CFBundleVersion": "2",
+        "CFBundleVersion": "3",
         "LSMinimumSystemVersion": "13.0",
         "NSHighResolutionCapable": True,
     }
     with open(os.path.join(dest, "Contents", "Info.plist"), "wb") as f:
         plistlib.dump(plist, f)
 
-    # launcher
-    exe = os.path.join(macos, EXEC_NAME)
-    with open(exe, "w") as f:
+    # universal stub (CFBundleExecutable) + the real logic in launcher.sh
+    stub_c = os.path.join(BUILD, "wordpaper_stub.c")
+    with open(stub_c, "w") as f:
+        f.write(STUB_C)
+    run(["clang", "-arch", "arm64", "-arch", "x86_64", "-O2",
+         "-mmacosx-version-min=12.0", "-o", os.path.join(macos, EXEC_NAME), stub_c])
+    launcher = os.path.join(macos, "launcher.sh")
+    with open(launcher, "w") as f:
         f.write(LAUNCHER)
-    os.chmod(exe, 0o755)
+    os.chmod(launcher, 0o755)
 
     # payload
     for name in PAYLOAD_FILES:
@@ -270,20 +328,81 @@ def build_app(dest, bundled_arch):
         os.chmod(os.path.join(bin_dir, f"node-{bundled_arch}"), 0o755)
 
 
-def make_dmg(stage, out_path, volname):
+def eject_stale(extra_paths):
+    """弹出所有挂着同名卷或来自我们镜像的残留挂载。
+
+    曾经挂过同卷名镜像(比如验证时忘了 detach)时,Finder 的
+    `tell disk "<volname>"` 会解析到旧卷,排版打在那上面直接 AppleEvent 超时。
+    """
+    info = subprocess.run(["hdiutil", "info"], capture_output=True, text=True).stdout
+    for block in re.split(r"={10,}", info):
+        if any(p in block for p in extra_paths) or f"/Volumes/{VOLNAME}" in block:
+            for dev in sorted(set(re.findall(r"/dev/disk\d+(?!s)", block)), reverse=True):
+                subprocess.run(["hdiutil", "detach", dev, "-force"], capture_output=True)
+
+
+def make_dmg(stage, out_path):
+    """stage → 排版好的只读 UDZO DMG(背景图 + 图标定位 + 卷标图标)。
+
+    用 dmgbuild 程序化写 .DS_Store,不走 Finder AppleScript——本机实测
+    所有碰 Finder 窗口的 AppleEvent 都会超时(macOS 26 的窗口事件异常)。
+    """
+    import dmgbuild
+    eject_stale([out_path])
     if os.path.exists(out_path):
         os.remove(out_path)
-    subprocess.run(
-        ["hdiutil", "create", "-volname", volname, "-srcfolder", stage,
-         "-ov", "-format", "UDZO", out_path],
-        check=True, capture_output=True, text=True,
+    dmgbuild.build_dmg(
+        out_path,
+        VOLNAME,
+        settings={
+            "files": [
+                (os.path.join(stage, APP_NAME), APP_NAME),
+                (os.path.join(stage, "使用说明.txt"), "使用说明.txt"),
+            ],
+            "symlinks": {"Applications": "/Applications"},
+            "icon": ICON,
+            "background": DMG_BG,
+            "window_rect": DMG_WINDOW_RECT,
+            "default_view": "icon-view",
+            "icon_size": 96,
+            "icon_locations": DMG_ICON_LOCATIONS,
+            "show_status_bar": False,
+            "show_toolbar": False,
+            "format": "UDZO",
+        },
+        lookForHiDPI=False,
     )
 
 
+def ensure_dmgbuild():
+    """dmgbuild 只在打包机需要,装在 scripts/.venv-build;缺了自动切过去重跑。
+
+    注意 venv 的 bin/python 是指向基础解释器的软链,realpath 会穿透它导致
+    误判「已经在 venv 里」——必须比较未解析的路径,并加环境变量防死循环。
+    """
+    try:
+        import dmgbuild  # noqa: F401
+        return
+    except ImportError:
+        pass
+    venv_py = os.path.join(HERE, ".venv-build", "bin", "python")
+    already = os.path.abspath(sys.executable) == os.path.abspath(venv_py)
+    if (os.path.exists(venv_py) and not already
+            and os.environ.get("WP_BUILD_VENV") != "1"):
+        os.execve(venv_py, [venv_py, os.path.abspath(__file__)] + sys.argv[1:],
+                  {**os.environ, "WP_BUILD_VENV": "1"})
+    raise SystemExit("缺 dmgbuild:python3 -m venv scripts/.venv-build && "
+                     "scripts/.venv-build/bin/pip install dmgbuild")
+
+
 def main():
+    ensure_dmgbuild()
     if not os.path.exists(ICON):
         raise SystemExit("缺 assets/icon.icns,先跑 python3 scripts/make_icon.py")
+    if not os.path.exists(DMG_BG):
+        raise SystemExit("缺 assets/dmg-background.png,先跑 python3 scripts/make_dmg_bg.py")
     shutil.rmtree(BUILD, ignore_errors=True)
+    os.makedirs(BUILD, exist_ok=True)
     os.makedirs(DIST, exist_ok=True)
 
     results = []
@@ -298,13 +417,13 @@ def main():
         with open(os.path.join(stage, "使用说明.txt"), "w") as f:
             f.write(README_COMMON.format(extra=extra))
         out = os.path.join(DIST, dmg_name)
-        log(f"· 打包 {dmg_name}…")
-        make_dmg(stage, out, "WordPaper 每日壁纸")
+        log(f"· 打包排版 {dmg_name}…")
+        make_dmg(stage, out)
         mb = os.path.getsize(out) / 1024 / 1024
         results.append((dmg_name, mb))
         log(f"  ✓ {dmg_name}  {mb:.1f} MB")
 
-    log("\n完成。上传到 GitHub Release 后,网站下载弹窗里的 latest/download 链接即生效:")
+    log("\n完成。gh release upload companion-v2.0.0 scripts/dist/*.dmg --clobber 即发布:")
     for name, mb in results:
         log(f"  {name}  {mb:.1f} MB")
 
