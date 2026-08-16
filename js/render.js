@@ -631,135 +631,6 @@
     }
   }
 
-  /* ---------- POSTER layout ---------- */
-  function renderPoster(ctx, W, H, theme, words, reminders, settings, dateStr, minutesUntilFn) {
-    var margin = Math.round(W * 0.07);
-    var scale = settings.fontScale || 1;
-    var weight = Math.min(800, (settings.fontWeight || 700) + 100);
-    var spacing = settings.letterSpacing || 0;
-    var F = fontStack(settings);
-    drawBackground(ctx, W, H, theme, settings);
-    drawCustomBlocks(ctx, W, H, theme, settings, margin);
-    var w = words[0] || { word: '', meaning: '' };
-
-    var topBand = Math.round(margin * 1.1);
-    var bottomBand = H - Math.round(margin * 1.1);
-    var remH = remindersHeight(ctx, W, reminders, settings);
-    var remAnchor = settings.anchorReminders || 'bottom';
-    var remTop = blockTopFor(remAnchor, settings.offReminders.y, topBand, bottomBand, remH, H);
-
-    var availTop = topBand, availBottom = bottomBand;
-    if (remH && remAnchor === 'top') availTop = Math.max(availTop, remTop + remH + Math.round(H * 0.02));
-    if (remH && remAnchor === 'bottom') availBottom = Math.min(availBottom, remTop - Math.round(H * 0.02));
-
-    var isPhone = H >= W;
-    var fs = Math.round(W * (isPhone ? 0.17 : 0.11) * scale);
-    ctx.font = weight + ' ' + fs + 'px ' + F;
-    while (measureSpaced(ctx, w.word, spacing) > W - margin * 2 && fs > 20) {
-      fs -= 2; ctx.font = weight + ' ' + fs + 'px ' + F;
-    }
-    var meaning = (w.pos ? w.pos + ' ' : '') + (w.meaning || '');
-    var lineHMul = settings.lineHeight || 1;
-    var accentH = Math.max(4, Math.round(W * 0.008));
-    var accentGap = Math.round(W * 0.045);
-    // Both the word and its details are one movable block. Measure all lines
-    // before anchoring it so a large type scale or a long translation never
-    // escapes below the canvas.
-    function posterMetrics(size) {
-      ctx.font = '500 ' + Math.round(size * 0.3) + 'px ' + F;
-      var metricMeaningLines = (w.pos || w.meaning) ? wrapMixed(ctx, meaning, W - margin * 2) : [];
-      ctx.font = 'italic 400 ' + Math.round(size * 0.26) + 'px ' + F;
-      var metricExampleLines = (settings.showExample && w.example) ? wrap(ctx, w.example, W - margin * 2) : [];
-      var textH = Math.round(size * 1.18 * lineHMul);
-      if (settings.showPhonetic && w.phonetic) textH += Math.round(size * 0.5 * lineHMul);
-      if (metricMeaningLines.length) textH += metricMeaningLines.length * Math.round(size * 0.46 * lineHMul) + Math.round(size * 0.1);
-      if (metricExampleLines.length) textH += metricExampleLines.length * Math.round(size * 0.4 * lineHMul) + Math.round(size * 0.28);
-      return { meaningLines: metricMeaningLines, exampleLines: metricExampleLines, textH: textH, totalH: accentH + accentGap + textH };
-    }
-    var metrics = posterMetrics(fs);
-    var usableH = Math.max(40, availBottom - availTop);
-    // Do not let a max-size poster consume the entire free band. Keeping a
-    // deliberate reserve makes the dashed word block meaningfully draggable
-    // upward and downward after it has been made large.
-    var dragReserve = Math.min(Math.round(H * 0.18), Math.round(usableH * 0.24));
-    var maxPosterH = Math.max(40, usableH - dragReserve);
-    while (metrics.totalH > maxPosterH && fs > 20) {
-      fs -= 2;
-      metrics = posterMetrics(fs);
-    }
-    var meaningLines = metrics.meaningLines;
-    var exampleLines = metrics.exampleLines;
-    var blockH = metrics.totalH;
-    var desiredY = anchorY(settings.anchorWords || 'center', availTop, availBottom, blockH, 0.42) + Math.round((settings.offWords.y || 0) * H);
-    // The poster is intentionally a free-floating block: dragging can take it
-    // almost anywhere vertically, including over the reminders zone. We only
-    // stop at the canvas-safe edge, so the translation remains visible while
-    // the user still gets a genuinely flexible up/down range.
-    var canvasPad = Math.max(12, Math.round(H * 0.035));
-    var minY = canvasPad;
-    var maxY = Math.max(minY, H - canvasPad - blockH);
-    var y = Math.max(minY, Math.min(maxY, desiredY));
-    var xN = Math.round((settings.offWords.x || 0) * W);
-    var blockTop = y;
-    // 海报没有单独词卡，也要把主词的真实点击区域回传给页面：
-    // 普通单击记住，Shift+单击打开整组外观编辑。
-    ctx.font = weight + ' ' + fs + 'px ' + F;
-    var posterWordW = Math.min(W - margin * 2, Math.max(Math.round(fs * 1.2), measureSpaced(ctx, w.word || '', spacing)));
-    settings.wordCells = [{ index: 0, x: (margin + xN) / W, y: (blockTop + accentGap) / H, w: posterWordW / W, h: Math.round(fs * 1.18 * lineHMul) / H }];
-
-    if (theme.liquid && !settings.bgImage) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(255,255,255,.22)';
-      ctx.strokeStyle = 'rgba(255,255,255,.68)';
-      ctx.lineWidth = Math.max(2, W * .0014);
-      ctx.shadowColor = theme.name === '珍珠' ? 'rgba(60,60,70,.14)' : 'rgba(45,72,94,.16)';
-      ctx.shadowBlur = Math.max(12, W * .014);
-      ctx.shadowOffsetY = Math.max(3, W * .004);
-      var slabPadX = Math.round(W * .035);
-      var slabPadY = Math.round(W * .025);
-      rr(ctx, margin + xN - slabPadX, blockTop - slabPadY, W - margin * 2 + slabPadX * 2, blockH + slabPadY * 2, Math.round(W * .035));
-      ctx.fill(); ctx.stroke();
-      ctx.restore();
-    }
-
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = theme.accent;
-    ctx.fillRect(margin + xN, y, Math.round(W * 0.06), accentH);
-    y += accentGap;
-
-    ctx.fillStyle = ink(theme, settings);
-    ctx.font = weight + ' ' + fs + 'px ' + F;
-    drawSpaced(ctx, w.word, margin + xN, y, spacing);
-    y += Math.round(fs * 1.18 * lineHMul);
-
-    if (settings.showPhonetic && w.phonetic) {
-      ctx.fillStyle = theme.accent;
-      ctx.font = '500 ' + Math.round(fs * 0.32) + 'px ' + F;
-      ctx.fillText(w.phonetic, margin + xN, y);
-      y += Math.round(fs * 0.5 * lineHMul);
-    }
-    if (meaningLines.length) {
-      ctx.fillStyle = ink(theme, settings);
-      ctx.font = '500 ' + Math.round(fs * 0.3) + 'px ' + F;
-      for (var i = 0; i < meaningLines.length; i++) { ctx.fillText(meaningLines[i], margin + xN, y); y += Math.round(fs * 0.46 * lineHMul); }
-      y += Math.round(fs * 0.1);
-    }
-    if (exampleLines.length) {
-      y += Math.round(fs * 0.18);
-      ctx.fillStyle = subInk(theme, settings);
-      ctx.font = 'italic 400 ' + Math.round(fs * 0.26) + 'px ' + F;
-      for (var j = 0; j < exampleLines.length; j++) { ctx.fillText(exampleLines[j], margin + xN, y); y += Math.round(fs * 0.4 * lineHMul); }
-    }
-
-    if (remH) drawReminders(ctx, W, H, theme, reminders, settings, margin + Math.round((settings.offReminders.x || 0) * W), remTop, minutesUntilFn);
-
-    if (settings.hl) {
-      if (settings.hl.kind === 'background') drawBackgroundDragCue(ctx, W, H, theme);
-      else if (settings.hl.kind === 'reminders' && remH) drawHlRect(ctx, theme, margin + Math.round((settings.offReminders.x || 0) * W), remTop, W - 2 * margin, remH);
-      else if (settings.hl.kind === 'words') drawHlRect(ctx, theme, margin + xN, blockTop, W - 2 * margin, blockH);
-    }
-  }
-
   /* letter-spacing helpers (canvas has no tracking, so draw per-char). */
   function measureSpaced(ctx, text, spacing) {
     if (!spacing) return ctx.measureText(text).width;
@@ -829,13 +700,11 @@
     }
   }
 
-  /* Main dispatcher. page: 'words' | 'reminders'. layout applies to 'words'. */
+  /* Main dispatcher. page: 'words' | 'reminders'. */
   function draw(ctx, opts) {
     var page = opts.page || 'words';
     if (page === 'reminders') {
       renderReminderPage(ctx, opts.width, opts.height, opts.theme, opts.reminders, opts.settings, opts.dateStr, opts.minutesUntil);
-    } else if (opts.layout === 'poster') {
-      renderPoster(ctx, opts.width, opts.height, opts.theme, opts.words, opts.reminders, opts.settings, opts.dateStr, opts.minutesUntil);
     } else {
       renderGroup(ctx, opts.width, opts.height, opts.theme, opts.words, opts.reminders, opts.settings, opts.dateStr, opts.minutesUntil);
     }

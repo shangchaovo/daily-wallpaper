@@ -118,7 +118,6 @@
     // （位置布局预设已移除，拖拽即可）
     $('#custom-size-row').hidden = settings.size !== 'custom';
     if (settings.size === 'custom') { $('#inp-cw').value = settings.customW || 1080; $('#inp-ch').value = settings.customH || 1920; }
-    $$('#layout-switch .seg-btn').forEach(b => b.classList.toggle('on', b.dataset.layout === settings.layout));
     renderLibraryCards();
     renderThemeSwatches();
     renderPatternPicker();
@@ -490,7 +489,6 @@
   }
 
   function syncDependentUI() {
-    $('#count-row').style.display = settings.layout === 'poster' ? 'none' : '';
     $('#rotate-min-row').style.display = settings.rotateEnabled ? '' : 'none';
     $('#cycle-sec-row').style.display = settings.cycleEnabled ? '' : 'none';
     $('#anti-ms-row').style.display = settings.antiTouch ? '' : 'none';
@@ -562,12 +560,6 @@
     $('#rng-lineheight').addEventListener('input', e => { settings.lineHeight = Number(e.target.value); updateTypoLabels(); commit(true); });
 
     // （位置布局预设已移除，拖拽即可）
-
-    $$('#layout-switch .seg-btn').forEach(b => b.addEventListener('click', () => {
-      settings.layout = b.dataset.layout;
-      $$('#layout-switch .seg-btn').forEach(x => x.classList.toggle('on', x === b));
-      syncDependentUI(); commit();
-    }));
 
     const refreshTop = $('#btn-refresh'); if (refreshTop) refreshTop.addEventListener('click', async () => { await refresh(true); toast('已换一组新单词'); });
     const downloadTop = $('#btn-download'); if (downloadTop) downloadTop.addEventListener('click', downloadPNG);

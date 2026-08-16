@@ -154,14 +154,6 @@ def main():
             # v3: background photo control present (upload tile + clear hidden until set)
             check("背景照片上传入口", page.locator("#file-bgphoto").count() == 1)
 
-            # layout poster
-            page.locator('#layout-switch .seg-btn[data-layout="poster"]').click()
-            page.wait_for_timeout(400)
-            check("切大字海报", page.locator('#layout-switch .seg-btn[data-layout="poster"]').evaluate("e=>e.classList.contains('on')"))
-            # back to group for the rest
-            page.locator('#layout-switch .seg-btn[data-layout="group"]').click()
-            page.wait_for_timeout(300)
-
             # 位置布局(锚点预设)卡片已移除，拖拽即可
             check("锚点预设卡片已移除", page.locator('#anchor-words').count() == 0)
 

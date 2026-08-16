@@ -22,14 +22,14 @@
       const minutesIntoDay = now.getHours() * 60 + now.getMinutes();
       const bucket = Math.floor(minutesIntoDay / Math.max(1, settings.rotateMinutes));
       const rotKey = today + '#r' + bucket;
-      const count = settings.layout === 'poster' ? 1 : settings.wordsPerGroup;
+      const count = settings.wordsPerGroup;
       // Use a hash of the rotation key as the date seed for a fresh group.
       words = window.Words.pickForDate(list, count, rotKey, settings.order === 'random' ? 'random' : 'seq-rot');
       return { dateStr, words, library: settings.library, rotated: true, bucket };
     }
 
     if (settings.autoRefreshDaily) {
-      const count = settings.layout === 'poster' ? 1 : settings.wordsPerGroup;
+      const count = settings.wordsPerGroup;
       words = window.Words.pickForDate(list, count, today, settings.order);
     } else {
       // Manual mode: keep whatever was last frozen in engine state, else today.
@@ -40,7 +40,7 @@
         const availableKeys = new Set(list.map(w => window.Words.wordKey(w)));
         words = frozen.words.filter(w => availableKeys.has(window.Words.wordKey(w)));
         dateStr = frozen.dateStr || today;
-        const count = settings.layout === 'poster' ? 1 : settings.wordsPerGroup;
+        const count = settings.wordsPerGroup;
         if (words.length < Math.min(count, list.length)) {
           const existing = new Set(words.map(w => window.Words.wordKey(w)));
           const replacements = window.Words.pickForDate(list, count + words.length, today + '#screened', settings.order);
@@ -48,7 +48,7 @@
           freeze(settings.library, dateStr, words);
         }
       } else {
-        const count = settings.layout === 'poster' ? 1 : settings.wordsPerGroup;
+        const count = settings.wordsPerGroup;
         words = window.Words.pickForDate(list, count, today, settings.order);
         freeze(settings.library, dateStr, words);
       }
@@ -68,7 +68,7 @@
     const all = await window.Words.loadLibrary(settings.library);
     const list = window.Words.availableLibrary(settings.library, all);
     const today = window.Words.dateKey(new Date());
-    const count = settings.layout === 'poster' ? 1 : settings.wordsPerGroup;
+    const count = settings.wordsPerGroup;
     const salt = 'manual-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
     const words = window.Words.pickForDate(list, count, salt, 'random');
     freeze(settings.library, today, words);

@@ -215,7 +215,7 @@ def main():
             check("自定义文字拖动位置持久化(y=0.30)", abs(posy - 0.30) < 0.001)
             canvas_png(page, os.path.join(OUT, "5_custom_dragged.png"))
 
-            # ---- 6. POSTER with kai font ----
+            # ---- 6. GROUP with kai font ----
             page.evaluate(
                 "() => { const s=window.Store.getSettings(); s.fontStyle='kai';"
                 " window.Store.saveSettings(s); }"
@@ -223,11 +223,9 @@ def main():
             page.reload(wait_until="domcontentloaded")
             page.wait_for_selector("#preview-canvas")
             page.wait_for_timeout(600)
-            page.locator('#layout-switch .seg-btn[data-layout="poster"]').click()
-            page.wait_for_timeout(500)
-            canvas_png(page, os.path.join(OUT, "6_poster_kai.png"))
-            layout_on = page.locator('#layout-switch .seg-btn[data-layout="poster"]').evaluate("e=>e.classList.contains('on')")
-            check("大字海报 + 楷体渲染", layout_on)
+            canvas_png(page, os.path.join(OUT, "6_group_kai.png"))
+            kai_on = page.locator("#sel-fontstyle").evaluate("e=>e.value")
+            check("单词组 + 楷体渲染", kai_on == "kai")
 
             browser.close()
     finally:

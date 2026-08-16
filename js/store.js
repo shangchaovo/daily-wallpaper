@@ -20,7 +20,7 @@
   const DEFAULT_SETTINGS = {
     uiTheme: 'editorial',      // 'anime' | 'editorial' | 'liquid'（网站界面皮肤）
     library: 'ielts',          // see LIBRARIES in app.js (chuzhong/gaozhong/cet4/.../custom)
-    layout: 'group',           // 'group' | 'poster'
+    layout: 'group',           // 唯一版式;旧数据里的 'poster' 会自动落到 group 渲染
     size: 'phone-1080x2400',   // see SIZES in app.js
     theme: 'cream',            // cream/.../liquid, see THEMES in app.js
     bgPattern: 'soft',         // 'none'|'soft'|'dots'|'grid'|'diag'|'waves'|'blobs'
@@ -32,8 +32,8 @@
     fontWeight: 700,           // word weight 400–800
     fontStyle: 'yuan',         // 'hei'|'song'|'kai'|'yuan'|'heiti' (system font stacks)
     inkOverride: '',           // '' = use theme.ink; else a css color for ALL text
-    letterSpacing: 0,          // px letter spacing on the word (group + poster)
-    lineHeight: 1.0,           // multiplier on row/line gaps (group + poster)
+    letterSpacing: 0,          // px letter spacing on the word
+    lineHeight: 1.0,           // multiplier on row/line gaps
     // background
     bgImage: null,             // dataURL string of a user-uploaded photo (or null)
     bgScrim: 0.22,             // 0..1 light overlay over bgImage for legibility

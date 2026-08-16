@@ -54,7 +54,7 @@ function loadConfig() {
     intervalMinutes: 30,          // how often the real desktop wallpaper changes
     size: 'desktop-1920x1080',    // match your screen
     theme: 'cream',
-    layout: 'group',              // 'group' | 'poster'
+    layout: 'group',              // 唯一版式(大字海报已移除);旧配置里的 'poster' 自动按 group 渲染
     library: 'ielts',
     wordsPerGroup: 6,
     bgPattern: 'soft',
@@ -381,7 +381,7 @@ const THEMES = {
 
 /* Render the wallpaper to a PNG file WITHOUT any dependency, by drawing SVG
  * and rasterizing with macOS's built-in `sips`/`qlmanage`. This mirrors
- * render.js's GROUP/POSTER layouts closely enough for a desktop wallpaper. */
+ * render.js's GROUP layout closely enough for a desktop wallpaper. */
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 function buildSVG(opts) {
@@ -404,63 +404,51 @@ function buildSVG(opts) {
   const text = (x, y, s, size, fill, weight, anchor) =>
     `<text x="${x}" y="${y}" font-family="${fam}" font-size="${size}" fill="${fill}" font-weight="${weight || 400}"${anchor ? ` text-anchor="${anchor}"` : ''}>${esc(s)}</text>`;
 
-  if (layout === 'poster') {
-    const w0 = words[0] || { word: '', meaning: '' };
-    let fs = Math.round(W * (H >= W ? 0.17 : 0.11));
-    let y = Math.round(H * 0.32);
-    parts.push(`<rect x="${margin}" y="${y - W * 0.03}" width="${W * 0.06}" height="${Math.max(4, W * 0.008)}" fill="${t.accent}"/>`);
-    parts.push(text(margin, y + fs * 0.8, w0.word, fs, t.ink, 800));
-    y += fs * 1.35;
-    if (w0.phonetic) { parts.push(text(margin, y, w0.phonetic, fs * 0.32, t.accent, 500)); y += fs * 0.5; }
-    const meaning = (w0.pos ? w0.pos + ' ' : '') + (w0.meaning || '');
-    parts.push(text(margin, y + fs * 0.2, meaning, fs * 0.3, t.ink, 500));
-  } else {
-    // Mirror render.js renderGroup(): adaptive rows. When rows are tall enough we
-    // stack word over meaning; when short (landscape / many words) we lay the row
-    // out on a single line — index · word · phonetic · meaning — with divider rules.
-    const n = Math.max(1, words.length);
-    const hasRem = settings.showReminders && reminders && reminders.length;
-    const blockTop = Math.round(H * 0.19);
-    const blockBottom = Math.round(H * (hasRem ? 0.64 : 0.88));
-    const rowH = Math.floor((blockBottom - blockTop) / n);
-    const wordFs = Math.max(Math.round(W * 0.018), Math.min(Math.round(W * 0.052), Math.round(rowH * 0.34)));
-    const stacked = rowH >= wordFs * 2.4;
-    const gap = Math.round(W * 0.014);
-    // rough proportional width estimates (latin ~0.55em, CJK ~1em, phonetic slimmer)
-    const estW = (s, fs) => {
-      let u = 0;
-      for (const ch of String(s)) u += /[　-鿿豈-﫿]/.test(ch) ? 1 : (ch === ' ' ? 0.3 : 0.55);
-      return u * fs;
-    };
-    const fit = (x, y, s, fs, fill, weight, maxW) => {
-      const nat = estW(s, fs);
-      const tl = nat > maxW ? ` textLength="${Math.round(maxW)}" lengthAdjust="spacingAndGlyphs"` : '';
-      return `<text x="${x}" y="${y}" font-family="${fam}" font-size="${fs}" fill="${fill}" font-weight="${weight}"${tl}>${esc(s)}</text>`;
-    };
-    words.forEach((w, i) => {
-      const rowY = blockTop + i * rowH;
-      const midY = rowY + rowH / 2;
-      // 词义本身就是信息层级的起点；不再为每一项占用编号空间。
-      const ix = margin;
-      const meaning = (w.pos ? w.pos + ' ' : '') + (w.meaning || '');
-      if (stacked) {
-        parts.push(text(ix, midY - rowH * 0.16 + wordFs * 0.36, w.word, wordFs, t.ink, 700));
-        const ww = estW(w.word, wordFs);
-        if (w.phonetic) parts.push(fit(ix + ww + W * 0.015, midY - rowH * 0.16 + wordFs * 0.36, w.phonetic, wordFs * 0.48, t.sub, 400, W - ix - ww - margin - W * 0.015));
-        parts.push(fit(ix, midY + rowH * 0.22 + wordFs * 0.18, meaning, wordFs * 0.54, t.sub, 400, W - ix - margin));
-      } else {
-        const baseY = midY + wordFs * 0.36;
-        parts.push(fit(ix, baseY, w.word, wordFs, t.ink, 700, W * 0.42));
-        let tx = ix + Math.min(estW(w.word, wordFs), W * 0.42) + gap;
-        if (w.phonetic) {
-          parts.push(fit(tx, baseY, w.phonetic, wordFs * 0.48, t.sub, 400, W * 0.2));
-          tx += Math.min(estW(w.phonetic, wordFs * 0.48), W * 0.2) + gap;
-        }
-        parts.push(fit(tx, baseY, meaning, wordFs * 0.5, t.sub, 400, W - tx - margin));
+  // Mirror render.js renderGroup(): adaptive rows. When rows are tall enough we
+  // stack word over meaning; when short (landscape / many words) we lay the row
+  // out on a single line — index · word · phonetic · meaning — with divider rules.
+  const n = Math.max(1, words.length);
+  const hasRem = settings.showReminders && reminders && reminders.length;
+  const blockTop = Math.round(H * 0.19);
+  const blockBottom = Math.round(H * (hasRem ? 0.64 : 0.88));
+  const rowH = Math.floor((blockBottom - blockTop) / n);
+  const wordFs = Math.max(Math.round(W * 0.018), Math.min(Math.round(W * 0.052), Math.round(rowH * 0.34)));
+  const stacked = rowH >= wordFs * 2.4;
+  const gap = Math.round(W * 0.014);
+  // rough proportional width estimates (latin ~0.55em, CJK ~1em, phonetic slimmer)
+  const estW = (s, fs) => {
+    let u = 0;
+    for (const ch of String(s)) u += /[　-鿿豈-﫿]/.test(ch) ? 1 : (ch === ' ' ? 0.3 : 0.55);
+    return u * fs;
+  };
+  const fit = (x, y, s, fs, fill, weight, maxW) => {
+    const nat = estW(s, fs);
+    const tl = nat > maxW ? ` textLength="${Math.round(maxW)}" lengthAdjust="spacingAndGlyphs"` : '';
+    return `<text x="${x}" y="${y}" font-family="${fam}" font-size="${fs}" fill="${fill}" font-weight="${weight}"${tl}>${esc(s)}</text>`;
+  };
+  words.forEach((w, i) => {
+    const rowY = blockTop + i * rowH;
+    const midY = rowY + rowH / 2;
+    // 词义本身就是信息层级的起点；不再为每一项占用编号空间。
+    const ix = margin;
+    const meaning = (w.pos ? w.pos + ' ' : '') + (w.meaning || '');
+    if (stacked) {
+      parts.push(text(ix, midY - rowH * 0.16 + wordFs * 0.36, w.word, wordFs, t.ink, 700));
+      const ww = estW(w.word, wordFs);
+      if (w.phonetic) parts.push(fit(ix + ww + W * 0.015, midY - rowH * 0.16 + wordFs * 0.36, w.phonetic, wordFs * 0.48, t.sub, 400, W - ix - ww - margin - W * 0.015));
+      parts.push(fit(ix, midY + rowH * 0.22 + wordFs * 0.18, meaning, wordFs * 0.54, t.sub, 400, W - ix - margin));
+    } else {
+      const baseY = midY + wordFs * 0.36;
+      parts.push(fit(ix, baseY, w.word, wordFs, t.ink, 700, W * 0.42));
+      let tx = ix + Math.min(estW(w.word, wordFs), W * 0.42) + gap;
+      if (w.phonetic) {
+        parts.push(fit(tx, baseY, w.phonetic, wordFs * 0.48, t.sub, 400, W * 0.2));
+        tx += Math.min(estW(w.phonetic, wordFs * 0.48), W * 0.2) + gap;
       }
-      if (i < n - 1) parts.push(`<line x1="${margin}" y1="${rowY + rowH}" x2="${W - margin}" y2="${rowY + rowH}" stroke="${t.line || 'rgba(128,128,128,0.18)'}" stroke-width="1"/>`);
-    });
-  }
+      parts.push(fit(tx, baseY, meaning, wordFs * 0.5, t.sub, 400, W - tx - margin));
+    }
+    if (i < n - 1) parts.push(`<line x1="${margin}" y1="${rowY + rowH}" x2="${W - margin}" y2="${rowY + rowH}" stroke="${t.line || 'rgba(128,128,128,0.18)'}" stroke-width="1"/>`);
+  });
 
   if (settings.showReminders && reminders && reminders.length) {
     let y = Math.round(H * 0.72);
@@ -1270,11 +1258,9 @@ function pushWallpaper(cb) {
   let picked;
   if (CFG.petWallpaperSync) {
     picked = petFirstPassWords();
-    if (CFG.layout === 'poster') picked = picked.slice(0, 1);
   } else {
     const words = loadWords(CFG.library);
-    const count = CFG.layout === 'poster' ? 1 : CFG.wordsPerGroup;
-    picked = pickForDate(words, count, todaySeed(), 'random');
+    picked = pickForDate(words, CFG.wordsPerGroup, todaySeed(), 'random');
   }
   const [W, H] = SIZES[CFG.size] || SIZES['desktop-1920x1080'];
   const svg = buildSVG({
