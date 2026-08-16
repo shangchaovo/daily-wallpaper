@@ -32,3 +32,4 @@ cloudflare-wordpaper.*.log
 scripts/build/
 scripts/dist/
 scripts/.venv-build/
+__pycache__/
