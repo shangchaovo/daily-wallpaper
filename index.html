@@ -17,8 +17,8 @@ try {
   try { localStorage.setItem('wp:uiTheme', JSON.stringify(saved)); } catch (_) {}
 } catch (_) {}
 </script>
-<link rel="stylesheet" href="css/styles.css?v=20260816c">
-<link rel="stylesheet" href="css/ui-themes.css?v=20260814a">
+<link rel="stylesheet" href="css/styles.css?v=20260817b">
+<link rel="stylesheet" href="css/ui-themes.css?v=20260817a">
 </head>
 <body>
 
@@ -349,7 +349,7 @@ try {
 <div id="memory-modal" class="modal-overlay memory-modal" hidden>
   <div class="modal-card memory-card" role="dialog" aria-modal="true" aria-labelledby="memory-title">
     <div class="modal-head">
-      <div><h2 id="memory-title"><span class="h-emoji" data-anime-icon="🧠">忆</span>艾宾浩斯记忆本</h2><p id="memory-subtitle" class="hint">先回想答案，再选择“还没记住”或“记住了”；作答后显示中文。</p></div>
+      <div><h2 id="memory-title"><span class="h-emoji" data-anime-icon="🧠">忆</span>艾宾浩斯记忆本</h2><p id="memory-subtitle" class="hint">词分两类：「📌 还在记」是还没背下来的（到点的排最前，先回想再答「记住了 / 还没记住」），答「记住了」进入下一轮，跑满 8 轮就进「✅ 已经记住」；中途忘了会自动从头再来。</p></div>
       <button id="btn-close-memory" class="modal-close" type="button" title="关闭" aria-label="关闭记忆本">✕</button>
     </div>
     <div id="memory-summary" class="memory-summary"></div>
@@ -480,7 +480,7 @@ try {
 <script src="js/review.js?v=20260812a"></script>
 <script src="js/render.js?v=20260816a"></script>
 <script src="js/engine.js?v=20260816a"></script>
-<script src="js/app.js?v=20260816g"></script>
+<script src="js/app.js?v=20260817a"></script>
 <script src="js/support.js?v=20260814a"></script>
 </body>
 </html>

@@ -392,7 +392,15 @@ textarea { width: 100%; resize: vertical; margin-bottom: 8px; }
 .memory-entry.answered.remembered { border-color:#88c7a2; background:linear-gradient(145deg,#fff,#effbf4); }
 .memory-entry.answered.forgotten { border-color:#e8ad91; background:linear-gradient(145deg,#fff,#fff2e9); }
 .memory-entry.mastered { border-color:#a7ccb5; background:linear-gradient(145deg,#fbfff9,#edf8f1); }
-.memory-entry.mastered::after { content:"已巩固"; position:absolute; right:12px; top:12px; padding:4px 7px; border-radius:999px; background:#dff2e6; color:#387052; font-size:10px; font-weight:900; }
+.memory-entry.mastered::after { content:"已记住"; position:absolute; right:12px; top:12px; padding:4px 7px; border-radius:999px; background:#dff2e6; color:#387052; font-size:10px; font-weight:900; }
+/* 记忆本分区标题:还在记 / 已经记住,一眼分清。用 CSS 变量,随主题走。 */
+.memory-section-head { grid-column:1/-1; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin:12px 2px 0; padding:10px 6px 6px; border-top:1px dashed var(--line); }
+.memory-section-head:first-child { border-top:none; margin-top:0; padding-top:2px; }
+.memory-section-title { font-size:13.5px; font-weight:900; color:var(--ink); letter-spacing:.02em; }
+.memory-section-count { font-size:11px; font-weight:800; color:var(--accent-2); background:var(--paper-muted,#fff); border:1px solid var(--line); border-radius:999px; padding:2px 8px; }
+.memory-section-head.mastered .memory-section-count { color:#387052; border-color:#bfe0cc; background:#effaf3; }
+.memory-section-hint { flex:1 1 100%; font-size:11px; color:var(--sub); line-height:1.45; }
+.memory-section-empty { grid-column:1/-1; padding:14px 16px; margin-top:2px; }
 .memory-result { display:inline-flex; margin-top:12px; padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.82); color:var(--accent-2); font-size:11px; font-weight:900; }
 .memory-undo { display:inline-flex; margin-top:12px; margin-left:7px; padding:5px 11px; border-radius:999px; border:1px solid rgba(150,110,70,.35); background:rgba(255,255,255,.7); color:#8a6a4a; font:800 11px/1 var(--font); cursor:pointer; vertical-align:top; transition:background .15s ease, transform .15s ease; }
 .memory-undo:hover { background:#fff; transform:translateY(-1px); }

@@ -1506,7 +1506,7 @@
     const petOpenBtn = $('#btn-pet-memory'); if (petOpenBtn) petOpenBtn.disabled = false;
     const st = window.Review.stats(settings.library);
     $('#srs-status').innerHTML = enabled
-      ? `首轮 <b>${st.total}</b> 词 · 复习中 <b>${st.pending}</b> 词 · 已巩固 <b>${st.done}</b> 词${st.failures ? ` · 遗忘 <b>${st.failures}</b> 次` : ''}`
+      ? `共学 <b>${st.total}</b> 词 · 还在记 <b>${st.pending}</b> 词 · 已经记住 <b>${st.done}</b> 词${st.failures ? ` · 遗忘 <b>${st.failures}</b> 次` : ''}`
       : '已关闭记忆轮换';
     renderSrsRecords(enabled);
     const cd = $('#srs-countdown');
@@ -1576,33 +1576,61 @@
   function renderMemoryNotebook() {
     const list = $('#memory-notebook-list'), summary = $('#memory-summary');
     if (!list || !summary || !window.Review) return;
-    const active = window.Review.activeWords(settings.library);
-    const mastered = window.Review.masteredWords(settings.library);
-    const all = active.concat(mastered);
+    const ROUNDS = window.Review.INTERVALS_MIN.length;              // 一共 8 轮
+    const active = window.Review.activeWords(settings.library);     // 还在记(没跑满 8 轮)
+    const mastered = window.Review.masteredWords(settings.library); // 已经记住(跑满 8 轮)
     const now = Date.now();
-    const due = active.filter(item => item.due && item.due <= now);
+    const isDue = (item) => !!(item.due && item.due <= now);
+    const dueCount = active.filter(isDue).length;
     const st = window.Review.stats(settings.library);
-    summary.innerHTML = `<span class="memory-pill">本轮到期 <b>${due.length}</b> 词</span><span class="memory-pill">复习中 <b>${st.pending}</b> 词</span><span class="memory-pill">已巩固 <b>${st.done}</b> 词</span><span class="memory-pill memory-pill-forgot">遗忘记录 <b>${st.failures}</b> 次</span>`;
+    summary.innerHTML =
+      `<span class="memory-pill memory-pill-due">到点该复习 <b>${dueCount}</b></span>` +
+      `<span class="memory-pill">还在记 <b>${active.length}</b></span>` +
+      `<span class="memory-pill">已经记住 <b>${mastered.length}</b></span>` +
+      `<span class="memory-pill memory-pill-forgot">遗忘 <b>${st.failures}</b> 次</span>`;
     list.innerHTML = '';
-    if (!all.length) { list.innerHTML = '<div class="memory-empty">还没有记忆记录。先在桌面小词灵点击词卡完成首轮学习，再回到这里复习。</div>'; return; }
-    all.sort((a, b) => (a.stage >= window.Review.INTERVALS_MIN.length) - (b.stage >= window.Review.INTERVALS_MIN.length) || (a.due || Infinity) - (b.due || Infinity)).forEach(item => {
-      const isMastered = item.stage >= window.Review.INTERVALS_MIN.length;
-      const isDue = !!(item.due && item.due <= now);
+    if (!active.length && !mastered.length) {
+      list.innerHTML = '<div class="memory-empty">还没有记忆记录。先在桌面小词灵点击词卡完成首轮学习，再回到这里复习。</div>';
+      return;
+    }
+
+    const buildCard = (item, masteredFlag) => {
+      const dueNow = isDue(item);
       const card = document.createElement('article');
-      card.className = 'memory-entry' + (isDue ? ' due' : '') + (isMastered ? ' mastered' : '');
-      const stage = isMastered ? `已完成全部周期 · 共复习 ${item.reviewCount || 0} 次` : `第 ${item.stage + 1} 轮${isDue ? ' · 先回想，再选择结果' : ' · ' + fmtCountdown(item.due - now)}`;
-      const meaningClass = isMastered ? 'memory-meaning' : 'memory-meaning locked';
-      const meaningText = isMastered ? escapeHTML((item.word.pos ? item.word.pos + ' ' : '') + (item.word.meaning || '')) : '中文释义已遮盖';
-      card.innerHTML = `<b>${escapeHTML(item.word.word)}</b><span class="memory-meta">${stage}</span><span class="${meaningClass}" aria-label="${isMastered ? '已巩固释义' : '作答后显示中文释义'}">${meaningText}</span>`;
-      if (isDue) {
+      card.className = 'memory-entry' + (dueNow && !masteredFlag ? ' due' : '') + (masteredFlag ? ' mastered' : '');
+      const meta = masteredFlag
+        ? `已经记住 · 复习了 ${item.reviewCount || 0} 次`
+        : dueNow
+          ? `到点了 · 先回想再作答（第 ${item.stage + 1}/${ROUNDS} 轮）`
+          : `还在记 · 第 ${item.stage + 1}/${ROUNDS} 轮 · ${fmtCountdown(item.due - now)}后考你`;
+      const meaningClass = masteredFlag ? 'memory-meaning' : 'memory-meaning locked';
+      const meaningText = masteredFlag ? escapeHTML((item.word.pos ? item.word.pos + ' ' : '') + (item.word.meaning || '')) : '中文释义已遮盖';
+      card.innerHTML = `<b>${escapeHTML(item.word.word)}</b><span class="memory-meta">${meta}</span><span class="${meaningClass}" aria-label="${masteredFlag ? '已记住，显示释义' : '作答后显示中文释义'}">${meaningText}</span>`;
+      if (dueNow && !masteredFlag) {
         const actions = document.createElement('div'); actions.className = 'memory-actions';
         actions.innerHTML = '<button type="button" class="memory-answer forgot">还没记住</button><button type="button" class="memory-answer remembered">记住了</button>';
         actions.querySelector('.forgot').addEventListener('click', () => answerNotebookWord(item, card, false));
         actions.querySelector('.remembered').addEventListener('click', () => answerNotebookWord(item, card, true));
         card.appendChild(actions);
       }
-      list.appendChild(card);
-    });
+      return card;
+    };
+    const addSection = (title, hint, items, masteredFlag, emptyNote) => {
+      const head = document.createElement('div');
+      head.className = 'memory-section-head' + (masteredFlag ? ' mastered' : '');
+      head.innerHTML = `<span class="memory-section-title">${title}</span><span class="memory-section-count">${items.length} 词</span><span class="memory-section-hint">${hint}</span>`;
+      list.appendChild(head);
+      if (!items.length) {
+        const note = document.createElement('div'); note.className = 'memory-empty memory-section-empty'; note.textContent = emptyNote; list.appendChild(note);
+        return;
+      }
+      items.forEach(item => list.appendChild(buildCard(item, masteredFlag)));
+    };
+
+    const sortedActive = active.slice().sort((a, b) => (isDue(b) - isDue(a)) || ((a.due || Infinity) - (b.due || Infinity)));
+    const sortedMastered = mastered.slice().sort((a, b) => ((b.lastSeenAt || b.learnedAt || 0) - (a.lastSeenAt || a.learnedAt || 0)));
+    addSection('📌 还在记', '到点的排在最前面，答「记住了」进入下一轮；跑满 8 轮就毕业', sortedActive, false, '没有还在记的词 —— 全都记住了 🎉');
+    addSection('✅ 已经记住', '跑满全部 8 轮复习，以后不用再管', sortedMastered, true, '还没有已经记住的词 —— 跑满 8 轮复习的词会自动进到这里。');
   }
   function answerNotebookWord(item, card, remembered) {
     card.querySelectorAll('.memory-answer').forEach(button => { button.disabled = true; });

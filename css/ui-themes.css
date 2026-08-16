@@ -700,6 +700,13 @@
 :root[data-ui-theme="liquid"] .memory-answer.remembered { color: #1d1d1f; border-color: rgba(255,255,255,.9); background: rgba(255,255,255,.88); box-shadow: inset 0 1px 0 rgba(255,255,255,1); }
 :root[data-ui-theme="liquid"] .memory-pill,
 :root[data-ui-theme="liquid"] .library-progress { border: 1px solid rgba(84,84,84,.12); border-radius: 999px; background: rgba(255,255,255,.48); }
+/* 记忆本分区标题(还在记/已经记住)走中性白,与 liquid 一致。 */
+:root[data-ui-theme="liquid"] .memory-section-head { border-top-color: rgba(84,84,84,.16); }
+:root[data-ui-theme="liquid"] .memory-section-title { color: #1d1d1f; }
+:root[data-ui-theme="liquid"] .memory-section-count { color: #55555d; background: rgba(121,121,121,.1); border-color: transparent; }
+:root[data-ui-theme="liquid"] .memory-section-head.mastered .memory-section-count { color: #3a3a3c; background: rgba(121,121,121,.14); }
+:root[data-ui-theme="liquid"] .memory-section-hint { color: #6e6e73; }
+:root[data-ui-theme="liquid"] .memory-entry.mastered::after { background: rgba(121,121,121,.12); color: #3a3a3c; }
 
 :root[data-ui-theme="liquid"] .layout-editing .panel-col { padding: 8px; box-shadow: inset 0 0 0 1px rgba(123,123,123,.34), var(--glass-shadow); }
 :root[data-ui-theme="liquid"] .panel-col.layout-drop-target { background: rgba(255,255,255,.86); box-shadow: inset 0 0 0 3px rgba(123,123,123,.56), var(--glass-shadow); }
