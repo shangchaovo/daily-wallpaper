@@ -222,6 +222,7 @@ async function registerEmail(base, email, password) {
     assert.equal(discovery.status, 200);
     assert.deepEqual(await discovery.json(), {
       email: { enabled: true, registrationEnabled: true }, google: { enabled: true }, wechat: { enabled: true },
+      paired: null, pairingAllowed: false,
     });
 
     const parallelEmail = 'parallel@example.test';

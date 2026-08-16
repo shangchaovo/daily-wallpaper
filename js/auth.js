@@ -121,6 +121,33 @@
     }
     emailRegistrationEnabled = Boolean(providers.email && providers.email.registrationEnabled);
     updateEmailRegistrationState();
+
+    // ── 主账号镜像(卫星模式) ─────────────────────────────
+    const paired = providers.paired || null;
+    const pairCard = document.querySelector('#pair-card');
+    const pairSection = document.querySelector('#pair-section');
+    if (paired) {
+      // 已连接主账号:本地注册/登录/OAuth 全部让位,只留「继续」。
+      emailPanel.style.display = 'none';
+      const stack = document.querySelector('.provider-stack');
+      if (stack) stack.style.display = 'none';
+      const divider0 = document.querySelector('.auth-divider');
+      if (divider0) divider0.style.display = 'none';
+      const note = document.querySelector('.migration-note');
+      if (note) note.style.display = 'none';
+      pairCard.hidden = false;
+      document.querySelector('#pair-identity').textContent = paired.username + ' @ ' + paired.url.replace(/^https?:\/\//, '');
+      document.querySelector('#pair-status').textContent =
+        paired.status === 'ok' ? '与主账号连接正常,数据实时同步。'
+        : paired.status === 'reauth' ? '主账号会话已过期:点继续可先用本机缓存,建议在下方重新验证。'
+        : '暂时连不上主账号:本机缓存可离线使用,恢复后自动同步。';
+      // 已配对时配对区收起为「重新验证/换绑」入口
+      pairSection.hidden = false;
+      document.querySelector('#pair-summary').textContent = '重新验证 / 更换主账号 →';
+      return;
+    }
+    if (providers.pairingAllowed) pairSection.hidden = false;
+
     const enabled = Boolean(providers.google && providers.google.enabled);
     const state = googleButton.querySelector('[data-provider-state]');
     // 未配置时(独立版)整条隐藏 Google 入口和分隔线,不显示「管理员尚未配置」
@@ -133,6 +160,57 @@
     state.textContent = enabled ? '首次使用将自动创建账号' : '';
     googleButton.title = enabled ? '' : '';
   }
+
+  // ── 配对 / 继续 / 断开 ──────────────────────────────────
+  async function postPlain(url, body) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+    const data = await response.json().catch(function () { return {}; });
+    if (!response.ok) throw new Error(data.error || '操作失败,请稍后重试');
+    return data;
+  }
+
+  const pairButton = document.querySelector('#btn-pair');
+  pairButton.addEventListener('click', async function () {
+    showError('', false);
+    const url = document.querySelector('#pair-url').value.trim();
+    const identifier = document.querySelector('#pair-identifier').value.trim();
+    const password = document.querySelector('#pair-password').value;
+    if (!url || !identifier || !password) { showError('服务器地址、账号和密码都要填', false); return; }
+    pairButton.disabled = true;
+    pairButton.textContent = '正在连接并同步…';
+    try {
+      await postPlain('/api/pair', { url: url, identifier: identifier, password: password });
+      location.replace(destination());
+    } catch (error) {
+      showError(error.message, false);
+      pairButton.disabled = false;
+      pairButton.textContent = '连接并同步';
+    }
+  });
+
+  document.querySelector('#btn-resume').addEventListener('click', async function () {
+    showError('', false);
+    try {
+      await postPlain('/api/auth/resume');
+      location.replace(destination());
+    } catch (error) {
+      showError(error.message, false);
+    }
+  });
+
+  document.querySelector('#btn-unpair').addEventListener('click', async function () {
+    if (!window.confirm('断开后会删除这台电脑上的同步副本(主账号数据不受影响)。确定断开吗？')) return;
+    try {
+      await postPlain('/api/unpair');
+      location.reload();
+    } catch (error) {
+      showError(error.message, false);
+    }
+  });
 
   googleButton.addEventListener('click', function () {
     if (googleButton.disabled) return;

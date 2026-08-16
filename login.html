@@ -74,6 +74,34 @@
           <button id="submit-auth" class="submit-auth" type="submit">使用邮箱登录</button>
         </form>
       </div>
+      <section id="pair-card" class="pair-card" hidden>
+        <p class="card-kicker">主账号已连接</p>
+        <h2 id="pair-identity" class="pair-identity">—</h2>
+        <p id="pair-status" class="field-hint pair-status"></p>
+        <button id="btn-resume" class="submit-auth" type="button">继续进入工作区</button>
+        <button id="btn-unpair" class="pair-unpair" type="button">断开连接(删除本机同步副本)</button>
+      </section>
+
+      <details id="pair-section" class="pair-section" hidden>
+        <summary id="pair-summary">这台是我的另一台电脑？连接到主账号 →</summary>
+        <div class="pair-body">
+          <p class="field-hint">输入主账号所在的服务器地址和账号密码。连接后这台电脑实时共用同一个工作区;断网时用本机缓存,恢复后自动同步。</p>
+          <label>
+            <span>服务器地址</span>
+            <input id="pair-url" type="url" autocomplete="url" placeholder="https://你的主账号地址">
+          </label>
+          <label>
+            <span>邮箱或用户名</span>
+            <input id="pair-identifier" autocomplete="username" placeholder="主账号的邮箱或用户名">
+          </label>
+          <label>
+            <span>密码</span>
+            <input id="pair-password" type="password" autocomplete="current-password" placeholder="主账号密码">
+          </label>
+          <button id="btn-pair" class="submit-auth" type="button">连接并同步</button>
+        </div>
+      </details>
+
       <p class="migration-note">首次注册会将本浏览器原有的 WordPaper 数据迁入该账号；Google 和邮箱账号之间不会自动共享或合并数据。</p>
     </section>
   </main>

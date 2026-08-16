@@ -2,6 +2,7 @@
 'use strict';
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -58,6 +59,45 @@ if (!Number.isInteger(COMPANION_PORT) || COMPANION_PORT < 1 || COMPANION_PORT > 
 const storage = openStorage(DATA_DIR);
 storage.deleteExpiredSessions();
 storage.deleteExpiredOAuthFlows();
+
+// 主账号镜像(卫星模式):本机作为上游账号的实时缓存 + 写入代理。
+// 只有 local 模式允许配对/镜像;public 实例永远是权威数据源,不做卫星。
+const upstream = require('./lib/upstream');
+upstream.init({
+  storage,
+  usernameKey,
+  createUser: (username, key, hash) => storage.createUser(username, key, hash),
+  findUserByKey: key => storage.findUserByKey(key),
+});
+upstream.startBackground();
+function mirroring() { return MODE === 'local' && upstream.isPaired(); }
+
+// ── 新版本提示(仅独立版/本地模式):仓库根的 VERSION 是唯一版本源,
+//    与 GitHub main 的 VERSION 比较,有新版本时在 /api/session 里带给页面。 ──
+const BUNDLED_VERSION = (() => { try { return fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim(); } catch { return ''; } })();
+let latestVersion = '';
+function versionNewer(candidate, current) {
+  const a = String(candidate).split('.').map(n => parseInt(n, 10) || 0);
+  const b = String(current).split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) { if (a[i] !== b[i]) return a[i] > b[i]; }
+  return false;
+}
+function checkForUpdate() {
+  if (!BUNDLED_VERSION || MODE !== 'local') return;
+  const req = https.get('https://raw.githubusercontent.com/shangchaovo/daily-wallpaper/main/VERSION', { timeout: 8000 }, res => {
+    if (res.statusCode !== 200) { res.resume(); return; }
+    let body = '';
+    res.on('data', c => { body += c; });
+    res.on('end', () => { const v = body.trim(); if (/^\d+\.\d+\.\d+$/.test(v)) latestVersion = v; });
+  });
+  req.on('error', () => {});
+  req.on('timeout', () => req.destroy());
+}
+checkForUpdate();
+setInterval(checkForUpdate, 24 * 60 * 60 * 1000).unref();
+function updateNotice() {
+  return latestVersion && BUNDLED_VERSION && versionNewer(latestVersion, BUNDLED_VERSION) ? { latest: latestVersion } : null;
+}
 storage.deleteExpiredEmailVerifications();
 setInterval(() => {
   storage.deleteExpiredSessions();
@@ -743,9 +783,49 @@ async function handleAuth(req, res, parsed) {
   if (pathname === '/api/auth/providers' && req.method === 'GET') {
     json(res, 200, {
       email: { enabled: true, registrationEnabled: emailRegistrationEnabled(req) },
-      google: { enabled: oauthProviderConfigured('google') },
-      wechat: { enabled: oauthProviderConfigured('wechat') },
+      google: { enabled: oauthProviderConfigured('google') && !mirroring() },
+      wechat: { enabled: oauthProviderConfigured('wechat') && !mirroring() },
+      pairingAllowed: MODE === 'local',
+      paired: upstream.pairedInfo(),
     });
+    return true;
+  }
+
+  // ── 主账号配对(仅本机 local 模式;回环 + Origin 校验 + 限流) ──────────
+  if (pathname === '/api/pair' && req.method === 'POST') {
+    if (MODE !== 'local' || !isLoopbackRequest(req)) { json(res, 404, { error: '只有本机部署可以连接主账号' }); return true; }
+    if (!requireOrigin(req, res)) return true;
+    if (!authRateAllowed(req)) { json(res, 429, { error: '操作过于频繁，请稍后再试' }); return true; }
+    // 已配对时重复调用视为「重新验证/换绑」:复用影子账号,刷新上游会话。
+    const body = await readJson(req);
+    try {
+      const user = await upstream.pair({ url: body && body.url, identifier: body && body.identifier, password: body && body.password });
+      const session = newSession(req, res, user, true);
+      json(res, 200, session);
+    } catch (error) {
+      json(res, error.status || 502, { error: error.message || '连接主账号失败' });
+    }
+    return true;
+  }
+
+  if (pathname === '/api/unpair' && req.method === 'POST') {
+    if (MODE !== 'local' || !isLoopbackRequest(req)) { json(res, 404, { error: '只有本机部署可以断开主账号' }); return true; }
+    if (!requireOrigin(req, res)) return true;
+    if (!authRateAllowed(req)) { json(res, 429, { error: '操作过于频繁，请稍后再试' }); return true; }
+    upstream.unpair();   // 删除本机影子账号(含会话),当前页面随即回到登录页
+    res.setHeader('Set-Cookie', clearSessionCookies());
+    json(res, 200, { ok: true });
+    return true;
+  }
+
+  if (pathname === '/api/auth/resume' && req.method === 'POST') {
+    if (MODE !== 'local' || !isLoopbackRequest(req)) { json(res, 404, { error: 'Not Found' }); return true; }
+    if (!requireOrigin(req, res)) return true;
+    if (!authRateAllowed(req)) { json(res, 429, { error: '操作过于频繁，请稍后再试' }); return true; }
+    const user = upstream.resumeUser();
+    if (!user) { json(res, 409, { error: '这台设备还没有连接主账号' }); return true; }
+    const session = newSession(req, res, user, false);
+    json(res, 200, session);
     return true;
   }
 
@@ -795,6 +875,7 @@ async function handleAuth(req, res, parsed) {
 
   if (pathname === '/api/auth/register' && req.method === 'POST') {
     if (!requireOrigin(req, res)) return true;
+    if (mirroring()) { json(res, 403, { error: '这台设备已连接主账号，无需注册本地账号' }); return true; }
     if (!authRateAllowed(req)) { json(res, 429, { error: '操作过于频繁，请稍后再试' }); return true; }
     const body = await readJson(req);
     const { username, usernameKey: key, email, password } = validateCredentials(body);
@@ -821,6 +902,7 @@ async function handleAuth(req, res, parsed) {
 
   if (pathname === '/api/auth/login' && req.method === 'POST') {
     if (!requireOrigin(req, res)) return true;
+    if (mirroring()) { json(res, 403, { error: '这台设备已连接主账号，直接点「继续」即可进入' }); return true; }
     if (!authRateAllowed(req)) { json(res, 429, { error: '登录尝试过多，请稍后再试' }); return true; }
     const body = await readJson(req);
     const { usernameKey: key, password } = validateCredentials(body);
@@ -861,7 +943,11 @@ async function handle(req, res) {
 
   if (pathname === '/api/session' && req.method === 'GET') {
     if (!session) { json(res, 401, { error: '请先登录' }); return; }
-    json(res, 200, { user: session.user, csrfToken: session.csrfToken, allowLegacyImport: session.allowLegacyImport });
+    json(res, 200, {
+      user: session.user, csrfToken: session.csrfToken, allowLegacyImport: session.allowLegacyImport,
+      mirrored: mirroring(), upstream: mirroring() ? upstream.status() : null,
+      update: updateNotice(),
+    });
     return;
   }
 
@@ -876,7 +962,9 @@ async function handle(req, res) {
 
   if (pathname === '/api/state' && req.method === 'GET') {
     if (!session) { json(res, 401, { error: '请先登录' }); return; }
-    json(res, 200, Object.assign({ user: session.user }, storage.getState(session.user.id)));
+    // 卫星模式:先补推再拉取,返回的本地缓存即为上游最新镜像;断网自动回退缓存。
+    const snapshot = mirroring() ? await upstream.mirroredState() : storage.getState(session.user.id);
+    json(res, 200, Object.assign({ user: session.user }, snapshot));
     return;
   }
 
@@ -889,6 +977,12 @@ async function handle(req, res) {
     const body = await readJson(req);
     if (!Object.prototype.hasOwnProperty.call(body, 'value') || !Number.isInteger(body.expectedRevision) || body.expectedRevision < 0) {
       json(res, 400, { error: 'value 或 expectedRevision 无效' }); return;
+    }
+    if (mirroring()) {
+      const mirrored = await upstream.pushState(namespace, body.value, body.expectedRevision);
+      if (mirrored.kind === 'conflict') { json(res, 409, { conflict: true, revision: mirrored.revision, value: mirrored.value }); return; }
+      json(res, 200, { conflict: false, revision: mirrored.revision, updatedAt: Date.now(), queued: mirrored.kind === 'queued' });
+      return;
     }
     const result = storage.putState(session.user.id, namespace, body.value, body.expectedRevision);
     if (result.conflict) { json(res, 409, result); return; }

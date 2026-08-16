@@ -253,3 +253,18 @@ button:focus-visible,input:focus-visible { outline: 3px solid rgba(0,122,255,.34
   .verification-control { grid-template-columns: minmax(0,1fr) 102px; }
   .send-code-button { min-width: 0; padding-inline: 8px; }
 }
+
+/* ── 主账号配对(卫星模式) ─────────────────────────────── */
+.pair-card { text-align: center; padding: 8px 0 2px; }
+.pair-identity { margin: 6px 0 8px; font-size: 19px; font-weight: 800; letter-spacing: .01em; }
+.pair-status { margin: 0 0 16px; }
+.pair-unpair { display: inline-block; margin-top: 12px; background: none; border: 0; padding: 4px;
+  color: var(--sub, #8a8494); font-size: 12.5px; text-decoration: underline; cursor: pointer; }
+.pair-unpair:hover { color: var(--danger, #b3402a); }
+.pair-section { margin-top: 18px; border-top: 1px dashed rgba(128,128,128,.25); padding-top: 14px; }
+.pair-section summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--sub, #8a8494); list-style: none; }
+.pair-section summary:hover { color: inherit; }
+.pair-section summary::before { content: '🔗 '; }
+.pair-body { display: grid; gap: 10px; margin-top: 12px; }
+.pair-body label { display: grid; gap: 5px; font-size: 13px; }
+.pair-body label span { font-weight: 600; color: var(--sub, #8a8494); }

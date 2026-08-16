@@ -219,6 +219,14 @@
     const session = await sessionResponse.json();
     currentUser = session.user;
     csrfToken = session.csrfToken;
+    if (session.update && session.update.latest) {
+      emit('wordpaper:storage-warning', { message: 'WordPaper 有新版本 v' + session.update.latest + ':重新下载安装即可,数据不受影响' });
+    }
+    if (session.mirrored && session.upstream && session.upstream !== 'ok') {
+      emit('wordpaper:storage-warning', { message: session.upstream === 'reauth'
+        ? '主账号连接已过期:退出登录后重新验证即可恢复同步(本机数据不丢)'
+        : '暂时连不上主账号:改动已存本机,恢复后自动补同步' });
+    }
     userPrefix = NS + 'user:' + currentUser.id + ':';
 
     const stateResponse = await fetch('/api/state', { cache: 'no-store' });

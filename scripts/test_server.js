@@ -117,6 +117,7 @@ function rawStatus(port, requestPath) {
     const providers = await (await fetch(base + '/api/auth/providers')).json();
     assert.deepEqual(providers, {
       email: { enabled: true, registrationEnabled: true }, google: { enabled: false }, wechat: { enabled: false },
+      paired: null, pairingAllowed: false,
     });
 
     const alice = await register(base, 'server_alice', 'correct horse alice');

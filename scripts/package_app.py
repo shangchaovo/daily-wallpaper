@@ -62,10 +62,11 @@ DMG_BG = os.path.join(ROOT, "assets", "dmg-background.png")
 APP_NAME = "WordPaper.app"
 EXEC_NAME = "WordPaper"
 BUNDLE_ID = "cc.cd.wordpaper.companion"
-VERSION = "2.0.2"
+# 版本号唯一来源是仓库根的 VERSION 文件;独立版启动后拿它跟 GitHub main 比对出新版本提示。
+VERSION = open(os.path.join(ROOT, "VERSION"), encoding="utf-8").read().strip()
 VOLNAME = "WordPaper 每日壁纸"
 
-PAYLOAD_FILES = ["server.js", "companion.js", "package.json", "index.html", "login.html"]
+PAYLOAD_FILES = ["server.js", "companion.js", "package.json", "index.html", "login.html", "VERSION"]
 PAYLOAD_DIRS = ["lib", "css", "js", "data"]
 
 # Universal launcher stub: LaunchServices 只认 Mach-O 的架构;纯脚本可执行文件
