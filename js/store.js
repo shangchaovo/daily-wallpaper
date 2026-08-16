@@ -13,6 +13,7 @@
   let csrfToken = '';
   let userPrefix = '';
   let availableLegacy = {};
+  let localMode = false;   // 静态托管本地模式:只写 localStorage,无任何同步
   const syncing = new Map();
   const timers = new Map();
 
@@ -212,6 +213,7 @@
     if (!sessionResponse || !sessionResponse.ok || sessionCT.indexOf('application/json') === -1) {
       userPrefix = NS;
       cache = legacyState();
+      localMode = true;
       return null;
     }
     const session = await sessionResponse.json();
@@ -411,6 +413,7 @@
     read,
     write,
     NS,
+    isLocalMode() { return localMode; },
   };
 
   window.Store = Store;

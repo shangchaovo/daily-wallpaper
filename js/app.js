@@ -1759,18 +1759,46 @@
   }
 
   /* ---------- desktop companion ---------- */
-  async function setDesktopWallpaper() {
+  /* 探测本站背后是否真有能改壁纸的伴侣。静态托管的 SPA 兜底对任何路径都回
+     200+HTML,只看状态码会把「设壁纸」误判成功;按 content-type + 字段形状区分:
+     - 直接开伴侣站(8771):  {mac, config, pet, hotkey}
+     - 主站代理且伴侣在跑:    {companion:true, ...}
+     - 主站代理但伴侣没跑:    {companion:false, available:true}
+     - 公网/非属主:          {companion:false, mode:'public'}
+     - 静态托管:             HTML → 'static'                                   */
+  async function probeWallpaperCapability() {
     try {
-      const r = await fetch('set-wallpaper.php', { method: 'HEAD' });
-      if (!r.ok) throw new Error('no');
-    } catch { toast('需要用桌面伴侣打开本站才能直改壁纸'); return; }
+      const r = await fetch('status.json', { cache: 'no-store' });
+      const ct = String(r.headers.get('content-type') || '');
+      if (!r.ok || ct.indexOf('application/json') === -1) return 'static';
+      const s = await r.json();
+      if (s && (s.companion || s.config || s.mac !== undefined)) return 'companion';
+      return s && s.mode === 'public' ? 'public' : 'local-no-companion';
+    } catch { return 'static'; }
+  }
+
+  async function setDesktopWallpaper() {
+    const capability = await probeWallpaperCapability();
+    if (capability !== 'companion') {
+      if (capability === 'local-no-companion') {
+        toast('桌面伴侣没在运行:点中央「小词灵」启动它,或用「下载 PNG」手动设置');
+      } else {
+        toast('网页改不了系统桌面:点「下载 PNG」保存后手动设置;Mac 装桌面伴侣可自动换');
+      }
+      return;
+    }
     if (!currentCanvas) return;
     toast('正在把当前壁纸设到桌面…');
     const blob = await new Promise(res => currentCanvas.toBlob(res, 'image/png'));
     const fd = new FormData();
     fd.append('image', blob, 'wallpaper.png');
-    const resp = await fetch('set-wallpaper.php', { method: 'POST', body: fd });
-    if (resp.ok) toast('已设为 Mac 桌面壁纸 ✓'); else toast('设置失败');
+    let ok = false;
+    try {
+      const resp = await fetch('set-wallpaper.php', { method: 'POST', body: fd });
+      const body = await resp.json();
+      ok = resp.ok && body && body.ok === true;
+    } catch { ok = false; }
+    toast(ok ? '已设为 Mac 桌面壁纸 ✓' : '设置失败');
   }
 
   /* ---------- companion download chooser (DMG, GitHub Releases) ---------- */
@@ -2073,8 +2101,10 @@
       status.textContent = state === 'saving' ? '保存中…'
         : state === 'error' ? '未保存'
         : state === 'conflict' ? '有冲突'
+        : state === 'local' ? '本机保存'
         : '已同步';
-      if (detail && detail.message) status.title = detail.message;
+      if (state === 'local') status.title = '演示版没有账号和云同步:数据只保存在这个浏览器里,清缓存会丢;下载 Mac 版或登录公网站可持久保存。';
+      else if (detail && detail.message) status.title = detail.message;
     };
     window.addEventListener('wordpaper:sync-status', event => {
       setStatus(event.detail);
@@ -2098,7 +2128,8 @@
     return () => {
       const user = window.Store.currentUser();
       if (accountName && user) accountName.textContent = user.username;
-      setStatus({ state: 'saved' });
+      const isLocal = window.Store.isLocalMode && Store.isLocalMode();
+      setStatus(isLocal ? { state: 'local' } : { state: 'saved' });
     };
   }
 

@@ -86,6 +86,7 @@ body::before {
 .account-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 800; }
 .sync-status { color: var(--good); font-weight: 800; white-space: nowrap; }
 .sync-status[data-state="saving"] { color: var(--sub); }
+.sync-status[data-state="local"] { color: var(--sub); }
 .sync-status[data-state="error"], .sync-status[data-state="conflict"] { color: var(--danger); }
 .account-link { color: var(--sub); text-decoration: none; font: inherit; font-weight: 700; }
 .account-link:hover { color: var(--accent); }
