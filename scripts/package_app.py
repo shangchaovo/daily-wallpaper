@@ -190,6 +190,25 @@ trap cleanup EXIT INT TERM
 server_up() { curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; }
 companion_up() { curl -fsS "http://127.0.0.1:$COMP_PORT/status.json" >/dev/null 2>&1; }
 
+# ── 版本闸门:在跑的实例版本和本包不一致时(比如没退旧版就装了新版),
+#    只替换从某个 WordPaper.app 启动的进程——别人/开发版实例绝不乱动。
+#    旧版 healthz 不带 version 字段,读到空串也算不一致。────────────────
+bundle_process() {  # $1=pid;该进程的工作目录在某个 WordPaper.app 里才算我们的实例
+  lsof -a -p "$1" -d cwd -Fn 2>/dev/null | grep -q "WordPaper.app/Contents/Resources"
+}
+if server_up; then
+  RUNNING_VER="$(curl -fsS "http://127.0.0.1:$PORT/healthz" 2>/dev/null | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
+  MY_VER="$(cat "$RES/VERSION" 2>/dev/null)"
+  if [ -n "$MY_VER" ] && [ "$RUNNING_VER" != "$MY_VER" ]; then
+    for port in "$PORT" "$COMP_PORT"; do
+      for p in $(lsof -nP -tiTCP:$port -sTCP:LISTEN 2>/dev/null); do
+        bundle_process "$p" && kill "$p" 2>/dev/null
+      done
+    done
+    sleep 1
+  fi
+fi
+
 # ── 已在运行:再次双击 = 回到应用(真·Mac 应用行为)。
 #    没有这一步时,重复双击会让第二个伴侣撞 EADDRINUSE 秒退,
 #    从用户看就是「双击图标毫无反应」。─────────────────────────

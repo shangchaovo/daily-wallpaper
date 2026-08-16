@@ -924,7 +924,7 @@ async function handle(req, res) {
   const pathname = parsed.pathname;
 
   if (pathname === '/healthz' && req.method === 'GET') {
-    json(res, 200, { ok: true, mode: MODE });
+    json(res, 200, { ok: true, mode: MODE, version: BUNDLED_VERSION || '' });
     return;
   }
 
