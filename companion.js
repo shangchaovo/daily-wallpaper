@@ -55,7 +55,7 @@ function loadConfig() {
     size: 'desktop-1920x1080',    // match your screen
     theme: 'cream',
     layout: 'group',              // 唯一版式(大字海报已移除);旧配置里的 'poster' 自动按 group 渲染
-    // 版面位置(与网页端 anchorWords/offWords 同步;小刺灵翻页/点词重渲壁纸时保持)
+    // 版面位置(与网页端 anchorWords/offWords 同步;小词灵翻页/点词重渲壁纸时保持)
     anchorWords: 'center',        // 'top'|'center'|'bottom' 单词块锚点
     anchorReminders: 'bottom',    // 'top'|'center'|'bottom' 提醒块锚点
     offWords: { x: 0, y: 0 },     // 单词块分数偏移(相对 W/H)
@@ -64,15 +64,15 @@ function loadConfig() {
     wordsPerGroup: 6,
     bgPattern: 'soft',
     showReminders: true,
-    uiTheme: 'editorial',          // 'anime' | 'editorial' | 'liquid'（网页外观与小刺灵同步）
+    uiTheme: 'editorial',          // 'anime' | 'editorial' | 'liquid'（网页外观与小词灵同步）
     // floating pet window
     petEnabled: true,
     petCorner: 'top-right',       // 'top-right'|'top-left'|'bottom-right'|'bottom-left'
-    petWordsPerPage: 6,           // 小刺灵连续词槽；与壁纸每组数量相互独立
+    petWordsPerPage: 6,           // 小词灵连续词槽；与壁纸每组数量相互独立
     petTransition: 'dissolve-pop', // 换词特效: dissolve(溶解)|pop(Q弹)|dissolve-pop|none
-    petWallpaperSync: true,        // 壁纸/预览与小刺灵当前页词同步（网页推送为准）
+    petWallpaperSync: true,        // 壁纸/预览与小词灵当前页词同步（网页推送为准）
     reminders: [],                // optional: hard-code reminders for wallpaper
-    // 换壁纸快捷键仍可选；小刺灵本身点击词卡只记录记忆，不再换词。
+    // 换壁纸快捷键仍可选；小词灵本身点击词卡只记录记忆，不再换词。
     advanceByClick: true,
     hotkeyEnabled: false,         // global hotkey (needs Input Monitoring; off by default)
     hotkey: 'ctrl+alt+w',         // format: ctrl/alt/shift/cmd + '+' + a-z or 'space'
@@ -162,14 +162,14 @@ function uniquePetWords(list) {
   (list || []).forEach(word => { const key = petWordKey(word); if (key && !seen.has(key)) { seen.add(key); out.push(word); } });
   return out;
 }
-// 壁纸数量与小刺灵词槽解耦：壁纸可以显示任意数量，小刺灵始终维护连续的
+// 壁纸数量与小词灵词槽解耦：壁纸可以显示任意数量，小词灵始终维护连续的
 // 6 个学习位置（除非整个候选词库只剩不到 6 个），点击一词就补回一词。
 function petSlotCount() {
   const requested = Math.max(1, Math.min(36, Number(CFG.petWordsPerPage) || 6));
   return requested > 1 && requested % 2 ? Math.min(36, requested + 1) : requested;
 }
 
-/* 小刺灵采用可翻页的连续首轮队列：点掉一词就补一词；上一页/下一页只切换
+/* 小词灵采用可翻页的连续首轮队列：点掉一词就补一词；上一页/下一页只切换
  * 尚未完成首轮的词，不会推进艾宾浩斯阶段。 */
 function availablePetWords(library) {
   const learned = learnedFor(library), known = knownFor(library);
@@ -222,7 +222,7 @@ function ensurePetDeck(library) {
 }
 function currentPetPage(library) { const deck = ensurePetDeck(library); return deck.pages[deck.index]; }
 function petFirstPassWords() { return currentPetPage(CFG.library).words.slice(); }
-/* 小刺灵当前页词的「代际」计数器：点词/翻页/补位导致当前页词变化就 +1。网页按
+/* 小词灵当前页词的「代际」计数器：点词/翻页/补位导致当前页词变化就 +1。网页按
  * epoch 轮询比对，发现变化就拉取当前页词对齐预览；这是翻页（不产生记忆事件）
  * 也能被网页感知的关键。 */
 function bumpPetWordEpoch() { state.petWordEpoch = Math.max(0, Number(state.petWordEpoch) || 0) + 1; }
@@ -421,7 +421,7 @@ function buildSVG(opts) {
   const hasRem = settings.showReminders && reminders && reminders.length;
 
   // ---- 定位:镜像 render.js 的 anchorY/blockTopFor,让网页里拖的锚点+偏移
-  // 真正作用到桌面壁纸(小刺灵翻页/点词重渲时布局不再回默认)。 ----
+  // 真正作用到桌面壁纸(小词灵翻页/点词重渲时布局不再回默认)。 ----
   const topBand = Math.round(margin * 1.1);
   const bottomBand = H - Math.round(margin * 1.1);
   const anchorY = (anchor, aTop, aBottom, bH) => {
@@ -643,7 +643,7 @@ function buildPetSVG(words, reminders, uiTheme, W, H) {
   // 可拖动的标题区用三根短线做暗示，不添加新交互。
   [0, 1, 2].forEach(i => parts.push(`<rect x="${(W / 2 - 13 + i * 10) * s}" y="${10 * s}" width="${6 * s}" height="${1.2 * s}" rx="${.6 * s}" fill="${mist}" opacity=".28"/>`));
 
-  // 小刺灵只保留一枚精致二次元头像徽章：头发、表情和领口构成陪伴感，没有巨大耳朵或身体。
+  // 小词灵只保留一枚精致二次元头像徽章：头发、表情和领口构成陪伴感，没有巨大耳朵或身体。
   const sprite = (cx, cy, r) => (
     `<circle cx="${cx}" cy="${cy}" r="${r * 1.18}" fill="${skin.avatarOuter}" stroke="${skin.avatarStroke}" stroke-width="${1.1 * s}"/>` +
     `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${skin.avatarFace}"/>` +
@@ -665,7 +665,7 @@ function buildPetSVG(words, reminders, uiTheme, W, H) {
   parts.push(sprite(faceX * s, faceY * s, faceR * s));
   const deck = state.petDecksByLibrary[CFG.library] || { index: 0, pages: [] };
   const pageLabel = words.length ? `第 ${deck.index + 1} 页 · ${words.length} 个首轮词` : '首轮新词已完成';
-  parts.push(txt((faceX + 22) * s, (padY + 22) * s, '小刺灵 · 首轮词流', 12.2 * s, skin.title, 700));
+  parts.push(txt((faceX + 22) * s, (padY + 22) * s, '小词灵 · 首轮词流', 12.2 * s, skin.title, 700));
   parts.push(txt((faceX + 22) * s, (padY + 39) * s, pageLabel, 9.5 * s, skin.titleSub, 500));
   parts.push(`<circle cx="${(faceX + 14) * s}" cy="${(padY + 39 - 3) * s}" r="${2 * s}" fill="${moss}"/>`);
   // 右上角关闭按钮（✕），点击可关闭小窗
@@ -681,7 +681,7 @@ function buildPetSVG(words, reminders, uiTheme, W, H) {
   const waW = W - 2 * padX, waH = footerTop - waY - bodyBottomGap;
   const n = Math.max(1, words.length);
   const shown = words.slice(0, n);
-  // 小刺灵是日常学习卡：中文释义始终可见；只有记忆本会遮盖中文来做回忆检测。
+  // 小词灵是日常学习卡：中文释义始终可见；只有记忆本会遮盖中文来做回忆检测。
   const meaning = wd => (wd.pos ? wd.pos + ' ' : '') + (wd.meaning || '');
   if (!words.length) {
     parts.push(ctxt(w / 2, (waY + waH * .45) * s, '这一词书的首轮新词已完成', 14 * s * scale, skin.empty, 700));
@@ -1037,7 +1037,7 @@ function run(argv){
       }
       dragging = false;
       if (Date.now() - spawnedAt < 350 || downTime === 0) return;   // 预热期 / 没有真实按下
-      // 单击词泡泡＝记住该词；不会再跳到下一组。拖动空白处只移动小刺灵。
+      // 单击词泡泡＝记住该词；不会再跳到下一组。拖动空白处只移动小词灵。
       // 同步 POST 返回时新 PNG 已写好:立即原地换图(新词顶替旧词不闪),并用响应里
       // 的最新 key 表更新窗口 KEYS,保证下一次点击命中不 stale。
       if (!moved && wordIndex >= 0 && Date.now() - downTime < 400) { applyKeys(postUrl(rememberUrl + wordIndex + '&key=' + encodeURIComponent(KEYS[wordIndex] || ''))); reloadImg(); }
@@ -1120,7 +1120,7 @@ function run(argv){
 
 let petChild = null;
 let petVisible = false;   // whether the floating pet window is currently shown
-let petWords = [];        // 当前小刺灵实际展示的词，供点击命中和记忆事件使用
+let petWords = [];        // 当前小词灵实际展示的词，供点击命中和记忆事件使用
 function stopPet() {
   petVisible = false;
   if (petChild) { try { petChild.kill(); } catch {} petChild = null; }
@@ -1271,11 +1271,11 @@ function startPet() {
       if (code && !fs.existsSync(closeFile)) console.error(`[companion] pet window exited (${code}${signal ? ', ' + signal : ''})`);
     });
     petChild.unref();
-    console.log(`[companion] 桌面小刺灵已显示（词卡展示中文；点击词卡＝记住；按住空白处可拖动，右下角圆形把手可调大小；每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
+    console.log(`[companion] 桌面小词灵已显示（词卡展示中文；点击词卡＝记住；按住空白处可拖动，右下角圆形把手可调大小；每 ${Math.max(5, CFG.intervalMinutes)} 分钟刷新）`);
   });
 }
 
-/* 词卡点击 / 翻页后刷新小刺灵，但**不重启窗口**：只在原位重渲 PNG，窗口自带的
+/* 词卡点击 / 翻页后刷新小词灵，但**不重启窗口**：只在原位重渲 PNG，窗口自带的
  * mtime 轮询（buildPetJXA 里 0.6s 定时器）发现文件变了就原地换图。这样点击
  * 标熟时新词直接顶替旧词、窗口纹丝不动——没有 kill+重开带来的闪屏和位置跳动。
  * 仅当可见词数真的变化（词库见底补不满、翻页词数不同）时才重启窗口，因为原生
@@ -1292,7 +1292,7 @@ function refreshPetInPlace(prevCount, nextCount, done) {
   renderPetPng(w, h, done);
 }
 
-/* 当前小刺灵可见词的命中 key 表(与 PNG 同源 petFirstPassWords)。原位换图后窗口
+/* 当前小词灵可见词的命中 key 表(与 PNG 同源 petFirstPassWords)。原位换图后窗口
  * 不重开,但窗口里的 KEYS 是创建时写死的静态表;必须随响应回传最新表,让 JXA 更新
  * 自己的 KEYS,否则第二次点击 key 对不上 → stale 拒判 → “点不动”。 */
 function currentPetKeys() { return petFirstPassWords().map(petWordKey); }
@@ -1308,7 +1308,7 @@ function setMacWallpaper(pngPath, cb) {
 /* push one fresh wallpaper to the desktop */
 function pushWallpaper(cb) {
   const today = dateKey(new Date());
-  // 同步开启时壁纸 = 小刺灵当前页词（单一事实源）；否则回退原有按日期/种子随机。
+  // 同步开启时壁纸 = 小词灵当前页词（单一事实源）；否则回退原有按日期/种子随机。
   let picked;
   if (CFG.petWallpaperSync) {
     picked = petFirstPassWords();
@@ -1371,7 +1371,7 @@ function runAdvance(dir) {
   });
 }
 
-/* 小刺灵驱动的壁纸同步：词变了立即换壁纸，但点词可能连击——throttle 到 ≥900ms
+/* 小词灵驱动的壁纸同步：词变了立即换壁纸，但点词可能连击——throttle 到 ≥900ms
  * 一次，期间只记一个「待渲染」标记，结束后补一帧，避免壁纸狂闪。sips 单线程，
  * 与 runAdvance 共用同一把串行锁（advancing），防止两个渲染交错抢壁纸。 */
 let petWallpaperTimer = null;
@@ -1585,7 +1585,7 @@ const server = http.createServer((req, res) => {
       const allowedPatterns = new Set(['none', 'soft', 'dots', 'grid', 'diag', 'waves', 'blobs']);
       const changedPattern = allowedPatterns.has(requestedPattern) && requestedPattern !== CFG.bgPattern;
       if (allowedPatterns.has(requestedPattern)) CFG.bgPattern = requestedPattern;
-      // 版面位置(锚点+分数偏移):网页拖拽后同步过来,小刺灵翻页/点词重渲壁纸时保持布局。
+      // 版面位置(锚点+分数偏移):网页拖拽后同步过来,小词灵翻页/点词重渲壁纸时保持布局。
       const numOrNull = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
       const readOff = (o) => {
         if (!o || typeof o !== 'object') return null;
@@ -1636,7 +1636,7 @@ const server = http.createServer((req, res) => {
     });
   }
 
-  // 小刺灵点击词卡：登记首轮、立即补入一个新词；分组更新与同步事件一次原子保存。
+  // 小词灵点击词卡：登记首轮、立即补入一个新词；分组更新与同步事件一次原子保存。
   if (url === '/remember.php') {
     if (req.method !== 'POST') { res.writeHead(405); return res.end(); }
     if (!trustedLocalMutation(req)) { res.writeHead(403); return res.end(); }
@@ -1657,7 +1657,7 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ ok: true, event, page: firstPass.deck.index + 1, visibleWords: firstPass.page.words.length, refilled: event.refilled, keys: currentPetKeys(), wordEpoch: state.petWordEpoch }));
     };
     // 丝滑刷新：原位重渲 PNG，窗口原地换图不闪不动；仅词数变化时才重启窗口。
-    // 同步开启时壁纸跟着小刺灵换（throttle 防连击狂刷）。
+    // 同步开启时壁纸跟着小词灵换（throttle 防连击狂刷）。
     syncWallpaperToPet();
     return refreshPetInPlace(prevCount, firstPass.page.words.length, respond);
   }
@@ -1670,7 +1670,7 @@ const server = http.createServer((req, res) => {
     const result = navigatePetPage(direction);
     const respond = () => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, ...result, keys: currentPetKeys(), wordEpoch: state.petWordEpoch })); };
     // 翻页同样丝滑：原位换图，仅当新页词数不同（如最后一页没补满）才重启窗口。
-    // 同步开启时壁纸跟着小刺灵换。
+    // 同步开启时壁纸跟着小词灵换。
     syncWallpaperToPet();
     return refreshPetInPlace(prevCount, result.words, respond);
   }
@@ -1684,7 +1684,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ streamId: state.petMemoryStreamId, firstId, lastId, reset, events, snapshot: reset ? learnedSnapshot() : undefined }));
   }
-  // 网页轮询：小刺灵「当前页词」+ 代际。点词/翻页/补位 bump epoch，网页据此对齐预览。
+  // 网页轮询：小词灵「当前页词」+ 代际。点词/翻页/补位 bump epoch，网页据此对齐预览。
   if (url === '/pet-current.json') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({
@@ -1695,7 +1695,7 @@ const server = http.createServer((req, res) => {
       words: petFirstPassWords(),
     }));
   }
-  // 快捷键保留为手动换壁纸的独立能力；小刺灵界面不再暴露这组重复按钮。
+  // 快捷键保留为手动换壁纸的独立能力；小词灵界面不再暴露这组重复按钮。
   const handleAdvance = (req, res, dir) => {
     if (req.method === 'HEAD') { res.writeHead(isMac ? 200 : 404); return res.end(); }
     const now = Date.now();

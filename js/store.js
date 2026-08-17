@@ -54,7 +54,7 @@
     showExample: true,
     showReminders: true,
     srsEnabled: true,          // 艾宾浩斯记忆轮换：到期的旧单词组混回壁纸复习
-    petWallpaperSync: true,    // 壁纸/预览与小刺灵当前页词同步（总闸，可关）
+    petWallpaperSync: true,    // 壁纸/预览与小词灵当前页词同步（总闸，可关）
     antiTouch: true,           // require long-press to interact (live mode)
     antiTouchMs: 1200,         // long-press duration to unlock
     custom: {                  // custom text overlay (free-floating blocks)

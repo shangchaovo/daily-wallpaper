@@ -222,18 +222,20 @@ function rawStatus(port, requestPath) {
       headers: { Cookie: localOwner.cookie, Origin: running.base, 'Content-Type': 'application/json' },
       body: JSON.stringify({ library: 'gre', knownWords: [] }),
     });
-    assert.equal(ownerSync.status, 200, 'owner should claim the local companion even while it is stopped');
+    assert.equal(ownerSync.status, 200, 'first account should drive the local companion even while it is stopped');
+    // 同机多账号共享:第二个账号也能看到并驱动这台 Mac 的伴侣(桌面是物理共享资源),
+    // 但服务端学习数据仍按账号各自独立(由上面的 A/B 隔离断言覆盖)。
     const otherStatus = await fetch(running.base + '/status.json', { headers: { Cookie: localOther.cookie } });
     assert.equal(otherStatus.status, 200);
-    assert.equal((await otherStatus.json()).available, false, 'second web account must not see another account\'s device companion');
+    assert.equal((await otherStatus.json()).available, true, 'same-machine second account shares the device companion');
     const otherSync = await fetch(running.base + '/pet-sync.php', {
       method: 'POST',
       headers: { Cookie: localOther.cookie, Origin: running.base, 'Content-Type': 'application/json' },
       body: JSON.stringify({ library: 'cet4', knownWords: [] }),
     });
-    assert.equal(otherSync.status, 404);
+    assert.equal(otherSync.status, 200, 'same-machine second account can sync its own context to the companion');
 
-    console.log('PASS server persistence, A/B and companion-owner isolation, conflict/CSRF checks, auth hashing, secure proxy cookie, static containment, and public single-port mode');
+    console.log('PASS server persistence, A/B state isolation, same-machine companion sharing, conflict/CSRF checks, auth hashing, secure proxy cookie, static containment, and public single-port mode');
   } finally {
     if (running) await stopServer(running.child).catch(() => {});
     fs.rmSync(dataDir, { recursive: true, force: true });

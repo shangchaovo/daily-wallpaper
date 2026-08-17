@@ -599,7 +599,7 @@ textarea { width: 100%; resize: vertical; margin-bottom: 8px; }
 
 /* 宠物控制分区：每组一行，标签 + 按钮，整齐对齐 */
 #pet-controls { margin-top: 9px; border-top: 2px dashed var(--line); padding-top: 9px; display: flex; flex-direction: column; gap: 8px; }
-#pet-controls::before { content: "小刺灵正在桌面等你"; font-size: 12px; font-weight: 800; color: #317da9; letter-spacing: .03em; }
+#pet-controls::before { content: "小词灵正在桌面等你"; font-size: 12px; font-weight: 800; color: #317da9; letter-spacing: .03em; }
 .pet-group { display: flex; align-items: center; gap: 9px; }
 .pet-group-label {
   flex: 0 0 64px; font-size: 12.5px; font-weight: 800; color: var(--sub);
@@ -657,6 +657,8 @@ body.live .app { display: none; }
 .support-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
 .support-card { min-height: 255px; padding: 26px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow-sm); }
 .support-icon { display: grid; width: 47px; height: 47px; margin-bottom: 16px; place-items: center; border-radius: var(--radius-sm); background: var(--accent-soft); font-size: 23px; }
+.support-icon .ic { width: 24px; height: 24px; }
+.support-icon-github { color: var(--accent-2); }
 .support-card:nth-child(2) .support-icon { filter: hue-rotate(120deg); }
 .support-card h3 { margin: 0 0 8px; color: var(--ink); font-size: 20px; }
 .support-card p { min-height: 46px; margin: 0 0 19px; color: var(--sub); font-size: 13px; font-weight: 600; line-height: 1.65; }
@@ -1227,6 +1229,9 @@ input[type="range"]::-webkit-slider-thumb { margin-top: -5px; }
 }
 .dl-chip-hint { margin: 10px 2px 0; font-size: 11.5px; }
 .dl-gate { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.dl-github-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--accent-2); font-size: 12px; font-weight: 700; text-decoration: none; }
+.dl-github-link:hover { text-decoration: underline; }
+.dl-github-link .ic { width: 15px; height: 15px; }
 .dl-gate summary { cursor: pointer; color: var(--accent); font-size: 12.5px; font-weight: 700; }
 .dl-gate ol { margin: 8px 0 6px; padding-left: 20px; color: var(--ink); font-size: 12.5px; line-height: 1.9; }
 .dl-gate p { margin: 6px 0 0; color: var(--sub); font-size: 11.5px; line-height: 1.7; }

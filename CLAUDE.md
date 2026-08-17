@@ -58,7 +58,7 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 **宠物可拉伸 / 自适应形状**：宠物窗口右下角有圆形缩放把手（`PET_RESIZE`）；拖动时实时重渲，松手把尺寸存进 `state.petSize`。词卡数每次变化会重建透明小窗，使原生命中网格与当前剩余词数一致。`buildPetSVG` 按 `W/H` 比例（`petMode()`）自动切换排列：`tall`（≤0.75）= 逐行堆叠、`square`（0.75–1.5）= 两列网格、`wide`（≥1.5）= 自适应多行网格。尺寸范围 `MIN_PET_W/H`–`MAX_PET`。
 
-**一键启用（仅 local 模式）**：网页 POST `/companion/start` 后，主服务只允许 loopback 请求，并把本地 companion owner 固定为首次使用它的 Web 账号。`public` 模式绝不在云主机 probe/spawn 8771，端点返回 404；公网用户需在自己的 Mac 安装伴侣。主 server 的 companion 端口来自 `WORDPAPER_COMPANION_PORT`，不再与应用端口自动漂移冲突。
+**一键启用（仅 local 模式）**：网页 POST `/companion/start` 后，主服务要求请求来自「这台机器自己」（`isSameMachineRequest`：回环或本机网卡 IP）。**同机多账号共享**（2026-08-17 起）：伴侣驱动的是这台 Mac 的桌面（物理共享资源），任何登录账号在本机都能启用/控制它，不再有「切换账号」；用户间数据隔离不受影响——settings/review 等服务端状态仍按账号分命名空间，共享的只是「桌面显示什么」。`companion_owner_user_id` 仍记录首个使用者（仅信息，不再是闸门）。`public` 模式绝不在云主机 probe/spawn 8771，端点返回 404；公网用户需在自己的 Mac 安装伴侣。主 server 的 companion 端口来自 `WORDPAPER_COMPANION_PORT`，不再与应用端口自动漂移冲突。
 
 **下载独立版**：对外分发走 **WordPaper.app + DMG**(`scripts/package_app.py` 一条命令出三种包)：AppleSilicon/Intel 完整包（自带 Node v24.19.0 运行时，约 44/45MB)+ Slim 国内加速版（1.6MB，首启从 npmmirror 下载运行时，SHA256 与官方 tarball 钉死一致）。启动器运行时解析顺序：包内 → `~/.wordpaper/runtime` 缓存 → 系统 Node(22–24) → 下载；测试钩子 `WORDPAPER_SELFTEST/FORCE_DOWNLOAD/SKIP_COMPANION/RUNTIME_DIR`。图标由 `scripts/make_icon.py`(favicon W 标 → Playwright → iconutil）生成，产物 `assets/icon.icns` 已入库。DMG 托管 GitHub Releases(`companion-v2.0.0`，网站下载弹窗指 `releases/latest/download/`)，因 CF Pages 单文件 ~25MiB 上限不能走静态站。App **未签名**：macOS 15+ 首次需「系统设置 → 隐私与安全性 → 仍要打开」（右键打开已被苹果移除），说明书与下载弹窗都写了指引。本地 `/companion.zip`(`serveCompanionZip` → `scripts/package_companion.py`）保留为兜底。
 

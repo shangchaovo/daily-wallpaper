@@ -299,33 +299,37 @@ def main():
                     return hit === document.querySelector('#btn-pet-dock') || document.querySelector('#btn-pet-dock').contains(hit);
                   }"""))
 
-            # A second account cannot control the first account's local pet,
-            # but the integrated launcher must remain visible with a safe fallback.
+            # 同一台 Mac 上的第二个账号:小词灵直接可用(共享本机桌面伴侣),
+            # 学习记录仍按账号各自独立保存。
             other_context = browser.new_context(viewport={"width": 1460, "height": 980})
             other_account = other_context.request.post(base + "/api/auth/register", headers={"Origin": base}, data={
-                "username": "e2e_pet_fallback_" + str(port), "password": "wordpaper-e2e-password",
+                "username": "e2e_pet_share_" + str(port), "password": "wordpaper-e2e-password",
             })
-            check("小词灵降级测试账号创建", other_account.status == 201)
+            check("小词灵共享测试账号创建", other_account.status == 201)
             other_page = other_context.new_page()
             other_page.goto(base, wait_until="domcontentloaded")
             other_page.wait_for_selector("#preview-canvas")
-            other_page.wait_for_timeout(700)
-            check("其他账号仍看得到小词灵入口",
+            other_page.wait_for_timeout(900)
+            other_status = other_context.request.get(base + "/status.json").json()
+            check("同机第二个账号伴侣状态可用", other_status.get("available") is True)
+            check("同机第二个账号直接看到可用的小词灵入口",
                   other_page.locator("#pet-dock").is_visible()
                   and other_page.locator("#btn-pet-dock").is_visible()
-                  and other_page.locator("#btn-pet-dock").get_attribute("data-action") == "switch-account"
-                  and "绑定另一个账号" in other_page.inner_text("#pet-dock-status"))
-            fallback_control_requests = []
-            def record_fallback_request(request):
-                if any(path in request.url for path in ("/companion/start", "/pet.php", "/pet-sync.php")):
-                    fallback_control_requests.append(request.url)
-            other_page.on("request", record_fallback_request)
+                  and other_page.locator("#btn-pet-dock").get_attribute("data-action") in ("start", "control"))
+            # 点击主入口会尝试启用/控制伴侣(不再被踢去登录);拦截请求避免碰到真实伴侣进程。
+            share_requests = []
+            def record_share_request(request):
+                if any(path in request.url for path in ("/companion/start", "/pet.php")):
+                    share_requests.append(request.url)
+            other_page.on("request", record_share_request)
+            other_context.route("**/companion/start", lambda route: route.fulfill(
+                status=200, content_type="application/json", body='{"ok":true,"already":true}'))
+            other_context.route("**/pet.php*", lambda route: route.fulfill(
+                status=200, content_type="application/json", body='{"ok":true,"pet":true}'))
             other_page.click("#btn-pet-dock")
-            other_page.wait_for_url("**/login.html", timeout=5000)
-            owner_status = context.request.get(base + "/status.json").json()
-            check("账号冲突只切换登录且不接管小词灵",
-                  len(fallback_control_requests) == 0
-                  and owner_status.get("available") is True)
+            other_page.wait_for_timeout(500)
+            check("点击直接启用/控制小词灵而不踢去登录",
+                  len(share_requests) >= 1 and "/login.html" not in other_page.url)
             other_context.close()
 
             # companion one-click zip route serves a real zip with launcher + data

@@ -712,10 +712,13 @@ function probeCompanion() {
 }
 
 function companionAllowed(req, session, claimOwner) {
+  /* 同机多账号共享:伴侣驱动的是这台 Mac 的桌面(壁纸/小窗是物理共享资源),
+     所以本机请求 + 任意登录账号即可用——同一台机器上的几个账号往往就是同一个人。
+     用户之间的数据隔离不受影响:settings/review 等状态在服务器上仍按账号分命名空间,
+     共享的只是「桌面显示什么」。真正的远端机器仍被 isSameMachineRequest 挡在门外。 */
   if (!COMPANION_ENABLED || !isSameMachineRequest(req)) return false;
-  return claimOwner
-    ? storage.claimCompanionOwner(session.user.id)
-    : storage.companionAvailableForUser(session.user.id);
+  if (claimOwner) storage.claimCompanionOwner(session.user.id); // 记录首个使用者(仅信息,不再做闸门)
+  return true;
 }
 
 async function proxyToCompanion(req, res) {

@@ -1,5 +1,5 @@
 'use strict';
-/* 渲染小刺灵小窗 PNG,检查新版图标按钮。 */
+/* 渲染小词灵小窗 PNG,检查新版图标按钮。 */
 const fs = require('fs');
 const http = require('http');
 const os = require('os');

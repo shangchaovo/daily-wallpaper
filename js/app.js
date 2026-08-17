@@ -51,7 +51,7 @@
 
   let settings = null;
   const UI_THEMES = new Set(['anime', 'editorial', 'liquid']);
-  let companionAction = 'start'; // 'start' | 'control' | 'download' | 'switch-account'
+  let companionAction = 'start'; // 'start' | 'control' | 'download' | 'remote'
   let currentCanvas = null;
   let liveTimer = null;
   let clockTimer = null;
@@ -154,7 +154,7 @@
       window.Store.setUITheme(next);
       saveSettings();
       refresh(false);
-      // 界面主题同时驱动桌面小刺灵；伴侣未运行时保持静默降级。
+      // 界面主题同时驱动桌面小词灵；伴侣未运行时保持静默降级。
       syncCompanionLearningContext();
     }
     document.dispatchEvent(new CustomEvent('wordpaper:ui-theme-change', { detail: { theme: next } }));
@@ -612,18 +612,18 @@
         toast('换词特效：' + petFx.options[petFx.selectedIndex].text);
       });
     }
-    // 壁纸/预览同步总闸:默认开。关掉后壁纸/预览回退各自独立随机,不再跟随小刺灵。
+    // 壁纸/预览同步总闸:默认开。关掉后壁纸/预览回退各自独立随机,不再跟随小词灵。
     const petSyncToggle = $('#chk-pet-sync');
     if (petSyncToggle) {
       petSyncToggle.checked = settings.petWallpaperSync !== false;
       petSyncToggle.addEventListener('change', () => {
         settings.petWallpaperSync = petSyncToggle.checked;
         saveSettings();
-        if (!petSyncToggle.checked) petSyncedSel = null;   // 关掉立即脱离小刺灵词
+        if (!petSyncToggle.checked) petSyncedSel = null;   // 关掉立即脱离小词灵词
         syncCompanionLearningContext();   // 推给 companion（决定壁纸词源）
         if (petSyncToggle.checked) syncPetCurrent();      // 打开立即对齐一次
         else refresh(false);                              // 关闭后按本地逻辑重绘
-        toast(petSyncToggle.checked ? '已开启：壁纸/预览跟随小刺灵' : '已关闭：壁纸/预览独立随机');
+        toast(petSyncToggle.checked ? '已开启：壁纸/预览跟随小词灵' : '已关闭：壁纸/预览独立随机');
       });
     }
     const companionTop = $('#btn-companion-top');
@@ -1302,7 +1302,7 @@
       const fy = (e.clientY - rect0.top) / rect0.height;
       const wordIndex = hitTestWord(fx, fy);
       if (wordIndex != null && !e.shiftKey) {
-        // 壁纸预览只负责选中并调整整组样式；“记住”只在桌面小刺灵词卡发生。
+        // 壁纸预览只负责选中并调整整组样式；“记住”只在桌面小词灵词卡发生。
         selectWord(wordIndex);
         e.preventDefault();
         return;
@@ -1500,13 +1500,13 @@
   async function refresh(manual, page) {
     let sel;
     if (manual && petSyncActive() && companionReachable()) {
-      // 「换一组」= 推动小刺灵翻页（闭环：小刺灵翻页→epoch 变→轮询拉回新词→预览+壁纸同步）。
+      // 「换一组」= 推动小词灵翻页（闭环：小词灵翻页→epoch 变→轮询拉回新词→预览+壁纸同步）。
       // 立即翻页并同步拉取当前页词本地渲染，不等 15s 轮询。
       const advanced = await drivePetNextPage();
       if (advanced) sel = petSelectionFromSync(advanced);
       if (!sel) sel = await window.Engine.reshuffle(settings); // 翻页失败兜底
     } else if (!manual && petSyncActive() && petSyncedSel && petSyncedSel.library === settings.library) {
-      sel = petSyncedSel;   // 同步开启且已拉到小刺灵当前页：预览以小刺灵为准
+      sel = petSyncedSel;   // 同步开启且已拉到小词灵当前页：预览以小词灵为准
     } else {
       sel = manual ? await window.Engine.reshuffle(settings) : await window.Engine.current(settings);
     }
@@ -1519,21 +1519,21 @@
     updateSrsUI();
   }
 
-  /* 小刺灵同步状态：petSyncedSel 缓存最近一次拉到的小刺灵当前页选择。 */
+  /* 小词灵同步状态：petSyncedSel 缓存最近一次拉到的小词灵当前页选择。 */
   let petSyncedSel = null;   // {dateStr, words, library, rotated:false}
   let companionUp = false;   // status.json 探测结果（syncCompanionButton 维护）
 
   function petSyncActive() { return !!(settings && settings.petWallpaperSync !== false); }
   function companionReachable() { return companionUp; }
 
-  // 用同步来的小刺灵词构造一个 selection（与 Engine.current 返回结构一致）。
+  // 用同步来的小词灵词构造一个 selection（与 Engine.current 返回结构一致）。
   function petSelectionFromSync(words) {
     if (!Array.isArray(words) || !words.length) return null;
     const today = window.Words.dateKey(new Date());
     return { dateStr: today, words, library: settings.library, rotated: false };
   }
 
-  // 让「换一组」推动小刺灵翻到下一页；成功返回新页词数组，失败返回 null。
+  // 让「换一组」推动小词灵翻到下一页；成功返回新页词数组，失败返回 null。
   async function drivePetNextPage() {
     if (!petCurrentSupported) return null;   // 旧伴侣无当前页端点，直接走本地兜底
     try {
@@ -1541,7 +1541,7 @@
       if (!r.ok) return null;
       const j = await r.json();
       if (!j || j.ok === false) return null;
-      // 翻页后小刺灵当前页词经 /pet-current.json 取回（keys 是命中 key 非词对象）。
+      // 翻页后小词灵当前页词经 /pet-current.json 取回（keys 是命中 key 非词对象）。
       const cur = await fetch('pet-current.json', { cache: 'no-store' });
       if (cur.status === 404) { petCurrentSupported = false; return null; }
       if (!cur.ok) return null;
@@ -1660,7 +1660,7 @@
     box.innerHTML = '';
     if (!enabled) return;
     const records = window.Review.recentWords(settings.library, 4);
-    if (!records.length) { box.innerHTML = '<div class="srs-record empty">在桌面小刺灵点词卡完成首轮后，单词会进入这里的复习周期。</div>'; return; }
+    if (!records.length) { box.innerHTML = '<div class="srs-record empty">在桌面小词灵点词卡完成首轮后，单词会进入这里的复习周期。</div>'; return; }
     records.forEach(item => {
       const row = document.createElement('div'); row.className = 'srs-record';
       const word = document.createElement('b'); word.textContent = item.word.word;
@@ -1707,7 +1707,7 @@
       `<span class="memory-pill memory-pill-forgot">遗忘 <b>${st.failures}</b> 次</span>`;
     list.innerHTML = '';
     if (!active.length && !mastered.length) {
-      list.innerHTML = '<div class="memory-empty">还没有记忆记录。先在桌面小刺灵点击词卡完成首轮学习，再回到这里复习。</div>';
+      list.innerHTML = '<div class="memory-empty">还没有记忆记录。先在桌面小词灵点击词卡完成首轮学习，再回到这里复习。</div>';
       return;
     }
 
@@ -1802,7 +1802,7 @@
       if (newlyDue > 0) refresh(false);
     }, 30000);
     setInterval(syncPetMemoryEvents, 15000);
-    setInterval(syncPetCurrent, 5000);   // 小刺灵词代际轮询：点词/翻页后 ≤5s 预览对齐
+    setInterval(syncPetCurrent, 5000);   // 小词灵词代际轮询：点词/翻页后 ≤5s 预览对齐
   }
 
   async function syncPetMemoryEvents() {
@@ -1821,20 +1821,20 @@
       window.Store.write('petMemoryCursor', { streamId: String(data.streamId || ''), lastId: Number(data.lastId) || 0 });
       if (events.length || snapshot.length) {
         updateSrsUI(); if ($('#memory-modal') && !$('#memory-modal').hidden) renderMemoryNotebook();
-        toast(data.reset ? `已从小刺灵恢复 ${snapshot.length} 个首轮记录` : `小刺灵已记录 ${events.length} 个首轮词并自动补位`);
+        toast(data.reset ? `已从小词灵恢复 ${snapshot.length} 个首轮记录` : `小词灵已记录 ${events.length} 个首轮词并自动补位`);
       }
     } catch (e) { /* 独立网页或伴侣未运行时静默跳过 */ }
     finally { petMemorySyncing = false; }
   }
 
-  /* 记录小刺灵同步游标（epoch+library），供轮询比对「小刺灵词是否变了」。 */
+  /* 记录小词灵同步游标（epoch+library），供轮询比对「小词灵词是否变了」。 */
   function recordPetSyncCursor(data) {
     if (!data) return;
     window.Store.write('petSyncCursor', { epoch: Number(data.wordEpoch) || 0, library: String(data.library || '') });
   }
 
-  /* 轮询小刺灵「当前页词 + 代际」。点词/翻页都会 bump epoch；发现 epoch 变化且词库
-   * 匹配就把预览对齐成小刺灵同批词（freeze 持久化 + 立即重绘），实现「小刺灵为准」。 */
+  /* 轮询小词灵「当前页词 + 代际」。点词/翻页都会 bump epoch；发现 epoch 变化且词库
+   * 匹配就把预览对齐成小词灵同批词（freeze 持久化 + 立即重绘），实现「小词灵为准」。 */
   let petCurrentSyncing = false;
   let petCurrentSupported = true;   // 旧版伴侣没有 /pet-current.json：404 一次后停轮询，避免刷 console
   async function syncPetCurrent() {
@@ -1874,7 +1874,7 @@
             uiTheme: settings.uiTheme,
             wallpaperTheme: settings.theme,
             bgPattern: settings.bgPattern,
-            // 版面位置(锚点+分数偏移):小刺灵翻页/点词重渲壁纸时保持网页里拖好的布局。
+            // 版面位置(锚点+分数偏移):小词灵翻页/点词重渲壁纸时保持网页里拖好的布局。
             anchorWords: settings.anchorWords,
             anchorReminders: settings.anchorReminders,
             offWords: settings.offWords,
@@ -1923,7 +1923,7 @@
     const capability = await probeWallpaperCapability();
     if (capability !== 'companion') {
       if (capability === 'local-no-companion') {
-        toast('桌面伴侣没在运行:点中央「小刺灵」启动它,或用「下载 PNG」手动设置');
+        toast('桌面伴侣没在运行:点中央「小词灵」启动它,或用「下载 PNG」手动设置');
       } else {
         toast('网页改不了系统桌面:点「下载 PNG」保存后手动设置;Mac 装桌面伴侣可自动换');
       }
@@ -1975,7 +1975,7 @@
     const dock = $('#pet-dock');
     const dockBtn = $('#btn-pet-dock');
     const dockStatus = $('#pet-dock-status');
-    // 小刺灵是工作台能力，不因公网模式或账号归属冲突而从界面消失。
+    // 小词灵是工作台能力，不因公网模式或账号归属冲突而从界面消失。
     if (dock) {
       dock.hidden = false;
       dock.dataset.state = state;
@@ -1992,7 +1992,7 @@
   function handleCompanionAction() {
     if (companionAction === 'control') return togglePet();
     if (companionAction === 'download') return downloadCompanion();
-    if (companionAction === 'switch-account') return window.Store.logout();
+    if (companionAction === 'remote') return toast('桌面伴侣只能在这台 Mac 本机启用；在这台 Mac 上打开本站即可');
     return enableCompanion();
   }
 
@@ -2023,7 +2023,7 @@
 
   async function syncCompanionButton() {
     const btn = $('#btn-companion');
-    setPetDockState('checking', '正在检查这台 Mac 上的小刺灵…', '检查中…', true);
+    setPetDockState('checking', '正在检查这台 Mac 上的小词灵…', '检查中…', true);
     try {
       const response = await fetch('status.json');
       if (!response.ok) throw new Error('status unavailable');
@@ -2033,23 +2033,25 @@
         companionUp = false;
         petSyncedSel = null;
         const isPublic = j.mode === 'public';
-        companionAction = isPublic ? 'download' : 'switch-account';
+        // 公网部署 → 引导下载独立版;本机局域网其它设备(手机等)→ 提示回 Mac 本机打开。
+        // 同一台 Mac 上的多个账号都能直接用,不再有「切换账号」。
+        companionAction = isPublic ? 'download' : 'remote';
         if (btn) {
-          btn.textContent = isPublic ? '下载 Mac 桌面伴侣' : '切换到绑定账号';
-          btn.disabled = false;
+          btn.textContent = isPublic ? '下载 Mac 桌面伴侣' : '桌面伴侣仅本机可用';
+          btn.disabled = !isPublic;
         }
         setPetDockState(
           'unavailable',
           isPublic
-            ? '网页端已保留小刺灵入口；下载 Mac 独立版后即可常驻桌面'
-            : '本机小刺灵已绑定另一个账号；切换到绑定账号即可安全召唤',
-          isPublic ? '下载 Mac 版 ↓' : '切换账号 →',
-          false
+            ? '网页端已保留小词灵入口；下载 Mac 独立版后即可常驻桌面'
+            : '小词灵跟着这台 Mac 的桌面走；在这台 Mac 上打开本站即可启用',
+          isPublic ? '下载 Mac 版 ↓' : '本机打开即可用',
+          !isPublic
         );
         const hint = $('#pet-hint');
         if (hint) hint.textContent = isPublic
           ? '公网服务只同步账号数据；桌面伴侣需安装在自己的 Mac 上。'
-          : '为保护不同账号的学习记录，当前账号不能直接控制已绑定的小刺灵。';
+          : '同一台 Mac 上的账号都能直接使用小词灵；学习记录仍按账号各自独立保存。';
         return;
       }
       // 伴侣页（8771）给 config；主 server（8770）探测到伴侣后给 companion:true
@@ -2063,13 +2065,13 @@
         syncPetControls(j);
         // 伴侣在线即把当前特效同步过去:特效值变了 companion 会重建小窗,无需手动刷新。
         syncCompanionLearningContext();
-        // 立即拉一次小刺灵当前页词，让预览/壁纸尽快对齐（不等首个 5s tick）。
+        // 立即拉一次小词灵当前页词，让预览/壁纸尽快对齐（不等首个 5s tick）。
         syncPetCurrent();
       } else {
         petOn = false;
         petSyncedSel = null;
         if (btn) { btn.textContent = '一键启用桌面伴侣'; btn.disabled = false; }
-        setPetDockState('ready', '已整合到工作台，点一下把今日单词带到 Mac 桌面', '启动小刺灵 ↗', false);
+        setPetDockState('ready', '已整合到工作台，点一下把今日单词带到 Mac 桌面', '启动小词灵 ↗', false);
       }
     } catch (_) {
       // 静态托管(无后端)时 status.json 拿到的是 SPA 兜底的 HTML,json() 抛错进这里。
@@ -2079,7 +2081,7 @@
       petSyncedSel = null;
       companionAction = 'download';
       if (btn) { btn.textContent = '下载 Mac 桌面伴侣'; btn.disabled = false; }
-      setPetDockState('unavailable', '这里是网页演示版;下载 Mac 桌面伴侣后,壁纸自动换、小刺灵常驻桌面', '下载 Mac 版 ↓', false);
+      setPetDockState('unavailable', '这里是网页演示版;下载 Mac 桌面伴侣后,壁纸自动换、小词灵常驻桌面', '下载 Mac 版 ↓', false);
     }
   }
 
@@ -2094,8 +2096,8 @@
     if (btn) btn.textContent = petOn ? '隐藏宠物' : '召唤宠物';
     setPetDockState(
       petOn ? 'active' : 'ready',
-      petOn ? '小刺灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小刺灵出现',
-      petOn ? '隐藏小刺灵' : '召唤小刺灵 ↗',
+      petOn ? '小词灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小词灵出现',
+      petOn ? '隐藏小词灵' : '召唤小词灵 ↗',
       false
     );
     const hint = $('#pet-hint');
@@ -2115,11 +2117,11 @@
       if (btn) btn.textContent = petOn ? '隐藏宠物' : '召唤宠物';
       setPetDockState(
         petOn ? 'active' : 'ready',
-        petOn ? '小刺灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小刺灵出现',
-        petOn ? '隐藏小刺灵' : '召唤小刺灵 ↗',
+        petOn ? '小词灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小词灵出现',
+        petOn ? '隐藏小词灵' : '召唤小词灵 ↗',
         false
       );
-      toast(petOn ? '小刺灵已召唤 ✓（点击单词即可记住）' : '小刺灵已隐藏');
+      toast(petOn ? '小词灵已召唤 ✓（点击单词即可记住）' : '小词灵已隐藏');
     } catch (e) {
       toast('操作失败：' + e.message);
       await syncCompanionButton();

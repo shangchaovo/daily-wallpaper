@@ -17,7 +17,7 @@ try {
   try { localStorage.setItem('wp:uiTheme', JSON.stringify(saved)); } catch (_) {}
 } catch (_) {}
 </script>
-<link rel="stylesheet" href="css/styles.css?v=20260817e">
+<link rel="stylesheet" href="css/styles.css?v=20260817f">
 <link rel="stylesheet" href="css/ui-themes.css?v=20260817d">
 </head>
 <body>
@@ -52,6 +52,7 @@ try {
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3.6 H13.6 L17 7 V20.4 H7 Z"/><path d="M13.6 3.6 V7 H17"/><path d="M12 10.4 V15.8 M9.7 13.6 L12 15.8 L14.3 13.6"/></symbol>
   <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.6 17.4 L10 12.4 L13.4 15.7 L16.7 12.7 L20.4 16.2"/></symbol>
   <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.2 V12 L15.4 14.1"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></symbol>
 </svg>
 
 <!-- 微弱的纸屑星光：只做氛围，不与内容争夺注意力。 -->
@@ -146,7 +147,7 @@ try {
           <h2><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-bookmark"/></svg></span>记忆复习</h2>
           <label class="srs-switch"><input id="chk-srs" type="checkbox" checked><span>艾宾浩斯</span></label>
         </div>
-        <p class="hint">在桌面小刺灵点词卡完成首轮；该词会立即移出并自动补入新词，也可以前后翻页。到期后在记忆本完成后续轮次。</p>
+        <p class="hint">在桌面小词灵点词卡完成首轮；该词会立即移出并自动补入新词，也可以前后翻页。到期后在记忆本完成后续轮次。</p>
         <div id="srs-status" class="srs-status">已记 0 词 · 待复习 0 词</div>
         <div id="srs-records" class="srs-records" aria-live="polite"></div>
         <button id="btn-open-memory" class="btn primary srs-learn" type="button">打开艾宾浩斯记忆本 →</button>
@@ -189,7 +190,7 @@ try {
           <button id="btn-set-wallpaper2" class="btn soft small">▣ 设壁纸</button>
         </div>
       </div>
-      <section id="pet-dock" class="pet-dock" data-state="checking" aria-label="桌面小刺灵">
+      <section id="pet-dock" class="pet-dock" data-state="checking" aria-label="桌面小词灵">
         <span class="pet-dock-face" aria-hidden="true">
           <svg viewBox="0 0 40 40" focusable="false">
             <circle cx="20" cy="20" r="18.2" fill="#182a35" stroke="#c7a56b" stroke-width="1.4"/>
@@ -199,8 +200,8 @@ try {
             <path d="M18.5 27c1 .8 2 .8 3 0" fill="none" stroke="#b96e55" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </span>
-        <div class="pet-dock-copy"><b>桌面小刺灵</b><span id="pet-dock-status" aria-live="polite">正在检查这台 Mac 上的小刺灵…</span></div>
-        <label class="pet-dock-fx" title="小刺灵点词换词时的过渡动画">
+        <div class="pet-dock-copy"><b>桌面小词灵</b><span id="pet-dock-status" aria-live="polite">正在检查这台 Mac 上的小词灵…</span></div>
+        <label class="pet-dock-fx" title="小词灵点词换词时的过渡动画">
           <span>换词特效</span>
           <select id="sel-pet-transition" aria-label="换词特效">
             <option value="dissolve-pop">溶解+Q弹</option>
@@ -209,13 +210,13 @@ try {
             <option value="none">无动画</option>
           </select>
         </label>
-        <label class="pet-dock-sync" title="开启后：点词/翻页立即换桌面壁纸，网页预览跟随小刺灵，「换一组」推动小刺灵翻页；关闭则壁纸/预览各自独立随机">
+        <label class="pet-dock-sync" title="开启后：点词/翻页立即换桌面壁纸，网页预览跟随小词灵，「换一组」推动小词灵翻页；关闭则壁纸/预览各自独立随机">
           <input type="checkbox" id="chk-pet-sync" checked>
           <span>同步壁纸</span>
         </label>
         <div class="pet-dock-actions">
           <button id="btn-pet-memory" class="btn pet-memory-shortcut" type="button">记忆本 <span id="pet-memory-badge" hidden>0</span></button>
-          <button id="btn-pet-dock" class="btn pet-dock-main" type="button">召唤小刺灵 ↗</button>
+          <button id="btn-pet-dock" class="btn pet-dock-main" type="button">召唤小词灵 ↗</button>
         </div>
       </section>
       <div id="preview-stage" class="stage">
@@ -378,6 +379,15 @@ try {
           <button class="btn ghost support-copy" type="button" data-copy="shangchaoxie888@gmail.com" data-copy-label="邮箱已复制">复制邮箱</button>
         </div>
       </article>
+      <article class="support-card">
+        <span class="support-icon support-icon-github" aria-hidden="true"><svg class="ic"><use href="#i-github"/></svg></span>
+        <h3>开源与更新</h3>
+        <p>WordPaper 在 GitHub 开源；桌面版每次出新包都会发在 Releases，点过去就能下载更新。</p>
+        <div class="support-actions">
+          <a class="btn support-primary" href="https://github.com/shangchaovo/daily-wallpaper" target="_blank" rel="noopener">GitHub 仓库 ↗</a>
+          <a class="btn ghost" href="https://github.com/shangchaovo/daily-wallpaper/releases/latest" target="_blank" rel="noopener">最新安装包 ↗</a>
+        </div>
+      </article>
     </section>
     <p class="support-note">谢谢你让 WordPaper 有机会长成更温柔、更有用的学习角落。✦</p>
   </main>
@@ -400,7 +410,7 @@ try {
 <div id="dl-modal" class="modal-overlay" hidden>
   <div class="modal-card dl-card" role="dialog" aria-modal="true" aria-labelledby="dl-title">
     <div class="modal-head">
-      <div><h2 id="dl-title"><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-monitor"/></svg></span>下载 Mac 桌面伴侣</h2><p class="hint">自动换桌面壁纸 + 小刺灵窗 + 本地词库站,免安装、自带运行环境。</p></div>
+      <div><h2 id="dl-title"><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-monitor"/></svg></span>下载 Mac 桌面伴侣</h2><p class="hint">自动换桌面壁纸 + 小词灵窗 + 本地词库站,免安装、自带运行环境。</p></div>
       <button id="btn-close-dl" class="modal-close" type="button" title="关闭" aria-label="关闭下载窗口">✕</button>
     </div>
     <div class="dl-options">
@@ -418,6 +428,7 @@ try {
       </a>
     </div>
     <p class="hint dl-chip-hint">不确定芯片?点屏幕左上角 <b></b> →「关于本机」,看「芯片」一栏。下载后双击 DMG,把 WordPaper 拖进「应用程序」即可。</p>
+    <a class="dl-github-link" href="https://github.com/shangchaovo/daily-wallpaper/releases" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-github"/></svg>在 GitHub 查看全部版本与更新说明 ↗</a>
     <details class="dl-gate">
       <summary>首次打开被 macOS 拦截?点这里看解决办法(只需一次)</summary>
       <ol>
@@ -510,7 +521,7 @@ try {
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <!-- ?v= busts browser cache — bump after any js/ change -->
-<script src="js/store.js?v=20260817a"></script>
+<script src="js/store.js?v=20260817b"></script>
 <script src="js/words.js?v=20260810j"></script>
 <script src="js/importer.js?v=20260810f"></script>
 <script src="js/ocr.js?v=20260810f"></script>
@@ -518,7 +529,7 @@ try {
 <script src="js/review.js?v=20260812a"></script>
 <script src="js/render.js?v=20260816a"></script>
 <script src="js/engine.js?v=20260816a"></script>
-<script src="js/app.js?v=20260817d"></script>
+<script src="js/app.js?v=20260817e"></script>
 <script src="js/support.js?v=20260814a"></script>
 </body>
 </html>
