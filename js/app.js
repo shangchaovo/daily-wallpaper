@@ -36,6 +36,8 @@
     { id: 'ielts', icon: 'globe', name: '雅思', desc: 'IELTS 核心词', file: 'words_ielts.json' },
     { id: 'toefl', icon: 'plane', name: '托福', desc: 'TOEFL 核心词', file: 'words_toefl.json' },
     { id: 'gre', icon: 'bulb', name: 'GRE', desc: 'GRE 核心词', file: 'words_gre.json' },
+    { id: 'french', icon: 'eiffel', name: '法语', desc: '高频核心词', file: 'words_french.json', source: 'CFDICT 中法词典 · OpenSubtitles 词频' },
+    { id: 'spanish', icon: 'fan', name: '西班牙语', desc: '高频核心词', file: 'words_spanish.json', source: 'X2CNDICT 西汉词典 · OpenSubtitles 词频' },
     { id: 'custom', icon: 'folder', name: '我的词库', desc: '自己导入的词', file: null },
   ];
 

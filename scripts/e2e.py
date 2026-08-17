@@ -88,8 +88,8 @@ def main():
             check("页面标题", "WordPaper" in page.title())
             check("换一组按钮", page.locator("#btn-refresh2").count() == 1)
 
-            # library cards (v3) — 10 built-in libraries (2 日语 + 初/高中 + 四六/研/雅/托/GRE) + 我的词库
-            check("词库卡片渲染(11张)", page.locator("#library-cards .lib-card").count() == 11)
+            # library cards (v3) — 12 built-in libraries (2 日语 + 初/高中 + 四六/研/雅/托/GRE + 法语/西语) + 我的词库
+            check("词库卡片渲染(13张)", page.locator("#library-cards .lib-card").count() == 13)
             # 词书搜索:输入关键词过滤卡片,清空恢复。
             page.fill("#library-filter", "雅思")
             page.wait_for_timeout(200)
@@ -97,7 +97,7 @@ def main():
                   and "雅思" in page.inner_text("#library-cards"))
             page.fill("#library-filter", "")
             page.wait_for_timeout(200)
-            check("清空搜索恢复全部词书", page.locator("#library-cards .lib-card").count() == 11)
+            check("清空搜索恢复全部词书", page.locator("#library-cards .lib-card").count() == 13)
             # default canvas size phone 1080x2400
             dims = page.evaluate("() => { const c=document.querySelector('#preview-canvas'); return {w:c.width,h:c.height}; }")
             check("默认手机画布 1080×2400", dims["w"] == 1080 and dims["h"] == 2400)
@@ -412,19 +412,26 @@ def main():
             check("Liquid 大面板点亮且静态高光(性能优化)", stage_motion["lit"] is True)
 
             # 跟随光与轻微视差保留在小控件上(工具条),那里面积小、代价可忽略。
-            page.eval_on_selector(".meta-actions", """e => {
-              const r = e.getBoundingClientRect();
-              e.dispatchEvent(new PointerEvent('pointerover', {bubbles:true, pointerType:'mouse'}));
-              e.dispatchEvent(new PointerEvent('pointermove', {
-                bubbles:true, pointerType:'mouse', clientX:r.left+r.width*.7, clientY:r.top+r.height*.4
-              }));
-            }""")
-            page.wait_for_timeout(180)
-            toolbar_motion = page.eval_on_selector(".meta-actions", """e => ({
-              lit: e.classList.contains('liquid-illuminated'),
-              x: e.style.getPropertyValue('--glass-x'),
-              tilt: e.style.getPropertyValue('--glass-tilt-y')
-            })""")
+            # 高光/视差变量由 rAF 合帧驱动;首屏渲染繁忙时 rAF 可能延迟数百毫秒,
+            # 所以重试几次而不是一次定生死(功能本身 lit 类是同步点亮的)。
+            toolbar_motion = {"lit": False, "x": "", "tilt": ""}
+            for _attempt in range(6):
+                page.eval_on_selector(".meta-actions", """e => {
+                  const r = e.getBoundingClientRect();
+                  e.dispatchEvent(new PointerEvent('pointerover', {bubbles:true, pointerType:'mouse'}));
+                  e.dispatchEvent(new PointerEvent('pointermove', {
+                    bubbles:true, pointerType:'mouse', clientX:r.left+r.width*.7, clientY:r.top+r.height*.4
+                  }));
+                }""")
+                page.wait_for_timeout(220)
+                toolbar_motion = page.eval_on_selector(".meta-actions", """e => ({
+                  lit: e.classList.contains('liquid-illuminated'),
+                  x: e.style.getPropertyValue('--glass-x'),
+                  tilt: e.style.getPropertyValue('--glass-tilt-y')
+                })""")
+                if toolbar_motion["x"] != "" and toolbar_motion["tilt"] not in ("", "0deg", "0.000deg"):
+                    break
+                page.wait_for_timeout(280)
             check("Liquid 小控件跟随光与轻微视差可用", toolbar_motion["lit"] is True
                   and toolbar_motion["x"] != ""
                   and toolbar_motion["tilt"] not in ("", "0deg", "0.000deg"))

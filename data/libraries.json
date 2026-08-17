@@ -68,5 +68,19 @@
     "desc": "出国读研核心",
     "emoji": "🗽",
     "count": 5000
+  },
+  {
+    "id": "french",
+    "name": "法语",
+    "desc": "高频核心词（OpenSubtitles 词频 · CFDICT 中法词典释义）",
+    "emoji": "法",
+    "count": 1155
+  },
+  {
+    "id": "spanish",
+    "name": "西班牙语",
+    "desc": "高频核心词（OpenSubtitles 词频 · X2CNDICT 西汉词典释义）",
+    "emoji": "西",
+    "count": 1400
   }
 ]
