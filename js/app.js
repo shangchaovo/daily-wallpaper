@@ -26,17 +26,17 @@
   };
 
   const LIBRARIES = [
-    { id: 'jlpt_n5', icon: 'あ', name: '日语 JLPT N5', desc: '入门核心词', file: 'words_jlpt_n5.json', source: 'JLPT N5 分级 · 开放词表整理' },
-    { id: 'jlpt_n4', icon: '日', name: '日语 JLPT N4', desc: '初级进阶词', file: 'words_jlpt_n4.json', source: 'JLPT N4 分级 · 开放词表整理' },
-    { id: 'chuzhong', icon: '初', name: '初中', desc: '中考核心词', file: 'words_chuzhong.json', source: 'ECDICT 中考核心' },
-    { id: 'gaozhong', icon: '高', name: '高中', desc: '高考核心词', file: 'words_gaozhong.json', source: 'ECDICT 高考核心' },
-    { id: 'cet4', icon: '四', name: '四级', desc: 'CET4 核心词', file: 'words_cet4.json' },
-    { id: 'cet6', icon: '六', name: '六级', desc: 'CET6 核心词', file: 'words_cet6.json' },
-    { id: 'kaoyan', icon: '研', name: '考研', desc: '考研核心词', file: 'words_kaoyan.json' },
-    { id: 'ielts', icon: '雅', name: '雅思', desc: 'IELTS 核心词', file: 'words_ielts.json' },
-    { id: 'toefl', icon: '托', name: '托福', desc: 'TOEFL 核心词', file: 'words_toefl.json' },
-    { id: 'gre', icon: 'G', name: 'GRE', desc: 'GRE 核心词', file: 'words_gre.json' },
-    { id: 'custom', icon: '自', name: '我的词库', desc: '自己导入的词', file: null },
+    { id: 'jlpt_n5', icon: 'torii', name: '日语 JLPT N5', desc: '入门核心词', file: 'words_jlpt_n5.json', source: 'JLPT N5 分级 · 开放词表整理' },
+    { id: 'jlpt_n4', icon: 'sakura', name: '日语 JLPT N4', desc: '初级进阶词', file: 'words_jlpt_n4.json', source: 'JLPT N4 分级 · 开放词表整理' },
+    { id: 'chuzhong', icon: 'backpack', name: '初中', desc: '中考核心词', file: 'words_chuzhong.json', source: 'ECDICT 中考核心' },
+    { id: 'gaozhong', icon: 'cap', name: '高中', desc: '高考核心词', file: 'words_gaozhong.json', source: 'ECDICT 高考核心' },
+    { id: 'cet4', icon: 'doc', name: '四级', desc: 'CET4 核心词', file: 'words_cet4.json' },
+    { id: 'cet6', icon: 'medal', name: '六级', desc: 'CET6 核心词', file: 'words_cet6.json' },
+    { id: 'kaoyan', icon: 'flag', name: '考研', desc: '考研核心词', file: 'words_kaoyan.json' },
+    { id: 'ielts', icon: 'globe', name: '雅思', desc: 'IELTS 核心词', file: 'words_ielts.json' },
+    { id: 'toefl', icon: 'plane', name: '托福', desc: 'TOEFL 核心词', file: 'words_toefl.json' },
+    { id: 'gre', icon: 'bulb', name: 'GRE', desc: 'GRE 核心词', file: 'words_gre.json' },
+    { id: 'custom', icon: 'folder', name: '我的词库', desc: '自己导入的词', file: null },
   ];
 
   const BG_PATTERNS = [
@@ -66,7 +66,6 @@
   let activeLibraryBrowser = null;
   let activeLibraryWords = [];
   let moduleEditing = false;
-  let draggedModule = null;
   let liquidTransitionTimer = null;
   const MODULE_DEFAULTS = {
     left: ['module-library', 'module-reminders', 'module-srs', 'module-automation'],
@@ -155,7 +154,7 @@
       window.Store.setUITheme(next);
       saveSettings();
       refresh(false);
-      // 界面主题同时驱动桌面小词灵；伴侣未运行时保持静默降级。
+      // 界面主题同时驱动桌面小刺灵；伴侣未运行时保持静默降级。
       syncCompanionLearningContext();
     }
     document.dispatchEvent(new CustomEvent('wordpaper:ui-theme-change', { detail: { theme: next } }));
@@ -613,18 +612,18 @@
         toast('换词特效：' + petFx.options[petFx.selectedIndex].text);
       });
     }
-    // 壁纸/预览同步总闸:默认开。关掉后壁纸/预览回退各自独立随机,不再跟随小词灵。
+    // 壁纸/预览同步总闸:默认开。关掉后壁纸/预览回退各自独立随机,不再跟随小刺灵。
     const petSyncToggle = $('#chk-pet-sync');
     if (petSyncToggle) {
       petSyncToggle.checked = settings.petWallpaperSync !== false;
       petSyncToggle.addEventListener('change', () => {
         settings.petWallpaperSync = petSyncToggle.checked;
         saveSettings();
-        if (!petSyncToggle.checked) petSyncedSel = null;   // 关掉立即脱离小词灵词
+        if (!petSyncToggle.checked) petSyncedSel = null;   // 关掉立即脱离小刺灵词
         syncCompanionLearningContext();   // 推给 companion（决定壁纸词源）
         if (petSyncToggle.checked) syncPetCurrent();      // 打开立即对齐一次
         else refresh(false);                              // 关闭后按本地逻辑重绘
-        toast(petSyncToggle.checked ? '已开启：壁纸/预览跟随小词灵' : '已关闭：壁纸/预览独立随机');
+        toast(petSyncToggle.checked ? '已开启：壁纸/预览跟随小刺灵' : '已关闭：壁纸/预览独立随机');
       });
     }
     const companionTop = $('#btn-companion-top');
@@ -682,6 +681,60 @@
     });
     window.Store.write('moduleLayout', layout);
   }
+
+  /* ---------- 隐藏 / 恢复模块 ----------
+   * 有些功能不是每个用户都需要,全堆在侧栏太乱。整理模式下每张卡右上角有「✕」可隐藏,
+   * 被隐藏的模块收进左栏顶部的恢复托盘,点「+」即可加回来。隐藏只是不显示,不影响其设置。 */
+  function moduleTitle(card) {
+    if (!card) return '';
+    const head = card.querySelector('h2, summary');
+    if (!head) return card.id.replace(/^module-/, '');
+    const clone = head.cloneNode(true);
+    clone.querySelectorAll('.h-emoji, .module-grip, .module-hide-btn, button, select, input').forEach(n => n.remove());
+    return (clone.textContent || '').replace(/\s+/g, ' ').trim() || card.id.replace(/^module-/, '');
+  }
+  function readHiddenModules() {
+    const v = window.Store.read('hiddenModules', []);
+    return Array.isArray(v) ? v.filter(id => document.getElementById(id)) : [];
+  }
+  function refreshModuleTray() {
+    const tray = $('#module-tray'), list = $('#module-tray-list');
+    if (!tray || !list) return;
+    const hidden = readHiddenModules();
+    list.innerHTML = '';
+    hidden.forEach(id => {
+      const card = document.getElementById(id); if (!card) return;
+      const chip = document.createElement('span');
+      chip.className = 'module-tray-item';
+      const label = document.createElement('span'); label.textContent = moduleTitle(card);
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'restore'; btn.textContent = '+';
+      btn.title = `恢复「${moduleTitle(card)}」`; btn.setAttribute('aria-label', `恢复 ${moduleTitle(card)}`);
+      btn.addEventListener('click', () => restoreModule(id));
+      chip.appendChild(label); chip.appendChild(btn);
+      list.appendChild(chip);
+    });
+    tray.hidden = !(moduleEditing && hidden.length);   // 只在整理模式且有隐藏模块时显示
+  }
+  function applyHiddenModules() {
+    const hidden = new Set(readHiddenModules());
+    $$('.module-card').forEach(card => card.classList.toggle('module-hidden', hidden.has(card.id)));
+    refreshModuleTray();
+  }
+  function hideModule(id) {
+    const card = document.getElementById(id); if (!card) return;
+    const hidden = readHiddenModules();
+    if (!hidden.includes(id)) hidden.push(id);
+    window.Store.write('hiddenModules', hidden);
+    applyHiddenModules();
+    toast(`已隐藏「${moduleTitle(card)}」,整理模式下点左上角托盘的 + 可恢复`);
+  }
+  function restoreModule(id) {
+    window.Store.write('hiddenModules', readHiddenModules().filter(x => x !== id));
+    applyHiddenModules();
+    const card = document.getElementById(id);
+    if (card) toast(`已恢复「${moduleTitle(card)}」`);
+  }
   function toggleModuleEditing(force) {
     moduleEditing = force == null ? !moduleEditing : !!force;
     document.body.classList.toggle('layout-editing', moduleEditing);
@@ -689,27 +742,105 @@
     if (edit) edit.textContent = moduleEditing ? '✓ 完成摆放' : '↕️ 整理模块';
     if (reset) reset.hidden = !moduleEditing;
     if (!moduleEditing) saveModuleLayout();
-  }
-  function setModuleDropTarget(container, clientY) {
-    if (!draggedModule || !container) return;
-    const cards = Array.from(container.querySelectorAll(':scope > .module-card')).filter(card => card !== draggedModule);
-    const before = cards.find(card => clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2);
-    if (before) container.insertBefore(draggedModule, before); else container.appendChild(draggedModule);
+    refreshModuleTray();   // 托盘只在整理模式显示
   }
   function moduleColumnAt(clientX, clientY) {
     return document.elementsFromPoint(clientX, clientY)
       .map(node => node.closest && node.closest('.panel-col'))
       .find(Boolean) || null;
   }
-  function finishModuleDrag() {
-    if (!draggedModule) return;
-    draggedModule.classList.remove('layout-dragging');
-    draggedModule = null;
-    $$('.panel-col').forEach(col => col.classList.remove('layout-drop-target'));
+  /* ---------- 平滑拖拽整理模块 ----------
+   * 旧实现把被拖的卡每次 mousemove 都真实插回 DOM,还对每张卡 getBoundingClientRect ——
+   * 整列不停 reflow,卡片也只是 teleport 不跟手,所以很卡。改成「浮动拖拽」:
+   * 被拖卡片 position:fixed 跟指针走(transform 合成,不触发 reflow);原位置留虚线占位块;
+   * 其它卡用 FLIP 平滑让位;坐标每帧 rAF 只算一次。 */
+  let moduleDrag = null;   // {card, ph, grabDX, grabDY, origL, origT, x, y, raf, isTouch}
+  function visibleColumnCards(col) {
+    return Array.from(col.querySelectorAll(':scope > .module-card'))
+      .filter(c => c !== (moduleDrag && moduleDrag.card) && !c.classList.contains('module-hidden'));
+  }
+  function stepModuleFloatDrag() {
+    moduleDrag.raf = 0;
+    const d = moduleDrag; if (!d) return;
+    d.card.style.transform = `translate(${d.x - d.grabDX - d.origL}px, ${d.y - d.grabDY - d.origT}px)`;
+    const col = moduleColumnAt(d.x, d.y);
+    $$('.panel-col').forEach(c => c.classList.toggle('layout-drop-target', c === col));
+    if (!col) return;
+    let before = null;
+    for (const c of visibleColumnCards(col)) {
+      const r = c.getBoundingClientRect();
+      if (d.y < r.top + r.height / 2) { before = c; break; }
+    }
+    const already = (before && d.ph.nextSibling === before) || (!before && d.ph.parentNode === col && !d.ph.nextSibling);
+    if (d.ph.parentNode === col && already) return;   // 占位块已在目标位,不动,避免多余 reflow
+    flipMovePlaceholder(col, before);
+  }
+  function flipMovePlaceholder(col, before) {
+    const d = moduleDrag; if (!d) return;
+    const movers = $$('.panel-col .module-card').filter(c => c !== d.card && !c.classList.contains('module-hidden'));
+    const first = new Map(movers.map(c => [c, c.getBoundingClientRect().top]));
+    if (before) col.insertBefore(d.ph, before); else col.appendChild(d.ph);
+    movers.forEach(c => {
+      const dy = first.get(c) - c.getBoundingClientRect().top;
+      if (!dy) return;
+      c.style.transition = 'none';
+      c.style.transform = `translateY(${dy}px)`;
+      requestAnimationFrame(() => { c.style.transition = 'transform .18s cubic-bezier(.2,.75,.25,1)'; c.style.transform = ''; });
+    });
+  }
+  function dropModuleFloatDrag() {
+    const d = moduleDrag; if (!d) return;
+    if (d.ph.parentNode) d.ph.parentNode.insertBefore(d.card, d.ph);
+    d.ph.remove();
+    d.card.classList.remove('module-drag-float');
+    d.card.style.width = ''; d.card.style.left = ''; d.card.style.top = ''; d.card.style.transform = '';
+    $$('.panel-col').forEach(c => c.classList.remove('layout-drop-target'));
+    $$('.panel-col .module-card').forEach(c => { c.style.transition = ''; c.style.transform = ''; });
+    moduleDrag = null;
     saveModuleLayout();
+  }
+  function startModuleFloatDrag(card, event, isTouch) {
+    const pt = isTouch ? event.touches[0] : event;
+    const rect = card.getBoundingClientRect();
+    const ph = document.createElement('div');
+    ph.className = 'module-placeholder';
+    ph.style.height = rect.height + 'px';
+    card.parentNode.insertBefore(ph, card);
+    card.classList.add('module-drag-float');
+    card.style.width = rect.width + 'px';
+    card.style.left = rect.left + 'px';
+    card.style.top = rect.top + 'px';
+    moduleDrag = { card, ph, grabDX: pt.clientX - rect.left, grabDY: pt.clientY - rect.top, origL: rect.left, origT: rect.top, x: pt.clientX, y: pt.clientY, raf: 0, isTouch };
+    card.style.transform = 'translate(0px, 0px)';
+    const move = e => {
+      const p = isTouch ? e.touches[0] : e;
+      if (!p) return;
+      if (isTouch) e.preventDefault();
+      moduleDrag.x = p.clientX; moduleDrag.y = p.clientY;
+      if (!moduleDrag.raf) moduleDrag.raf = requestAnimationFrame(stepModuleFloatDrag);
+    };
+    const end = () => {
+      document.removeEventListener(isTouch ? 'touchmove' : 'mousemove', move);
+      if (moduleDrag && moduleDrag.raf) { cancelAnimationFrame(moduleDrag.raf); moduleDrag.raf = 0; }
+      dropModuleFloatDrag();
+    };
+    document.addEventListener(isTouch ? 'touchmove' : 'mousemove', move, { passive: false });
+    document.addEventListener(isTouch ? 'touchend' : 'mouseup', end, { once: true });
+    if (isTouch) document.addEventListener('touchcancel', end, { once: true });
   }
   function initModuleLayout() {
     applyModuleLayout(window.Store.read('moduleLayout', null));
+    // 每张模块卡右上角注入「✕ 隐藏」按钮(仅整理模式显示)。details 卡放进 summary,
+    // 否则收起时按钮会被一并隐藏;与抓手同级、相对卡片定位。
+    $$('.module-card').forEach(card => {
+      const hide = document.createElement('button');
+      hide.type = 'button'; hide.className = 'module-hide-btn'; hide.textContent = '✕';
+      hide.title = '隐藏此模块(整理模式下可从顶部托盘恢复)'; hide.setAttribute('aria-label', `隐藏 ${moduleTitle(card)}`);
+      hide.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); hideModule(card.id); });
+      const summary = card.tagName === 'DETAILS' ? card.querySelector('summary') : null;
+      if (summary) summary.appendChild(hide); else card.appendChild(hide);
+    });
+    applyHiddenModules();   // 还原上次隐藏的模块
     const movable = new Set(MODULE_DEFAULTS.left.concat(MODULE_DEFAULTS.right));
     $$('.module-card').filter(card => movable.has(card.id)).forEach(card => {
       const grip = document.createElement('button');
@@ -717,22 +848,7 @@
       const beginDrag = (event, isTouch) => {
         if (!moduleEditing || (!isTouch && event.button !== 0)) return;
         event.preventDefault(); event.stopPropagation();
-        draggedModule = card; card.classList.add('layout-dragging');
-        const move = moveEvent => {
-          const point = isTouch ? moveEvent.touches[0] : moveEvent;
-          if (!point) return;
-          const column = moduleColumnAt(point.clientX, point.clientY);
-          if (!column) return;
-          $$('.panel-col').forEach(col => col.classList.toggle('layout-drop-target', col === column));
-          setModuleDropTarget(column, point.clientY);
-        };
-        const end = () => {
-          document.removeEventListener(isTouch ? 'touchmove' : 'mousemove', move);
-          finishModuleDrag();
-        };
-        document.addEventListener(isTouch ? 'touchmove' : 'mousemove', move, { passive: false });
-        document.addEventListener(isTouch ? 'touchend' : 'mouseup', end, { once: true });
-        if (isTouch) document.addEventListener('touchcancel', end, { once: true });
+        startModuleFloatDrag(card, event, isTouch);
       };
       // 使用 document 级 mousemove，避免浏览器在离开小把手后丢失拖动事件；触控也可用。
       grip.addEventListener('mousedown', event => beginDrag(event, false));
@@ -788,7 +904,7 @@
       card.className = 'lib-card' + (lib.id === settings.library ? ' on' : '');
       const count = lib.id === 'custom' ? window.Store.getCustomWords().length : (libCounts[lib.id] || '…');
       const countTxt = (typeof count === 'number') ? count.toLocaleString() : count;
-      card.innerHTML = `<span class="lib-icon">${lib.icon}</span>
+      card.innerHTML = `<span class="lib-icon"><svg class="ic" aria-hidden="true"><use href="#i-${lib.icon}"/></svg></span>
         <span class="lib-body"><b>${lib.name}</b><i>${lib.desc}</i></span>
         <span class="lib-count">${countTxt}词</span>`;
       card.addEventListener('click', () => {
@@ -1186,7 +1302,7 @@
       const fy = (e.clientY - rect0.top) / rect0.height;
       const wordIndex = hitTestWord(fx, fy);
       if (wordIndex != null && !e.shiftKey) {
-        // 壁纸预览只负责选中并调整整组样式；“记住”只在桌面小词灵词卡发生。
+        // 壁纸预览只负责选中并调整整组样式；“记住”只在桌面小刺灵词卡发生。
         selectWord(wordIndex);
         e.preventDefault();
         return;
@@ -1255,6 +1371,7 @@
       disp.classList.remove('grabbing');
       refresh(false);
       saveSettings();
+      syncCompanionLearningContext();   // 布局变了,推给伴侣,壁纸重渲时保持这个位置
       toast(finishedKind === 'background' ? '背景取景已调整' : '位置已调整，点「复位布局」可还原');
     };
     disp.addEventListener('pointerup', end);
@@ -1383,13 +1500,13 @@
   async function refresh(manual, page) {
     let sel;
     if (manual && petSyncActive() && companionReachable()) {
-      // 「换一组」= 推动小词灵翻页（闭环：小词灵翻页→epoch 变→轮询拉回新词→预览+壁纸同步）。
+      // 「换一组」= 推动小刺灵翻页（闭环：小刺灵翻页→epoch 变→轮询拉回新词→预览+壁纸同步）。
       // 立即翻页并同步拉取当前页词本地渲染，不等 15s 轮询。
       const advanced = await drivePetNextPage();
       if (advanced) sel = petSelectionFromSync(advanced);
       if (!sel) sel = await window.Engine.reshuffle(settings); // 翻页失败兜底
     } else if (!manual && petSyncActive() && petSyncedSel && petSyncedSel.library === settings.library) {
-      sel = petSyncedSel;   // 同步开启且已拉到小词灵当前页：预览以小词灵为准
+      sel = petSyncedSel;   // 同步开启且已拉到小刺灵当前页：预览以小刺灵为准
     } else {
       sel = manual ? await window.Engine.reshuffle(settings) : await window.Engine.current(settings);
     }
@@ -1402,21 +1519,21 @@
     updateSrsUI();
   }
 
-  /* 小词灵同步状态：petSyncedSel 缓存最近一次拉到的小词灵当前页选择。 */
+  /* 小刺灵同步状态：petSyncedSel 缓存最近一次拉到的小刺灵当前页选择。 */
   let petSyncedSel = null;   // {dateStr, words, library, rotated:false}
   let companionUp = false;   // status.json 探测结果（syncCompanionButton 维护）
 
   function petSyncActive() { return !!(settings && settings.petWallpaperSync !== false); }
   function companionReachable() { return companionUp; }
 
-  // 用同步来的小词灵词构造一个 selection（与 Engine.current 返回结构一致）。
+  // 用同步来的小刺灵词构造一个 selection（与 Engine.current 返回结构一致）。
   function petSelectionFromSync(words) {
     if (!Array.isArray(words) || !words.length) return null;
     const today = window.Words.dateKey(new Date());
     return { dateStr: today, words, library: settings.library, rotated: false };
   }
 
-  // 让「换一组」推动小词灵翻到下一页；成功返回新页词数组，失败返回 null。
+  // 让「换一组」推动小刺灵翻到下一页；成功返回新页词数组，失败返回 null。
   async function drivePetNextPage() {
     if (!petCurrentSupported) return null;   // 旧伴侣无当前页端点，直接走本地兜底
     try {
@@ -1424,7 +1541,7 @@
       if (!r.ok) return null;
       const j = await r.json();
       if (!j || j.ok === false) return null;
-      // 翻页后小词灵当前页词经 /pet-current.json 取回（keys 是命中 key 非词对象）。
+      // 翻页后小刺灵当前页词经 /pet-current.json 取回（keys 是命中 key 非词对象）。
       const cur = await fetch('pet-current.json', { cache: 'no-store' });
       if (cur.status === 404) { petCurrentSupported = false; return null; }
       if (!cur.ok) return null;
@@ -1543,7 +1660,7 @@
     box.innerHTML = '';
     if (!enabled) return;
     const records = window.Review.recentWords(settings.library, 4);
-    if (!records.length) { box.innerHTML = '<div class="srs-record empty">在桌面小词灵点词卡完成首轮后，单词会进入这里的复习周期。</div>'; return; }
+    if (!records.length) { box.innerHTML = '<div class="srs-record empty">在桌面小刺灵点词卡完成首轮后，单词会进入这里的复习周期。</div>'; return; }
     records.forEach(item => {
       const row = document.createElement('div'); row.className = 'srs-record';
       const word = document.createElement('b'); word.textContent = item.word.word;
@@ -1590,7 +1707,7 @@
       `<span class="memory-pill memory-pill-forgot">遗忘 <b>${st.failures}</b> 次</span>`;
     list.innerHTML = '';
     if (!active.length && !mastered.length) {
-      list.innerHTML = '<div class="memory-empty">还没有记忆记录。先在桌面小词灵点击词卡完成首轮学习，再回到这里复习。</div>';
+      list.innerHTML = '<div class="memory-empty">还没有记忆记录。先在桌面小刺灵点击词卡完成首轮学习，再回到这里复习。</div>';
       return;
     }
 
@@ -1685,7 +1802,7 @@
       if (newlyDue > 0) refresh(false);
     }, 30000);
     setInterval(syncPetMemoryEvents, 15000);
-    setInterval(syncPetCurrent, 5000);   // 小词灵词代际轮询：点词/翻页后 ≤5s 预览对齐
+    setInterval(syncPetCurrent, 5000);   // 小刺灵词代际轮询：点词/翻页后 ≤5s 预览对齐
   }
 
   async function syncPetMemoryEvents() {
@@ -1704,20 +1821,20 @@
       window.Store.write('petMemoryCursor', { streamId: String(data.streamId || ''), lastId: Number(data.lastId) || 0 });
       if (events.length || snapshot.length) {
         updateSrsUI(); if ($('#memory-modal') && !$('#memory-modal').hidden) renderMemoryNotebook();
-        toast(data.reset ? `已从小词灵恢复 ${snapshot.length} 个首轮记录` : `小词灵已记录 ${events.length} 个首轮词并自动补位`);
+        toast(data.reset ? `已从小刺灵恢复 ${snapshot.length} 个首轮记录` : `小刺灵已记录 ${events.length} 个首轮词并自动补位`);
       }
     } catch (e) { /* 独立网页或伴侣未运行时静默跳过 */ }
     finally { petMemorySyncing = false; }
   }
 
-  /* 记录小词灵同步游标（epoch+library），供轮询比对「小词灵词是否变了」。 */
+  /* 记录小刺灵同步游标（epoch+library），供轮询比对「小刺灵词是否变了」。 */
   function recordPetSyncCursor(data) {
     if (!data) return;
     window.Store.write('petSyncCursor', { epoch: Number(data.wordEpoch) || 0, library: String(data.library || '') });
   }
 
-  /* 轮询小词灵「当前页词 + 代际」。点词/翻页都会 bump epoch；发现 epoch 变化且词库
-   * 匹配就把预览对齐成小词灵同批词（freeze 持久化 + 立即重绘），实现「小词灵为准」。 */
+  /* 轮询小刺灵「当前页词 + 代际」。点词/翻页都会 bump epoch；发现 epoch 变化且词库
+   * 匹配就把预览对齐成小刺灵同批词（freeze 持久化 + 立即重绘），实现「小刺灵为准」。 */
   let petCurrentSyncing = false;
   let petCurrentSupported = true;   // 旧版伴侣没有 /pet-current.json：404 一次后停轮询，避免刷 console
   async function syncPetCurrent() {
@@ -1757,6 +1874,11 @@
             uiTheme: settings.uiTheme,
             wallpaperTheme: settings.theme,
             bgPattern: settings.bgPattern,
+            // 版面位置(锚点+分数偏移):小刺灵翻页/点词重渲壁纸时保持网页里拖好的布局。
+            anchorWords: settings.anchorWords,
+            anchorReminders: settings.anchorReminders,
+            offWords: settings.offWords,
+            offReminders: settings.offReminders,
             petTransition: window.Store.read('petTransition', 'dissolve-pop'),
             petWallpaperSync: settings.petWallpaperSync !== false,
             webOrigin: window.location.origin,
@@ -1801,7 +1923,7 @@
     const capability = await probeWallpaperCapability();
     if (capability !== 'companion') {
       if (capability === 'local-no-companion') {
-        toast('桌面伴侣没在运行:点中央「小词灵」启动它,或用「下载 PNG」手动设置');
+        toast('桌面伴侣没在运行:点中央「小刺灵」启动它,或用「下载 PNG」手动设置');
       } else {
         toast('网页改不了系统桌面:点「下载 PNG」保存后手动设置;Mac 装桌面伴侣可自动换');
       }
@@ -1853,7 +1975,7 @@
     const dock = $('#pet-dock');
     const dockBtn = $('#btn-pet-dock');
     const dockStatus = $('#pet-dock-status');
-    // 小词灵是工作台能力，不因公网模式或账号归属冲突而从界面消失。
+    // 小刺灵是工作台能力，不因公网模式或账号归属冲突而从界面消失。
     if (dock) {
       dock.hidden = false;
       dock.dataset.state = state;
@@ -1901,7 +2023,7 @@
 
   async function syncCompanionButton() {
     const btn = $('#btn-companion');
-    setPetDockState('checking', '正在检查这台 Mac 上的小词灵…', '检查中…', true);
+    setPetDockState('checking', '正在检查这台 Mac 上的小刺灵…', '检查中…', true);
     try {
       const response = await fetch('status.json');
       if (!response.ok) throw new Error('status unavailable');
@@ -1919,15 +2041,15 @@
         setPetDockState(
           'unavailable',
           isPublic
-            ? '网页端已保留小词灵入口；下载 Mac 独立版后即可常驻桌面'
-            : '本机小词灵已绑定另一个账号；切换到绑定账号即可安全召唤',
+            ? '网页端已保留小刺灵入口；下载 Mac 独立版后即可常驻桌面'
+            : '本机小刺灵已绑定另一个账号；切换到绑定账号即可安全召唤',
           isPublic ? '下载 Mac 版 ↓' : '切换账号 →',
           false
         );
         const hint = $('#pet-hint');
         if (hint) hint.textContent = isPublic
           ? '公网服务只同步账号数据；桌面伴侣需安装在自己的 Mac 上。'
-          : '为保护不同账号的学习记录，当前账号不能直接控制已绑定的小词灵。';
+          : '为保护不同账号的学习记录，当前账号不能直接控制已绑定的小刺灵。';
         return;
       }
       // 伴侣页（8771）给 config；主 server（8770）探测到伴侣后给 companion:true
@@ -1941,13 +2063,13 @@
         syncPetControls(j);
         // 伴侣在线即把当前特效同步过去:特效值变了 companion 会重建小窗,无需手动刷新。
         syncCompanionLearningContext();
-        // 立即拉一次小词灵当前页词，让预览/壁纸尽快对齐（不等首个 5s tick）。
+        // 立即拉一次小刺灵当前页词，让预览/壁纸尽快对齐（不等首个 5s tick）。
         syncPetCurrent();
       } else {
         petOn = false;
         petSyncedSel = null;
         if (btn) { btn.textContent = '一键启用桌面伴侣'; btn.disabled = false; }
-        setPetDockState('ready', '已整合到工作台，点一下把今日单词带到 Mac 桌面', '启动小词灵 ↗', false);
+        setPetDockState('ready', '已整合到工作台，点一下把今日单词带到 Mac 桌面', '启动小刺灵 ↗', false);
       }
     } catch (_) {
       // 静态托管(无后端)时 status.json 拿到的是 SPA 兜底的 HTML,json() 抛错进这里。
@@ -1957,7 +2079,7 @@
       petSyncedSel = null;
       companionAction = 'download';
       if (btn) { btn.textContent = '下载 Mac 桌面伴侣'; btn.disabled = false; }
-      setPetDockState('unavailable', '这里是网页演示版;下载 Mac 桌面伴侣后,壁纸自动换、小词灵常驻桌面', '下载 Mac 版 ↓', false);
+      setPetDockState('unavailable', '这里是网页演示版;下载 Mac 桌面伴侣后,壁纸自动换、小刺灵常驻桌面', '下载 Mac 版 ↓', false);
     }
   }
 
@@ -1972,8 +2094,8 @@
     if (btn) btn.textContent = petOn ? '隐藏宠物' : '召唤宠物';
     setPetDockState(
       petOn ? 'active' : 'ready',
-      petOn ? '小词灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小词灵出现',
-      petOn ? '隐藏小词灵' : '召唤小词灵 ↗',
+      petOn ? '小刺灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小刺灵出现',
+      petOn ? '隐藏小刺灵' : '召唤小刺灵 ↗',
       false
     );
     const hint = $('#pet-hint');
@@ -1993,11 +2115,11 @@
       if (btn) btn.textContent = petOn ? '隐藏宠物' : '召唤宠物';
       setPetDockState(
         petOn ? 'active' : 'ready',
-        petOn ? '小词灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小词灵出现',
-        petOn ? '隐藏小词灵' : '召唤小词灵 ↗',
+        petOn ? '小刺灵正在桌面陪你背词，点这里可以收起它' : '桌面伴侣已经开启，点这里让小刺灵出现',
+        petOn ? '隐藏小刺灵' : '召唤小刺灵 ↗',
         false
       );
-      toast(petOn ? '小词灵已召唤 ✓（点击单词即可记住）' : '小词灵已隐藏');
+      toast(petOn ? '小刺灵已召唤 ✓（点击单词即可记住）' : '小刺灵已隐藏');
     } catch (e) {
       toast('操作失败：' + e.message);
       await syncCompanionButton();

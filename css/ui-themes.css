@@ -118,12 +118,6 @@
   background: linear-gradient(135deg, #fff4fa, #edf8ff);
   box-shadow: 0 3px 0 rgba(154,117,232,.18);
 }
-:root[data-ui-theme="anime"] .h-emoji[data-anime-icon] { font-size: 0; filter: none; }
-:root[data-ui-theme="anime"] .h-emoji[data-anime-icon]::before {
-  content: attr(data-anime-icon);
-  font-size: 18px;
-  line-height: 1;
-}
 :root[data-ui-theme="anime"] .btn.primary { color: var(--accent-ink); text-shadow: none; }
 :root[data-ui-theme="anime"] .pet-memory-shortcut span { background: #8c6ad2; }
 :root[data-ui-theme="anime"] .memory-card { width: min(680px, calc(100vw - 28px)); max-width: 680px; }
@@ -422,6 +416,28 @@
   animation: liquid-content-in .34s cubic-bezier(.2,.75,.25,1) backwards;
 }
 :root[data-ui-theme="liquid"] .panel-col > .card:last-child { border-bottom-color: transparent; }
+/* 隐藏模块按钮 + 恢复托盘:中性白玻璃,贴合 liquid 去蓝的苹果质感 */
+:root[data-ui-theme="liquid"] .module-hide-btn {
+  top: 7px; right: 8px; width: 27px; height: 27px;
+  color: var(--ink); background: var(--glass-thick); border: 1px solid var(--line-strong);
+  border-radius: 8px; box-shadow: var(--glass-shadow); backdrop-filter: blur(8px) saturate(1.1); -webkit-backdrop-filter: blur(8px) saturate(1.1);
+}
+:root[data-ui-theme="liquid"] .module-hide-btn:hover { background: rgba(255,255,255,.9); }
+:root[data-ui-theme="liquid"] .layout-editing .module-grip { right: 41px; }
+:root[data-ui-theme="liquid"] .module-tray {
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--glass-regular); box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+}
+:root[data-ui-theme="liquid"] .module-tray-item { border: 1px solid var(--line-strong); background: rgba(255,255,255,.72); border-radius: 999px; }
+:root[data-ui-theme="liquid"] .module-tray-item .restore { background: var(--indigo); border-radius: 999px; }
+/* 平滑拖拽:浮动卡要不透明玻璃底(liquid 卡片本是透明的,浮起时需可读),占位块虚线 */
+:root[data-ui-theme="liquid"] .module-card.module-drag-float {
+  background: var(--glass-thick); border: 1px solid var(--line); border-radius: 13px;
+  box-shadow: var(--glass-shadow), 0 24px 50px rgba(0,0,0,.16);
+  backdrop-filter: blur(16px) saturate(1.15); -webkit-backdrop-filter: blur(16px) saturate(1.15);
+}
+:root[data-ui-theme="liquid"] .module-placeholder { border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); background: rgba(255,255,255,.42); }
 :root[data-ui-theme="liquid"] .panel-col > .card:hover {
   transform: none;
   border-color: rgba(62,62,62,.09);

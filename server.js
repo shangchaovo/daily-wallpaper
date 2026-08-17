@@ -146,6 +146,29 @@ function isLoopbackRequest(req) {
   return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
 }
 
+/* 本机网卡地址集合(每次现算,网卡/DHCP 变化也能跟上;只用于伴侣这种低频判断)。 */
+function ownInterfaceAddresses() {
+  const set = new Set();
+  try {
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const ni of list || []) if (ni && ni.address) set.add(ni.address);
+    }
+  } catch {}
+  return set;
+}
+
+/* 「这台机器自己」的请求:回环,或源地址是本机任意网卡 IP(同一台 Mac 用自己的
+   局域网 IP / mDNS 主机名访问时,源地址就是本机网卡地址)。真正的远端机器(卫星机)
+   源地址不在本机网卡列表里,仍被挡在门外——伴侣驱动的是这台机器的桌面,不该被远程控制。
+   TCP 三次握手决定了远端无法伪造本机源地址完成连接,所以这个判断是安全的。 */
+function isSameMachineRequest(req) {
+  const raw = req.socket && req.socket.remoteAddress;
+  if (!raw) return false;
+  if (raw === '127.0.0.1' || raw === '::1' || raw === '::ffff:127.0.0.1') return true;
+  const addr = raw.startsWith('::ffff:') ? raw.slice(7) : raw;
+  return ownInterfaceAddresses().has(addr);
+}
+
 function securityHeaders(res) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -689,7 +712,7 @@ function probeCompanion() {
 }
 
 function companionAllowed(req, session, claimOwner) {
-  if (!COMPANION_ENABLED || !isLoopbackRequest(req)) return false;
+  if (!COMPANION_ENABLED || !isSameMachineRequest(req)) return false;
   return claimOwner
     ? storage.claimCompanionOwner(session.user.id)
     : storage.companionAvailableForUser(session.user.id);

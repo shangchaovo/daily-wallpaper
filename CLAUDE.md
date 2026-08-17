@@ -48,6 +48,10 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 
 **桌面伴侣 `companion.js`**（Node，零依赖）：起一个静态服务器（同网站）+ macOS 上 (a) 用 `buildSVG` 生成 SVG、`sips` 转 PNG、`osascript` 设为桌面壁纸（`pushWallpaper`，定时），(b) 做一个**无边框置顶小窗**（`startPet`，显示今日单词+提醒），(c) `/ocr` 端点走 Apple Vision OCR 供网页「截图导入」。它的 `buildSVG` 独立复刻 group 版面（已移除日期/时钟；大字海报版式已于 2026-08-16 删除）。配置 `companion-config.json` 首跑自动生成。
 
+**版面位置同步**（2026-08-17 修复「翻页/点词后布局回默认」）：`buildSVG` 现在镜像 `render.js` 的 `anchorY`/`blockTopFor`，按 `anchorWords/offWords/anchorReminders/offReminders` 摆单词块与提醒块，不再写死。这四个字段由网页 `syncCompanionLearningContext()` 经 `/pet-sync.php` 推进 `CFG`（锚点校验 top/center/bottom、偏移 clamp 后存），布局变化触发 `pushWallpaper`；网页拖拽结束也会补一次同步。没同步前 `buildSettings()` 用 `loadConfig` 的默认（center/bottom + 零偏移）。
+
+**伴侣重启的 TCC 坑**：`osascript → System Events` 设壁纸的「自动化」权限是授给**派生伴侣的那个进程**的。所以重启伴侣必须走 server 的 `/companion/start`（server 是用户已授权的 launchd 上下文）；**千万别从临时 shell `node companion.js` 直接起**——那样责任进程变成终端/claude，没授权会弹 TCC 同意框并把 System Events 的 AppleEvent 队列堵死（报 `-1712` 超时），壁纸设不动。已在 `/companion/start` 验证可正常 `desktop wallpaper updated`。
+
 **小窗为什么不用 WKWebView**：实测 WKWebView 会吞掉鼠标事件，`movableByWindowBackground` / 盖透明把手都拖不动窗口（也踩过本机 JXA `ObjC.registerSubclass` 的 protocol 崩溃坑）。所以小窗改成 `buildPetSVG` 把卡片渲成 SVG → `rasterizeSVG`(sips) 出 PNG → JXA 里 `registerSubclass` 一个 `DWGrip`：**自定义拖动**（`mouseDown:/mouseDragged:/mouseUp:` + `NSEvent.mouseLocation` + `setFrameOrigin`，按住任意位置即拖，右上角 ✕ 区域则 `orderOut` + `terminate` 关闭小窗并写 `pet-closed` 标记），`drawRect:` 把 PNG 画出来。位置每 3s 存 `pet-position.json`，重启留在原位；`pet-closed` 在伴侣启动时清掉，所以**重启伴侣即可恢复小窗**。
 
 **桌面小词灵首轮**：`companion-state.json` 的 `petGroup` 保存当前封闭词组及其已点词。点击词卡只做一次**首轮学习**：该词立即从小窗移除，不以新词补位；整组清空后，才从未首轮学习过的词里自动生成下一组。事件通过 `/pet-memory-events.json` 传给网页记忆本。`bump` 与 `/next.php`/`/prev.php` 仍只用于手动换壁纸/全局热键，不干扰小词灵的首轮进度。小词灵右下角保持圆形缩放把手，空白处可拖动。
@@ -72,7 +76,8 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 - **加一个尺寸**：`app.js` 的 `SIZES` 加 `{w,h,label}`，`fillSizeSelect` 自动进下拉。
 - **加一种字体风格**：`render.js` 的 `FONT_STACKS` 加一族，`index.html` 的 `#sel-fontstyle` 加一个 `<option>`（值 = 该键）。
 - 版式:只剩单词组(group)一种(大字海报 poster 已于 2026-08-16 整体删除,含 `#layout-switch` UI/renderPoster/engine.js 词数特判/companion buildSVG 分支)。旧数据里的 layout: poster 不需要迁移,渲染分发自动落到 group。
-- **加一个内置词库**：`scripts/build_wordlibs.py` 的 `CAPS`/`TAG_TO_ID`/`LIB_META` 加一项并跑一遍生成 `data/words_<id>.json`；`app.js` 的 `LIBRARIES` 加一项；e2e 的卡片总数断言 +1。
+- **加一个内置词库**：`scripts/build_wordlibs.py` 的 `CAPS`/`TAG_TO_ID`/`LIB_META` 加一项并跑一遍生成 `data/words_<id>.json`；`app.js` 的 `LIBRARIES` 加一项（`icon` 填 sprite 里的图标键，没有就先在 sprite 画一个）；e2e 的卡片总数断言 +1。
+- **图标体系**（2026-08-17 起，告别"单字当图标"）：`index.html` `<body>` 开头有一个隐藏的 SVG sprite，所有图标是 24×24 线性 `<symbol id="i-…">`（fill:none + stroke:currentColor，**自动跟随三个界面主题着色**）。引用统一为 `<svg class="ic"><use href="#i-…"/></svg>`，尺寸由 CSS 按容器定（`.h-emoji .ic` 15px / `.lib-icon .ic` 16px / `.it-icon .ic` 24px）。**加新图标 = sprite 里加一个 `<symbol>` + 引用一行**；词库图标在 `LIBRARIES[].icon` 填键名。日语两库用鸟居/樱花、初中书包、高中博士帽、四级考卷、六级奖章、考研登顶旗、雅思地球、托福纸飞机、GRE 灯泡、我的词库文件夹+。模块标题（含弹窗标题）也都走这套，不再用汉字或 emoji。
 - **改提醒呈现**：`render.js` 的 `drawReminders` + `remindersHeight` 要**一起改**（预估高度必须与实际逐行高度一致，否则吸底错位）。
 
 ## 验证矩阵
@@ -82,6 +87,10 @@ python3 scripts/build_wordlibs.py  # 从 ECDICT 重新生成 data/words_*.json�
 ## 模块整理
 
 顶部「↕️ 整理模块」进入有序拖放模式。可移动模块由 `MODULE_DEFAULTS`（`app.js`）定义：词库、提醒、记忆复习、自动轮换、版式外观、自定义文字。拖拽把手只能将卡片插入左/右面板的纵向槽位，保证统一间距与列对齐；布局以 `moduleLayout` namespace 保存（本地镜像为 `wp:user:<id>:moduleLayout`），恢复默认会重建该顺序。预览画布固定居中，避免主工作区失去稳定性。
+
+**拖拽要平滑**（2026-08-17 重写）：别在 mousemove 里把被拖卡真实插回 DOM + 对每张卡 `getBoundingClientRect`（整列每帧 reflow、卡片只 teleport 不跟手 → 很卡）。现在是「浮动拖拽」：`startModuleFloatDrag` 起拖时卡片 `position:fixed` 跟指针走（`transform` 合成，不触发 reflow），原位插一个同高 `.module-placeholder` 虚线块顶住防塌陷；`stepModuleFloatDrag` 每帧 rAF 只算一次落点，占位块要移位时 `flipMovePlaceholder` 用 FLIP 让其它卡平滑让位；松手 `dropModuleFloatDrag` 把卡插到占位块处并保存。
+
+**隐藏 / 恢复模块**（2026-08-17）：有些功能不是每个用户都需要，全堆在侧栏太乱。整理模式下每张 `.module-card`（含 `module-typography`/`module-desktop` 这两个不在 `MODULE_DEFAULTS` 排序集里的）右上角注入「✕」隐藏按钮，被隐藏的模块加 `.module-hidden`（`display:none`），收进左栏顶部的 `#module-tray` 恢复托盘，点「+」一键还原。隐藏集合存 `hiddenModules` namespace（前后端 allowlist 都已注册）。隐藏只是不显示，不影响该模块背后的设置/逻辑；隐藏按钮只在 `body.layout-editing` 时出现，托盘只在整理模式且有隐藏模块时显示。details 卡的按钮要放进 `summary`（否则收起时被一并隐藏），section 卡直接挂到卡片（`.card` 是 `position:relative`）。
 
 ## 记忆复习（艾宾浩斯 SRS）
 

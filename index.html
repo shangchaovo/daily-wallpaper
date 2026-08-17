@@ -17,10 +17,42 @@ try {
   try { localStorage.setItem('wp:uiTheme', JSON.stringify(saved)); } catch (_) {}
 } catch (_) {}
 </script>
-<link rel="stylesheet" href="css/styles.css?v=20260817b">
-<link rel="stylesheet" href="css/ui-themes.css?v=20260817a">
+<link rel="stylesheet" href="css/styles.css?v=20260817e">
+<link rel="stylesheet" href="css/ui-themes.css?v=20260817d">
 </head>
 <body>
+
+<!-- 全局 SVG 图标集：线性 24×24 描边图标，stroke=currentColor 自动跟随三个界面主题着色；
+     词库卡片与模块标题统一引用（.lib-icon / .h-emoji 内的 <svg class="ic"><use href="#i-…">）。 -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <!-- 词库 -->
+  <symbol id="i-torii" viewBox="0 0 24 24"><path d="M3.5 7.4 Q12 4.6 20.5 7.4"/><path d="M5.9 11.2 h12.2"/><path d="M12 6.1 V11.2"/><path d="M8.2 11.2 V19.6 M15.8 11.2 V19.6"/></symbol>
+  <symbol id="i-sakura" viewBox="0 0 24 24"><circle cx="12" cy="8.6" r="2.7"/><circle cx="16.4" cy="11.8" r="2.7"/><circle cx="14.7" cy="16.9" r="2.7"/><circle cx="9.3" cy="16.9" r="2.7"/><circle cx="7.6" cy="11.8" r="2.7"/><circle cx="12" cy="13.2" r="1.3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-backpack" viewBox="0 0 24 24"><rect x="6.5" y="8.8" width="11" height="11.2" rx="3.4"/><path d="M10 8.8 V6.6 a2 2 0 0 1 4 0 V8.8"/><path d="M6.5 12.6 h11"/><rect x="9.8" y="14.8" width="4.4" height="3.2" rx="1.1"/></symbol>
+  <symbol id="i-cap" viewBox="0 0 24 24"><path d="M12 4.8 L21.8 9.2 L12 13.6 L2.2 9.2 Z"/><path d="M7.2 11.3 V15.8 c0 1.7 2.2 2.9 4.8 2.9 s4.8 -1.2 4.8 -2.9 V11.3"/><path d="M21.8 9.2 V14.6"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3.6 H13.6 L17 7 V20.4 H7 Z"/><path d="M13.6 3.6 V7 H17"/><path d="M9.6 11.4 h4.8 M9.6 14.4 h4.8"/><path d="M9.4 17.3 l1.2 1.2 2.3 -2.5"/></symbol>
+  <symbol id="i-medal" viewBox="0 0 24 24"><path d="M9.8 10.4 L7 3.6 M14.2 10.4 L17 3.6"/><circle cx="12" cy="14.6" r="4.7"/><circle cx="12" cy="14.6" r="1.6"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M3.6 18.6 L9.4 10.4 L12.9 14.7 L16.1 11 L20.4 18.6"/><path d="M9.4 10.4 V4.6"/><path d="M9.4 4.6 h4.6 l-1.3 1.6 1.3 1.6 H9.4"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><ellipse cx="12" cy="12" rx="3.9" ry="8.4"/><path d="M3.8 12 h16.4"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 24 24"><path d="M22 2 L11 13"/><path d="M22 2 L15 22 L11 13 L2 9 Z"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M12 3.6 a5.5 5.5 0 0 1 5.5 5.5 c0 2.1 -1.2 3.2 -2.1 4.1 -.6.6 -.9 1.2 -.9 2.3 h-5 c0 -1.1 -.3 -1.7 -.9 -2.3 -.9 -.9 -2.1 -2 -2.1 -4.1 A5.5 5.5 0 0 0 12 3.6 Z"/><path d="M10.1 18.3 h3.8 M10.9 20.7 h2.2"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M21.5 18.5 a2 2 0 0 1 -2 2 h-15 a2 2 0 0 1 -2 -2 V5.5 a2 2 0 0 1 2 -2 h5 l2 3 h8 a2 2 0 0 1 2 2 Z"/><path d="M12 10.6 V15.4 M9.6 13 h4.8"/></symbol>
+  <!-- 模块标题 -->
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.4 C10.2 4.9 7.2 4.5 4.2 5.1 V18.2 C7.2 17.6 10.2 18 12 19.5 C13.8 18 16.8 17.6 19.8 18.2 V5.1 C16.8 4.5 13.8 4.9 12 6.4 Z"/><path d="M12 6.4 V19.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M12 4.2 a5.4 5.4 0 0 1 5.4 5.4 V14 l1.5 2.5 a.85 .85 0 0 1 -.75 1.3 H5.85 a.85 .85 0 0 1 -.75 -1.3 L6.6 14 V9.6 A5.4 5.4 0 0 1 12 4.2 Z"/><path d="M10.1 20.4 a1.9 1.9 0 0 0 3.8 0"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6.5 4.2 h11 a.9 .9 0 0 1 .9 .9 V20.3 L12 16.8 L5.6 20.3 V5.1 a.9 .9 0 0 1 .9 -.9 Z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="22.6 4 22.6 10 16.6 10"/><polyline points="1.4 20 1.4 14 7.4 14"/><path d="M3.9 9 a9 9 0 0 1 14.7 -3.3 L22.6 10 M1.4 14 l4.5 4.3 A9 9 0 0 0 20.1 15"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6 V20.4 A8.4 8.4 0 0 0 12 3.6 Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-type" viewBox="0 0 24 24"><path d="M5 6.2 V4.4 h14 v1.8"/><path d="M12 4.4 V19.6"/><path d="M9.4 19.6 h5.2"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4.4" width="18" height="12.4" rx="2"/><path d="M12 16.8 V20.4 M8.4 20.4 h7.2"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M17 3 a2.83 2.83 0 1 1 4 4 L7.5 20.5 L2 22 l1.5 -5.5 Z"/></symbol>
+  <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3.4 V13.2 M8.3 9.5 L12 13.2 L15.7 9.5"/><path d="M4 14.5 V18 a2.2 2.2 0 0 0 2.2 2.2 h11.6 a2.2 2.2 0 0 0 2.2 -2.2 v-3.5"/></symbol>
+  <!-- 功能入口 -->
+  <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3.5 8 V5.8 a2.3 2.3 0 0 1 2.3 -2.3 H8 M16 3.5 h2.2 a2.3 2.3 0 0 1 2.3 2.3 V8 M20.5 16 v2.2 a2.3 2.3 0 0 1 -2.3 2.3 H16 M8 20.5 H5.8 a2.3 2.3 0 0 1 -2.3 -2.3 V16"/><path d="M8 10 h8 M8 13.6 h5.2"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3.6 H13.6 L17 7 V20.4 H7 Z"/><path d="M13.6 3.6 V7 H17"/><path d="M12 10.4 V15.8 M9.7 13.6 L12 15.8 L14.3 13.6"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.6 17.4 L10 12.4 L13.4 15.7 L16.7 12.7 L20.4 16.2"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.2 V12 L15.4 14.1"/></symbol>
+</svg>
 
 <!-- 微弱的纸屑星光：只做氛围，不与内容争夺注意力。 -->
 <span class="float-deco" style="left:7%; top:20%; --fs:16px; --dur:11s;">✦</span>
@@ -64,9 +96,15 @@ try {
     <aside class="panel panel-left">
       <div class="panel-col">
 
+      <!-- 已隐藏模块恢复托盘:仅「整理模块」模式下出现,一键把模块加回来 -->
+      <div id="module-tray" class="module-tray" hidden>
+        <div class="module-tray-head">已隐藏的模块</div>
+        <div id="module-tray-list" class="module-tray-list"></div>
+      </div>
+
       <section id="module-library" class="card module-card">
         <div class="card-head">
-          <h2><span class="h-emoji" data-anime-icon="📚">库</span>选一个词库</h2>
+          <h2><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg></span>选一个词库</h2>
           <button id="btn-open-import" class="btn small soft" type="button">⇧ 导入</button>
         </div>
         <div class="lib-search">
@@ -92,7 +130,7 @@ try {
       </section>
 
       <section id="module-reminders" class="card module-card">
-        <h2><span class="h-emoji" data-anime-icon="⏰">时</span>今天的小提醒</h2>
+        <h2><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg></span>今天的小提醒</h2>
         <div class="rem-input">
           <input id="inp-reminder" placeholder="比如：背单词 30 分钟">
           <input id="inp-reminder-time" type="time">
@@ -105,21 +143,21 @@ try {
 
       <section id="module-srs" class="card srs-card module-card">
         <div class="card-head">
-          <h2><span class="h-emoji" data-anime-icon="🧠">忆</span>记忆复习</h2>
+          <h2><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-bookmark"/></svg></span>记忆复习</h2>
           <label class="srs-switch"><input id="chk-srs" type="checkbox" checked><span>艾宾浩斯</span></label>
         </div>
-        <p class="hint">在桌面小词灵点词卡完成首轮；该词会立即移出并自动补入新词，也可以前后翻页。到期后在记忆本完成后续轮次。</p>
+        <p class="hint">在桌面小刺灵点词卡完成首轮；该词会立即移出并自动补入新词，也可以前后翻页。到期后在记忆本完成后续轮次。</p>
         <div id="srs-status" class="srs-status">已记 0 词 · 待复习 0 词</div>
         <div id="srs-records" class="srs-records" aria-live="polite"></div>
         <button id="btn-open-memory" class="btn primary srs-learn" type="button">打开艾宾浩斯记忆本 →</button>
         <div id="srs-countdown" class="srs-countdown" hidden>
-          <span class="srs-cd-icon">时</span>
+          <span class="srs-cd-icon"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg></span>
           <span class="srs-cd-text">下次复习 <b id="srs-cd-time">--:--</b></span>
         </div>
       </section>
 
       <details id="module-automation" class="card module-card">
-        <summary><span class="h-emoji" data-anime-icon="🔁">轮</span>自动与轮换</summary>
+        <summary><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></span>自动与轮换</summary>
         <div class="card-body">
         <div class="checks">
           <label><input id="chk-daily" type="checkbox" checked> 每天自动换一组</label>
@@ -151,7 +189,7 @@ try {
           <button id="btn-set-wallpaper2" class="btn soft small">▣ 设壁纸</button>
         </div>
       </div>
-      <section id="pet-dock" class="pet-dock" data-state="checking" aria-label="桌面小词灵">
+      <section id="pet-dock" class="pet-dock" data-state="checking" aria-label="桌面小刺灵">
         <span class="pet-dock-face" aria-hidden="true">
           <svg viewBox="0 0 40 40" focusable="false">
             <circle cx="20" cy="20" r="18.2" fill="#182a35" stroke="#c7a56b" stroke-width="1.4"/>
@@ -161,8 +199,8 @@ try {
             <path d="M18.5 27c1 .8 2 .8 3 0" fill="none" stroke="#b96e55" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </span>
-        <div class="pet-dock-copy"><b>桌面小词灵</b><span id="pet-dock-status" aria-live="polite">正在检查这台 Mac 上的小词灵…</span></div>
-        <label class="pet-dock-fx" title="小词灵点词换词时的过渡动画">
+        <div class="pet-dock-copy"><b>桌面小刺灵</b><span id="pet-dock-status" aria-live="polite">正在检查这台 Mac 上的小刺灵…</span></div>
+        <label class="pet-dock-fx" title="小刺灵点词换词时的过渡动画">
           <span>换词特效</span>
           <select id="sel-pet-transition" aria-label="换词特效">
             <option value="dissolve-pop">溶解+Q弹</option>
@@ -171,13 +209,13 @@ try {
             <option value="none">无动画</option>
           </select>
         </label>
-        <label class="pet-dock-sync" title="开启后：点词/翻页立即换桌面壁纸，网页预览跟随小词灵，「换一组」推动小词灵翻页；关闭则壁纸/预览各自独立随机">
+        <label class="pet-dock-sync" title="开启后：点词/翻页立即换桌面壁纸，网页预览跟随小刺灵，「换一组」推动小刺灵翻页；关闭则壁纸/预览各自独立随机">
           <input type="checkbox" id="chk-pet-sync" checked>
           <span>同步壁纸</span>
         </label>
         <div class="pet-dock-actions">
           <button id="btn-pet-memory" class="btn pet-memory-shortcut" type="button">记忆本 <span id="pet-memory-badge" hidden>0</span></button>
-          <button id="btn-pet-dock" class="btn pet-dock-main" type="button">召唤小词灵 ↗</button>
+          <button id="btn-pet-dock" class="btn pet-dock-main" type="button">召唤小刺灵 ↗</button>
         </div>
       </section>
       <div id="preview-stage" class="stage">
@@ -203,7 +241,7 @@ try {
       <div class="panel-col">
 
       <section id="module-appearance" class="card module-card">
-        <h2><span class="h-emoji" data-anime-icon="🎨">版</span>版式与外观</h2>
+        <h2><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-theme"/></svg></span>版式与外观</h2>
         <label class="row"><span>壁纸尺寸</span><select id="sel-size"></select></label>
         <div class="row" id="custom-size-row" hidden>
           <span>宽 × 高</span>
@@ -222,7 +260,7 @@ try {
           <div class="bg-photo-row">
             <label class="import-tile bg-tile">
               <input id="file-bgphoto" type="file" accept="image/*">
-              <span class="it-icon">图</span><b>上传照片</b><i>铺满壁纸</i>
+              <span class="it-icon"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg></span><b>上传照片</b><i>铺满壁纸</i>
             </label>
             <div id="bgphoto-preview" class="bgphoto-preview" hidden>
               <img id="bgphoto-thumb" alt="背景预览">
@@ -239,7 +277,7 @@ try {
       </section>
 
       <section id="module-typography" class="card module-card">
-        <h2><span class="h-emoji" data-anime-icon="🔤">字</span>字体与排版</h2>
+        <h2><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-type"/></svg></span>字体与排版</h2>
         <label class="row slider-row">
           <span>字号大小</span>
           <input id="rng-fontscale" type="range" min="0.7" max="1.7" step="0.05" value="1">
@@ -278,7 +316,7 @@ try {
       </section>
 
       <section id="module-desktop" class="card desktop-card module-card">
-        <h2><span class="h-emoji" data-anime-icon="💻">桌</span>搬到电脑桌面上</h2>
+        <h2><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-monitor"/></svg></span>搬到电脑桌面上</h2>
         <p class="hint">想在 Mac 桌面<b>真正换壁纸</b>、还要一个常驻不遮挡的小宠物？点一下下面按钮就行，<b>不用下载、不用解压、不用敲命令</b>。</p>
         <button id="btn-companion" class="btn soft">一键启用桌面伴侣</button>
         <div class="pack-row dl-row">
@@ -298,7 +336,7 @@ try {
       </section>
 
       <details id="module-custom" class="card module-card">
-        <summary><span class="h-emoji" data-anime-icon="✍️">注</span>自定义文字</summary>
+        <summary><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-pen"/></svg></span>自定义文字</summary>
         <div class="card-body">
         <p class="hint">开启后文字会出现在壁纸上，<b>直接在预览里拖动</b>就能摆到任意位置。</p>
         <div class="checks"><label><input id="chk-custom" type="checkbox"> 启用自定义文字</label></div>
@@ -349,7 +387,7 @@ try {
 <div id="memory-modal" class="modal-overlay memory-modal" hidden>
   <div class="modal-card memory-card" role="dialog" aria-modal="true" aria-labelledby="memory-title">
     <div class="modal-head">
-      <div><h2 id="memory-title"><span class="h-emoji" data-anime-icon="🧠">忆</span>艾宾浩斯记忆本</h2><p id="memory-subtitle" class="hint">词分两类：「📌 还在记」是还没背下来的（到点的排最前，先回想再答「记住了 / 还没记住」），答「记住了」进入下一轮，跑满 8 轮就进「✅ 已经记住」；中途忘了会自动从头再来。</p></div>
+      <div><h2 id="memory-title"><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-bookmark"/></svg></span>艾宾浩斯记忆本</h2><p id="memory-subtitle" class="hint">词分两类：「📌 还在记」是还没背下来的（到点的排最前，先回想再答「记住了 / 还没记住」），答「记住了」进入下一轮，跑满 8 轮就进「✅ 已经记住」；中途忘了会自动从头再来。</p></div>
       <button id="btn-close-memory" class="modal-close" type="button" title="关闭" aria-label="关闭记忆本">✕</button>
     </div>
     <div id="memory-summary" class="memory-summary"></div>
@@ -362,7 +400,7 @@ try {
 <div id="dl-modal" class="modal-overlay" hidden>
   <div class="modal-card dl-card" role="dialog" aria-modal="true" aria-labelledby="dl-title">
     <div class="modal-head">
-      <div><h2 id="dl-title"><span class="h-emoji" data-anime-icon="💻">桌</span>下载 Mac 桌面伴侣</h2><p class="hint">自动换桌面壁纸 + 小词灵窗 + 本地词库站,免安装、自带运行环境。</p></div>
+      <div><h2 id="dl-title"><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-monitor"/></svg></span>下载 Mac 桌面伴侣</h2><p class="hint">自动换桌面壁纸 + 小刺灵窗 + 本地词库站,免安装、自带运行环境。</p></div>
       <button id="btn-close-dl" class="modal-close" type="button" title="关闭" aria-label="关闭下载窗口">✕</button>
     </div>
     <div class="dl-options">
@@ -404,7 +442,7 @@ try {
 <div id="import-modal" class="modal-overlay" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="import-title">
     <div class="modal-head">
-      <h2 id="import-title"><span class="h-emoji" data-anime-icon="📥">导</span>导入单词到我的词库</h2>
+      <h2 id="import-title"><span class="h-emoji"><svg class="ic" aria-hidden="true"><use href="#i-import"/></svg></span>导入单词到我的词库</h2>
       <button id="btn-close-import" class="modal-close" type="button" title="关闭" aria-label="关闭导入窗口">✕</button>
     </div>
     <p class="hint">截图、CSV / Excel / 粘贴都行，导入后归到「我的词库」。</p>
@@ -412,11 +450,11 @@ try {
     <div class="import-grid">
       <label class="import-tile">
         <input id="file-screenshot" type="file" accept="image/*">
-        <span class="it-icon">截</span><b>截图识别</b><i>拍照/截图单词表</i>
+        <span class="it-icon"><svg class="ic" aria-hidden="true"><use href="#i-scan"/></svg></span><b>截图识别</b><i>拍照/截图单词表</i>
       </label>
       <label class="import-tile">
         <input id="file-import" type="file" accept=".csv,.txt,.tsv,.xlsx,.xls,image/*">
-        <span class="it-icon">文</span><b>文件导入</b><i>CSV / Excel / TXT</i>
+        <span class="it-icon"><svg class="ic" aria-hidden="true"><use href="#i-file"/></svg></span><b>文件导入</b><i>CSV / Excel / TXT</i>
       </label>
     </div>
 
@@ -472,7 +510,7 @@ try {
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <!-- ?v= busts browser cache — bump after any js/ change -->
-<script src="js/store.js?v=20260816d"></script>
+<script src="js/store.js?v=20260817a"></script>
 <script src="js/words.js?v=20260810j"></script>
 <script src="js/importer.js?v=20260810f"></script>
 <script src="js/ocr.js?v=20260810f"></script>
@@ -480,7 +518,7 @@ try {
 <script src="js/review.js?v=20260812a"></script>
 <script src="js/render.js?v=20260816a"></script>
 <script src="js/engine.js?v=20260816a"></script>
-<script src="js/app.js?v=20260817a"></script>
+<script src="js/app.js?v=20260817d"></script>
 <script src="js/support.js?v=20260814a"></script>
 </body>
 </html>

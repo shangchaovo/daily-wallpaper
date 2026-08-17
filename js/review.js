@@ -47,7 +47,7 @@
   }
   function soonestDue(lib) { var list = activeWords(lib).filter(function (item) { return item.due; }); return list.length ? list[0].due : null; }
 
-  /* 小词灵点击只登记「首次学习」，绝不推进复习阶段。这样即使同步事件重复、
+  /* 小刺灵点击只登记「首次学习」，绝不推进复习阶段。这样即使同步事件重复、
    * 或事件恰好在到期时送达，也不会被误判成用户已经通过本轮检测。 */
   function rememberWord(lib, word) {
     var L = getLib(lib), key = wordKey(word), t = nowMs();
